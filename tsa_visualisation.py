@@ -20,7 +20,7 @@ import networkx
 from matplotlib import pyplot
 from matplotlib.backends.backend_pdf import PdfPages
 
-from model.temporal_spreading_activation import TemporalSpreadingActivation, EdgeDataKey, NodeDataKey
+from model.temporal_spreading_activation import TemporalSpreadingActivation, EdgeDataKey
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +37,8 @@ def draw_graph(tsa: TemporalSpreadingActivation, pdf=None, pos=None, frame_label
     # Prepare labels
 
     node_labels = {}
-    for n, n_data in tsa.graph.nodes(data=True):
-        node_labels[n] = f"{n}\n{n_data[NodeDataKey.CHARGE].activation:.3g}"
+    for n in tsa.graph.nodes:
+        node_labels[n] = f"{n}\n{tsa.activation_of_node(n):.3g}"
 
     edge_labels = {}
     for v1, v2, e_data in tsa.graph.edges(data=True):
@@ -87,7 +87,7 @@ def draw_graph(tsa: TemporalSpreadingActivation, pdf=None, pos=None, frame_label
     # Draw the nodes
     networkx.draw_networkx_nodes(
         tsa.graph, pos=pos, with_labels=False,
-        node_color=[n_data[NodeDataKey.CHARGE].activation for n, n_data in tsa.graph.nodes(data=True)],
+        node_color=[tsa.activation_of_node(n) for n in tsa.graph.nodes],
         cmap=cmap, vmin=0, vmax=1,
         node_size=400)
     networkx.draw_networkx_labels(tsa.graph, pos=pos, labels=node_labels)
