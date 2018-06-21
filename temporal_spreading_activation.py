@@ -17,7 +17,7 @@ caiwingfield.net
 
 import logging
 from collections import namedtuple, defaultdict
-from typing import Set
+from typing import Set, Dict, DefaultDict
 
 from networkx import Graph, from_numpy_matrix, relabel_nodes, selfloop_edges
 from numpy import exp, ndarray, ones_like, ceil, float_power
@@ -53,55 +53,26 @@ def blank_node_activation_record() -> NodeActivationRecord:
     return NodeActivationRecord(activation=0, time_activated=-1)
 
 
-class Impulse(object):
-    """An activation travelling through an edge."""
-
-    def __init__(self,
-                 source_node,
-                 target_node,
-                 time_at_creation: int,
-                 time_at_destination: int,
-                 initial_activation: float,
-                 final_activation: float):
-        self.source_node = source_node
-        self.target_node = target_node
-        self.time_at_creation: int = time_at_creation
-        self.time_at_destination: int = time_at_destination
-        self.initial_activation: float = initial_activation
-        self.activation_at_destination: float = final_activation
+class Impulse(namedtuple("Impulse", ['source_node',
+                                     'target_node',
+                                     'departure_time',
+                                     'arrival_time',
+                                     'departure_activation',
+                                     'arrival_activation'
+                                     ])):
+    """
+    Stores information about an impulse.
+    Impulses are what I'm calling activation that is spreading along a connection.
+    """
+    # Tell Python no more fields can be added to this class, so it stays small in memory.
+    __slots__ = ()
 
     def __str__(self):
         return f"{self.source_node} → {self.target_node}: {self.activation_at_destination:.4g} @ {str(self.time_at_destination)}"
 
-    def age_at_time(self, t: int):
-        """
-        The integer age of this impulse at specified time, or None if impulse will not exist at that time.
-        """
-        if t > self.time_at_destination:
-            return None
-        if t < self.time_at_creation:
-            return None
-        return t - self.time_at_creation
-
-    # region Implement Hashable
-
-    def __key(self):
-        return (
-            self.source_node,
-            self.target_node,
-            self.time_at_creation,
-            self.time_at_destination,
-            self.initial_activation,
-            self.activation_at_destination
-        )
-
-    def __eq__(self, other):
-        return type(self) == type(other) and self.__key() == other.__key()
-
-    def __hash__(self):
-        return hash(self.__key())
-
-    # endregion
+    def age_at_time(self, t) -> int:
+        """The age of this impulse at a specified time."""
+        return t - self.departure_time
 
 
 class TemporalSpreadingActivation(object):
@@ -116,8 +87,6 @@ class TemporalSpreadingActivation(object):
         :param graph:
             ¡ Calling this constructor or modifying this object WILL modify the underlying graph !
             `graph` should be an undirected, weighted graph with the following data:
-                On Nodes:
-                    (no data required)
                 On Edges:
                     weight
                     length
@@ -153,12 +122,29 @@ class TemporalSpreadingActivation(object):
         # Stores the most recent activation of each node, if any
         self.node_activation_records = defaultdict(blank_node_activation_record)
 
-        # Impulses are hashed in such a way that their identity is given by source, destination, and time created.
-        # Therefore making self.impulses a Set, we ensure that multiple impulses created on the
-        self.impulses: Set = set()
+        # Impulses are stored in an arrival-time-keyed dict of destination-node-keyed dicts of lists of impulses
+        # scheduled for arrival.
+        # This way, when an arrival time is reached, we can .pop() a destination-node-keyed dict of impulses to process.
+        # Nice!
+        # TODO: if this is still too slow, we could just store arrival_activations in the inner dict. This would give us
+        # TODO: everything we *need*, but would make display and tracking a bit harder.
+        # ACTUALLY we'll use a defaultdict here, so we can quickly and easily add an impulse in the right place without
+        # verbose checks
+        self.impulses: DefaultDict = defaultdict(
+            # In case the aren't any impulses due to arrive at a particular time, we'll just find an empty dict
+            lambda: defaultdict(
+                # In case there aren't any impulses due to arrive at a particular node, we'll just find an empty list
+                list
+            ))
 
-        # Initialise graph
-        self.reset()
+    def impulses_by_edge(self, n1, n2) -> Set:
+        """The set of impulses in the (undirected) edge with endpoints n1, n2."""
+        d = defaultdict(set)
+        for t, impulse_dict in self.impulses:
+            for destination_node, impulses in impulse_dict:
+                for i in impulses:
+                    d[(i.source_node, destination_node)].add(i)
+        return d[(n1, n2)] + d[(n2, n1)]
 
     def activation_of_node(self, n) -> float:
         """Returns the current activation of a node."""
@@ -194,6 +180,7 @@ class TemporalSpreadingActivation(object):
 
             # For each incident edge
             for n1, n2, e_data in self.graph.edges(source_node, data=True):
+                # Determine source and target node
                 if source_node == n1:
                     target_node = n2
                 elif source_node == n2:
@@ -202,31 +189,25 @@ class TemporalSpreadingActivation(object):
                     raise ValueError()
 
                 edge_length = e_data[EdgeDataKey.LENGTH]
+                departure_activation = e_data[EdgeDataKey.WEIGHT] * new_activation
+                arrival_time = self.clock + edge_length
 
                 # We pre-compute the impulses now rather than decaying them over time.
                 # Intermediate activates can be computed for display purposes if necessary.
-                initial_activation = e_data[EdgeDataKey.WEIGHT] * new_activation
-                final_activation = self.edge_decay_function(edge_length, initial_activation)
-
-                new_impulse = Impulse(
-                    source_node=source_node, target_node=target_node,
-                    time_at_creation=self.clock, time_at_destination=self.clock + edge_length,
-                    initial_activation=initial_activation,
-                    final_activation=final_activation
+                impulse = Impulse(
+                    source_node=source_node,
+                    target_node=target_node,
+                    departure_time=self.clock,
+                    arrival_time=arrival_time,
+                    departure_activation=departure_activation,
+                    arrival_activation=self.edge_decay_function(edge_length, departure_activation)
                 )
 
                 # Since a node can only fire once when it first passes threshold, it should be logically impossible for
-                # there to be an existing impulse with the same age and target released from this node. We would double-check
-                # that here, except it's too expensive... :/
-
-                # existing_impulses = [impulse
-                #                      for impulse in self.impulses
-                #                      if impulse.source_node == source_node
-                #                      and impulse.target_node == target_node
-                #                      and impulse.time_at_creation == self.clock]
-                # assert len(existing_impulses) == 0
-
-                self.impulses.add(new_impulse)
+                # there to be an existing impulse with the same age and target released from this node.
+                # This means we can just remember ALL impulses that are ever released, without fear that they'll ever be
+                # overlapping.
+                self.impulses[arrival_time][target_node].append(impulse)
 
     def _propagate_impulses(self):
         """Propagates impulses along connections."""
@@ -234,32 +215,22 @@ class TemporalSpreadingActivation(object):
         # "Propagation" happens by just incrementing the global clock.
 
         # But we have to check if any impulses have reached their destination.
-        impulses_at_destination = set(i for i in self.impulses if i.time_at_destination == self.clock)
+        # This should be a destination-node-keyed dict of lists of impulses
+        impulses_at_destination: Dict = self.impulses.pop(self.clock)
 
         if len(impulses_at_destination) > 0:
-
-            # Remove those that have reached the destination
-            self.impulses -= impulses_at_destination
-
-            # And have them activated their target nodes
-            for impulse in impulses_at_destination:
-                self.activate_node(impulse.target_node, impulse.activation_at_destination)
+            # Each such impulse activates its target node
+            for destination_node, impulses in impulses_at_destination:
+                for impulse in impulses:
+                    self.activate_node(destination_node, impulse.arrival_activation)
 
     def tick(self):
         """Performs the spreading activation algorithm for one tick of the clock."""
         self.clock += 1
         self._propagate_impulses()
 
-    def reset(self):
-        """Reset SA graph so it looks as if it's just been built."""
-        # Reset clock
-        self.clock = 0
-        # Set all nodes as unactivated
-        self.node_activation_records = defaultdict(blank_node_activation_record)
-        # Delete all activations
-        self.impulses = set()
-
     def __str__(self):
+
         string_builder = f"CLOCK = {self.clock}\n"
         string_builder += "Nodes:\n"
         for node in self.graph.nodes:
@@ -268,15 +239,13 @@ class TemporalSpreadingActivation(object):
                 continue
             string_builder += f"\t{node}: {self.activation_of_node(node)}\n"
         string_builder += "Edges:\n"
+
         for n1, n2 in self.graph.edges():
-            impulse_list = [str(i)
-                            for i in self.impulses
-                            if {i.source_node, i.target_node} == {n1, n2}]
-            # Skip empty edges
-            if len(impulse_list) == 0:
+            impulses_this_edge = self.impulses_by_edge(n1, n2)
+            if len(impulses_this_edge) == 0:
                 continue
             string_builder += f"\t{n1}–{n2}:\n"
-            for impulse in impulse_list:
+            for impulse in impulses_this_edge:
                 string_builder += f"\t\t{impulse}\n"
         return string_builder
 

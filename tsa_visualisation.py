@@ -50,18 +50,14 @@ def draw_graph(tsa: TemporalSpreadingActivation, pdf=None, pos=None, frame_label
     impulse_data = []
     for v1, v2, e_data in tsa.graph.edges(data=True):
         length = e_data[EdgeDataKey.LENGTH]
-        impulses = e_data[EdgeDataKey.IMPULSES]
-        if len(impulses) == 0:
+        impulses_this_edge = tsa.impulses_by_edge(v1, v2)
+        if len(impulses_this_edge) == 0:
             continue
         x1, y1 = pos[v1]
         x2, y2 = pos[v2]
-        for impulse in impulses:
+        for impulse in impulses_this_edge:
 
             age = impulse.age_at_time(tsa.clock)
-
-            # Skip dead impulses
-            if age is None:
-                continue
 
             # Skip just-created impulses
             if age == 0:
@@ -78,7 +74,7 @@ def draw_graph(tsa: TemporalSpreadingActivation, pdf=None, pos=None, frame_label
             x = x1 + (fraction * (x2 - x1))
             y = y1 + (fraction * (y2 - y1))
 
-            colour = cmap(tsa.node_decay_function(age, impulse.initial_activation))
+            colour = cmap(tsa.node_decay_function(age, impulse.departure_activation))
 
             impulse_data.append([x, y, colour, impulse, length])
 
