@@ -137,6 +137,18 @@ class TemporalSpreadingActivation(object):
                 list
             ))
 
+    def n_suprathreshold_nodes(self) -> int:
+        """
+        The number of nodes which are above the activation threshold.
+        May take a long time to compute.
+        :return:
+        """
+        return len([
+            n
+            for n in self.graph.nodes
+            if self.activation_of_node(n) >= self.activation_threshold
+        ])
+
     def impulses_by_edge(self, n1, n2) -> Set:
         """The set of impulses in the (undirected) edge with endpoints n1, n2."""
         d = defaultdict(set)
