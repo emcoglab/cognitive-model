@@ -67,9 +67,6 @@ class Impulse(namedtuple("Impulse", ['source_node',
     # Tell Python no more fields can be added to this class, so it stays small in memory.
     __slots__ = ()
 
-    def __str__(self):
-        return f"{self.source_node} → {self.target_node}: {self.activation_at_destination:.4g} @ {str(self.time_at_destination)}"
-
     def age_at_time(self, t) -> int:
         """The age of this impulse at a specified time."""
         return t - self.departure_time
@@ -80,6 +77,7 @@ class TemporalSpreadingActivation(object):
     def __init__(self,
                  graph: Graph,
                  activation_threshold: float,
+                 node_relabelling_dictionary: Dict,
                  node_decay_function: callable,
                  edge_decay_function: callable,
                  ):
@@ -93,6 +91,9 @@ class TemporalSpreadingActivation(object):
         :param activation_threshold:
             Firing threshold.
             A node will fire on receiving activation if its activation crosses this threshold.
+        :param node_relabelling_dictionary:
+            A dictionary whose keys are nodes, and whose values are node labels.
+            This lets us keep the graph data stored throughout as ints rather than strings, saving a bunch of memory.
         :param node_decay_function:
             A function governing the decay of activations on nodes.
             Use the decay_function_*_with_params methods to create these.
@@ -112,6 +113,13 @@ class TemporalSpreadingActivation(object):
 
         # Underlying graph: weighted, undirected
         self.graph: Graph = graph
+
+        # Node label dictionaries
+
+        # node ↦ label
+        self.node2label: Dict = node_relabelling_dictionary
+        # label ↦ node
+        self.label2node: Dict = dict((v, k) for k, v in node_relabelling_dictionary)
 
         # Zero-indexed tick counter.
         self.clock: int = 0
@@ -249,14 +257,14 @@ class TemporalSpreadingActivation(object):
             # Skip unactivated nodes
             if self.node_activation_records[node].time == -1:
                 continue
-            string_builder += f"\t{node}: {self.activation_of_node(node)}\n"
-        string_builder += "Edges:\n"
+            string_builder += f"\t{self.node2label[node]}: {self.activation_of_node(node)}\n"
 
+        string_builder += "Edges:\n"
         for n1, n2 in self.graph.edges():
             impulses_this_edge = self.impulses_by_edge(n1, n2)
             if len(impulses_this_edge) == 0:
                 continue
-            string_builder += f"\t{n1}–{n2}:\n"
+            string_builder += f"\t{self.node2label[n1]}–{self.node2label[n2]}:\n"
             for impulse in impulses_this_edge:
                 string_builder += f"\t\t{impulse}\n"
         return string_builder
@@ -318,7 +326,6 @@ def graph_from_distance_matrix(distance_matrix: ndarray,
                                length_granularity: int,
                                weighted_graph: bool,
                                weight_factor: float = 1,
-                               relabelling_dict=None,
                                prune_connections_longer_than: int = None) -> Graph:
     """
     Produces a Graph of the correct format to underlie a TemporalSpreadingActivation.
@@ -342,10 +349,6 @@ def graph_from_distance_matrix(distance_matrix: ndarray,
     (Default 1.)
     If `weighted_graph` is True, this factor is multiplied by all weights.
     If `weighted_graph` is false, this fixed weight given to each edge in the graph.
-    :param relabelling_dict:
-    (Optional.)
-    If provided and not None: A dictionary which maps the integer indices of nodes to
-    their desired labels.
     :param prune_connections_longer_than:
     (Optional.) If provided and not None: Any connections with lengths (strictly) longer than this will be severed.
     :return:
@@ -376,9 +379,5 @@ def graph_from_distance_matrix(distance_matrix: ndarray,
             if e_data[EdgeDataKey.LENGTH] > prune_connections_longer_than
         ]
         graph.remove_edges_from(long_edges)
-
-    # Relabel nodes if dictionary was provided
-    if relabelling_dict is not None:
-        graph = relabel_nodes(graph, relabelling_dict, copy=False)
 
     return graph
