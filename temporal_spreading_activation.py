@@ -19,7 +19,7 @@ import logging
 from collections import namedtuple, defaultdict
 from typing import Set, Dict, DefaultDict
 
-from networkx import Graph, from_numpy_matrix, relabel_nodes, selfloop_edges
+from networkx import Graph, from_numpy_matrix, selfloop_edges
 from numpy import exp, ndarray, ones_like, ceil, float_power
 
 logger = logging.getLogger()
@@ -77,13 +77,13 @@ class TemporalSpreadingActivation(object):
     def __init__(self,
                  graph: Graph,
                  activation_threshold: float,
+                 impulse_pruning_threshold: float,
                  node_relabelling_dictionary: Dict,
                  node_decay_function: callable,
                  edge_decay_function: callable,
                  ):
         """
         :param graph:
-            ¡ Calling this constructor or modifying this object WILL modify the underlying graph !
             `graph` should be an undirected, weighted graph with the following data:
                 On Edges:
                     weight
@@ -102,8 +102,10 @@ class TemporalSpreadingActivation(object):
             Use the decay_function_*_with_* methods to create these.
         """
 
-        # Parameters
-        self.activation_threshold = activation_threshold  # Use < and >= to test for above/below
+        # Thresholds
+        # Use < and >= to test for above/below
+        self.activation_threshold = activation_threshold
+        self.impulse_pruning_threshold = impulse_pruning_threshold
 
         # These decay functions should be stateless, and convert an original activation and an age into a current
         # activation.
@@ -210,6 +212,12 @@ class TemporalSpreadingActivation(object):
 
                 edge_length = e_data[EdgeDataKey.LENGTH]
                 departure_activation = e_data[EdgeDataKey.WEIGHT] * new_activation
+                arrival_activation = self.edge_decay_function(edge_length, departure_activation)
+
+                # Skip any impulses which will be too small on arrival
+                if arrival_activation < self.impulse_pruning_threshold:
+                    continue
+
                 arrival_time = self.clock + edge_length
 
                 # We pre-compute the impulses now rather than decaying them over time.
@@ -220,7 +228,7 @@ class TemporalSpreadingActivation(object):
                     departure_time=self.clock,
                     arrival_time=arrival_time,
                     departure_activation=departure_activation,
-                    arrival_activation=self.edge_decay_function(edge_length, departure_activation)
+                    arrival_activation=arrival_activation
                 )
 
                 # Since a node can only fire once when it first passes threshold, it should be logically impossible for
