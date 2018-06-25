@@ -76,24 +76,25 @@ class TemporalSpreadingActivation(object):
 
     def __init__(self,
                  graph: Graph,
+                 node_relabelling_dictionary: Dict,
                  activation_threshold: float,
                  impulse_pruning_threshold: float,
-                 node_relabelling_dictionary: Dict,
                  node_decay_function: callable,
-                 edge_decay_function: callable,
-                 ):
+                 edge_decay_function: callable):
         """
         :param graph:
             `graph` should be an undirected, weighted graph with the following data:
                 On Edges:
                     weight
                     length
-        :param activation_threshold:
-            Firing threshold.
-            A node will fire on receiving activation if its activation crosses this threshold.
         :param node_relabelling_dictionary:
             A dictionary whose keys are nodes, and whose values are node labels.
             This lets us keep the graph data stored throughout as ints rather than strings, saving a bunch of memory.
+        :param activation_threshold:
+            Firing threshold.
+            A node will fire on receiving activation if its activation crosses this threshold.
+        :param impulse_pruning_threshold
+            Any impulse which decays to less than this threshold before reaching its destination will be deleted.
         :param node_decay_function:
             A function governing the decay of activations on nodes.
             Use the decay_function_*_with_params methods to create these.
@@ -101,6 +102,9 @@ class TemporalSpreadingActivation(object):
             A function governing the decay of activations in connections.
             Use the decay_function_*_with_* methods to create these.
         """
+
+        # Underlying graph: weighted, undirected
+        self.graph: Graph = graph
 
         # Thresholds
         # Use < and >= to test for above/below
@@ -113,11 +117,7 @@ class TemporalSpreadingActivation(object):
         self.node_decay_function: callable = node_decay_function
         self.edge_decay_function: callable = edge_decay_function
 
-        # Underlying graph: weighted, undirected
-        self.graph: Graph = graph
-
         # Node label dictionaries
-
         # node ↦ label
         self.node2label: Dict = node_relabelling_dictionary
         # label ↦ node
@@ -130,7 +130,7 @@ class TemporalSpreadingActivation(object):
 
         # A node-keyed dictionaries of node activations
         # Stores the most recent activation of each node, if any
-        self.node_activation_records = defaultdict(blank_node_activation_record)
+        self._node_activation_records = defaultdict(blank_node_activation_record)
 
         # Impulses are stored in an arrival-time-keyed dict of destination-node-keyed dicts of lists of impulses
         # scheduled for arrival.
@@ -140,7 +140,7 @@ class TemporalSpreadingActivation(object):
         # TODO: everything we *need*, but would make display and tracking a bit harder.
         # ACTUALLY we'll use a defaultdict here, so we can quickly and easily add an impulse in the right place without
         # verbose checks
-        self.impulses: DefaultDict = defaultdict(
+        self._impulses: DefaultDict = defaultdict(
             # In case the aren't any impulses due to arrive at a particular time, we'll just find an empty dict
             lambda: defaultdict(
                 # In case there aren't any impulses due to arrive at a particular node, we'll just find an empty list
@@ -162,7 +162,7 @@ class TemporalSpreadingActivation(object):
     def impulses_by_edge(self, n1, n2) -> Set:
         """The set of impulses in the (undirected) edge with endpoints n1, n2."""
         d = defaultdict(set)
-        for t, impulse_dict in self.impulses:
+        for t, impulse_dict in self._impulses:
             for destination_node, impulses in impulse_dict:
                 for i in impulses:
                     d[(i.source_node, destination_node)].add(i)
@@ -170,7 +170,7 @@ class TemporalSpreadingActivation(object):
 
     def activation_of_node(self, n) -> float:
         """Returns the current activation of a node."""
-        activation_record: NodeActivationRecord = self.node_activation_records[n]
+        activation_record: NodeActivationRecord = self._node_activation_records[n]
         return self.node_decay_function(
             # node age
             self.clock - activation_record.time_activated,
@@ -190,7 +190,7 @@ class TemporalSpreadingActivation(object):
 
         # Accumulate activation
         new_activation = current_activation + activation
-        self.node_activation_records[n] = NodeActivationRecord(new_activation, self.clock)
+        self._node_activation_records[n] = NodeActivationRecord(new_activation, self.clock)
 
         # Check if we reached the threshold
         if new_activation >= self.activation_threshold:
@@ -235,7 +235,7 @@ class TemporalSpreadingActivation(object):
                 # there to be an existing impulse with the same age and target released from this node.
                 # This means we can just remember ALL impulses that are ever released, without fear that they'll ever be
                 # overlapping.
-                self.impulses[arrival_time][target_node].append(impulse)
+                self._impulses[arrival_time][target_node].append(impulse)
 
     def _propagate_impulses(self):
         """Propagates impulses along connections."""
@@ -244,8 +244,8 @@ class TemporalSpreadingActivation(object):
 
         # But we have to check if any impulses have reached their destination.
         # This should be a destination-node-keyed dict of lists of impulses
-        if self.clock in self.impulses:
-            impulses_at_destination: DefaultDict = self.impulses.pop(self.clock)
+        if self.clock in self._impulses:
+            impulses_at_destination: DefaultDict = self._impulses.pop(self.clock)
 
             if len(impulses_at_destination) > 0:
                 # Each such impulse activates its target node
@@ -264,7 +264,7 @@ class TemporalSpreadingActivation(object):
         string_builder += "Nodes:\n"
         for node in self.graph.nodes:
             # Skip unactivated nodes
-            if self.node_activation_records[node].time_activated == -1:
+            if self._node_activation_records[node].time_activated == -1:
                 continue
             string_builder += f"\t{self.node2label[node]}: {self.activation_of_node(node)}\n"
 
