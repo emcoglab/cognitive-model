@@ -108,8 +108,8 @@ class TemporalSpreadingActivation(object):
 
         # Thresholds
         # Use < and >= to test for above/below
-        self.activation_threshold = activation_threshold
-        self.impulse_pruning_threshold = impulse_pruning_threshold
+        self.activation_threshold: float = activation_threshold
+        self.impulse_pruning_threshold: float = impulse_pruning_threshold
 
         # These decay functions should be stateless, and convert an original activation and an age into a current
         # activation.
@@ -124,13 +124,13 @@ class TemporalSpreadingActivation(object):
         self.label2node: Dict = dict((v, k) for k, v in node_relabelling_dictionary.items())
 
         # Zero-indexed tick counter.
-        self.clock: int = 0
+        self.clock: int = int(0)
 
         # Graph data:
 
-        # A node-keyed dictionaries of node activations
-        # Stores the most recent activation of each node, if any
-        self._node_activation_records = defaultdict(blank_node_activation_record)
+        # A node-keyed dictionaries of node activations.
+        # Stores the most recent activation of each node, if any.
+        self._node_activation_records: DefaultDict = defaultdict(blank_node_activation_record)
 
         # Impulses are stored in an arrival-time-keyed dict of destination-node-keyed dicts of lists of impulses
         # scheduled for arrival.
@@ -176,15 +176,23 @@ class TemporalSpreadingActivation(object):
             self.clock - activation_record.time_activated,
             activation_record.activation)
 
-    def activate_node(self, n, activation: float):
-        """Activates a node."""
+    def activate_node(self, n, activation: float) -> bool:
+        """
+        Activates a node.
+        :param n:
+        :param activation:
+        :return:
+            True if the node did fire, and False otherwise.
+        """
+
+        assert n in self.graph.nodes
 
         current_activation = self.activation_of_node(n)
 
         # If this node is currently suprathreshold, it acts as a sink.
         # It doesn't accumulate new activation and cannot fire.
         if current_activation >= self.activation_threshold:
-            return
+            return False
 
         # Otherwise, we proceed with the activation:
 
@@ -193,70 +201,92 @@ class TemporalSpreadingActivation(object):
         self._node_activation_records[n] = NodeActivationRecord(new_activation, self.clock)
 
         # Check if we reached the threshold
-        if new_activation >= self.activation_threshold:
 
-            # If so, Fire!
+        # If not, we're done
+        if new_activation < self.activation_threshold:
+            return False
 
-            # Fire and rebroadcast
-            source_node = n
+        # If so, Fire!
 
-            # For each incident edge
-            for n1, n2, e_data in self.graph.edges(source_node, data=True):
-                # Determine source and target node
-                if source_node == n1:
-                    target_node = n2
-                elif source_node == n2:
-                    target_node = n1
-                else:
-                    raise ValueError()
+        # Fire and rebroadcast
+        source_node = n
 
-                edge_length = e_data[EdgeDataKey.LENGTH]
-                departure_activation = e_data[EdgeDataKey.WEIGHT] * new_activation
-                arrival_activation = self.edge_decay_function(edge_length, departure_activation)
+        # For each incident edge
+        for n1, n2, e_data in self.graph.edges(source_node, data=True):
+            # Determine source and target node
+            if source_node == n1:
+                target_node = n2
+            elif source_node == n2:
+                target_node = n1
+            else:
+                raise ValueError()
 
-                # Skip any impulses which will be too small on arrival
-                if arrival_activation < self.impulse_pruning_threshold:
-                    continue
+            edge_length: int = e_data[EdgeDataKey.LENGTH]
+            departure_activation = e_data[EdgeDataKey.WEIGHT] * new_activation
+            arrival_activation = self.edge_decay_function(edge_length, departure_activation)
 
-                arrival_time = self.clock + edge_length
+            # Skip any impulses which will be too small on arrival
+            if arrival_activation < self.impulse_pruning_threshold:
+                continue
 
-                # We pre-compute the impulses now rather than decaying them over time.
-                # Intermediate activates can be computed for display purposes if necessary.
-                impulse = Impulse(
-                    source_node=source_node,
-                    target_node=target_node,
-                    departure_time=self.clock,
-                    arrival_time=arrival_time,
-                    departure_activation=departure_activation,
-                    arrival_activation=arrival_activation
-                )
+            arrival_time = int(self.clock + edge_length)
 
-                # Since a node can only fire once when it first passes threshold, it should be logically impossible for
-                # there to be an existing impulse with the same age and target released from this node.
-                # This means we can just remember ALL impulses that are ever released, without fear that they'll ever be
-                # overlapping.
-                self._impulses[arrival_time][target_node].append(impulse)
+            # We pre-compute the impulses now rather than decaying them over time.
+            # Intermediate activates can be computed for display purposes if necessary.
+            impulse = Impulse(
+                source_node=source_node,
+                target_node=target_node,
+                departure_time=self.clock,
+                arrival_time=arrival_time,
+                departure_activation=departure_activation,
+                arrival_activation=arrival_activation
+            )
 
-    def _propagate_impulses(self):
-        """Propagates impulses along connections."""
+            # Since a node can only fire once when it first passes threshold, it should be logically impossible for
+            # there to be an existing impulse with the same age and target released from this node.
+            # This means we can just remember ALL impulses that are ever released, without fear that they'll ever be
+            # overlapping.
+            self._impulses[arrival_time][target_node].append(impulse)
+
+        return True
+
+    def _propagate_impulses(self) -> Set:
+        """
+        Propagates impulses along connections.
+        :return:
+            Set of nodes which were caused to fire.
+        """
 
         # "Propagation" happens by just incrementing the global clock.
-
         # But we have to check if any impulses have reached their destination.
-        # This should be a destination-node-keyed dict of lists of impulses
+
+        nodes_caused_to_fire = set()
+
         if self.clock in self._impulses:
+
+            # This should be a destination-node-keyed dict of lists of impulses
             impulses_at_destination: DefaultDict = self._impulses.pop(self.clock)
 
             if len(impulses_at_destination) > 0:
                 # Each such impulse activates its target node
-                for destination_node, impulses in impulses_at_destination:
+                for destination_node, impulses in impulses_at_destination.items():
                     for impulse in impulses:
-                        self.activate_node(destination_node, impulse.arrival_activation)
+                        node_did_fire = self.activate_node(destination_node, impulse.arrival_activation)
+                        if node_did_fire:
+                            nodes_caused_to_fire.add(destination_node)
 
-    def tick(self):
-        """Performs the spreading activation algorithm for one tick of the clock."""
+        return nodes_caused_to_fire
+
+    def tick(self) -> Set:
+        """
+        Performs the spreading activation algorithm for one tick of the clock.
+        :return:
+            Set of nodes which fired.
+        """
         self.clock += 1
-        self._propagate_impulses()
+        nodes_which_fired = self._propagate_impulses()
+
+        return nodes_which_fired
 
     def __str__(self):
 
