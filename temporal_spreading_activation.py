@@ -119,7 +119,7 @@ class TemporalSpreadingActivation(object):
         # node ↦ label
         self.node2label: Dict = node_relabelling_dictionary
         # label ↦ node
-        self.label2node: Dict = dict((v, k) for k, v in node_relabelling_dictionary)
+        self.label2node: Dict = dict((v, k) for k, v in node_relabelling_dictionary.items())
 
         # Zero-indexed tick counter.
         self.clock: int = 0
@@ -164,7 +164,7 @@ class TemporalSpreadingActivation(object):
             for destination_node, impulses in impulse_dict:
                 for i in impulses:
                     d[(i.source_node, destination_node)].add(i)
-        return d[(n1, n2)] + d[(n2, n1)]
+        return d[(n1, n2)].union(d[(n2, n1)])
 
     def activation_of_node(self, n) -> float:
         """Returns the current activation of a node."""
@@ -236,13 +236,14 @@ class TemporalSpreadingActivation(object):
 
         # But we have to check if any impulses have reached their destination.
         # This should be a destination-node-keyed dict of lists of impulses
-        impulses_at_destination: Dict = self.impulses.pop(self.clock)
+        if self.clock in self.impulses:
+            impulses_at_destination: DefaultDict = self.impulses.pop(self.clock)
 
-        if len(impulses_at_destination) > 0:
-            # Each such impulse activates its target node
-            for destination_node, impulses in impulses_at_destination:
-                for impulse in impulses:
-                    self.activate_node(destination_node, impulse.arrival_activation)
+            if len(impulses_at_destination) > 0:
+                # Each such impulse activates its target node
+                for destination_node, impulses in impulses_at_destination:
+                    for impulse in impulses:
+                        self.activate_node(destination_node, impulse.arrival_activation)
 
     def tick(self):
         """Performs the spreading activation algorithm for one tick of the clock."""
@@ -255,7 +256,7 @@ class TemporalSpreadingActivation(object):
         string_builder += "Nodes:\n"
         for node in self.graph.nodes:
             # Skip unactivated nodes
-            if self.node_activation_records[node].time == -1:
+            if self.node_activation_records[node].time_activated == -1:
                 continue
             string_builder += f"\t{self.node2label[node]}: {self.activation_of_node(node)}\n"
 
