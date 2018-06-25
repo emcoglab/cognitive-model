@@ -38,7 +38,7 @@ def draw_graph(tsa: TemporalSpreadingActivation, pdf=None, pos=None, frame_label
 
     node_labels = {}
     for n in tsa.graph.nodes:
-        node_labels[n] = f"{n}\n{tsa.activation_of_node(n):.3g}"
+        node_labels[n] = f"{tsa.node2label[n]}\n{tsa.activation_of_node(n):.3g}"
 
     edge_labels = {}
     for v1, v2, e_data in tsa.graph.edges(data=True):
@@ -98,7 +98,7 @@ def draw_graph(tsa: TemporalSpreadingActivation, pdf=None, pos=None, frame_label
     for x, y, colour, impulse, length in impulse_data:
         pyplot.plot(x, y, marker='o', markersize=5, color=colour)
         age = impulse.age_at_time(tsa.clock)
-        pyplot.text(x, y, f"{tsa.node_decay_function(age, impulse.initial_activation):.3g} ({age}/{length})")
+        pyplot.text(x, y, f"{tsa.node_decay_function(age, impulse.departure_activation):.3g} ({age}/{length})")
 
     # Draw frame_label
     if frame_label is not None:

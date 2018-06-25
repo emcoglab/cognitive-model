@@ -162,19 +162,34 @@ class TemporalSpreadingActivation(object):
     def impulses_by_edge(self, n1, n2) -> Set:
         """The set of impulses in the (undirected) edge with endpoints n1, n2."""
         d = defaultdict(set)
-        for t, impulse_dict in self._impulses:
-            for destination_node, impulses in impulse_dict:
+        for t, impulse_dict in self._impulses.items():
+            for destination_node, impulses in impulse_dict.items():
                 for i in impulses:
                     d[(i.source_node, destination_node)].add(i)
         return d[(n1, n2)].union(d[(n2, n1)])
 
     def activation_of_node(self, n) -> float:
         """Returns the current activation of a node."""
+        assert n in self.graph.nodes
+
         activation_record: NodeActivationRecord = self._node_activation_records[n]
         return self.node_decay_function(
-            # node age
-            self.clock - activation_record.time_activated,
+            self.clock - activation_record.time_activated,  # node age
             activation_record.activation)
+
+    def activation_of_node_with_label(self, n) -> float:
+        """Returns the current activation of a node."""
+        return self.activation_of_node(self.label2node[n])
+
+    def activate_node_with_label(self, n, activation: float) -> bool:
+        """
+        Activates a node.
+        :param n:
+        :param activation:
+        :return:
+            True if the node did fire, and False otherwise.
+        """
+        return self.activate_node(self.label2node[n], activation)
 
     def activate_node(self, n, activation: float) -> bool:
         """
@@ -184,7 +199,6 @@ class TemporalSpreadingActivation(object):
         :return:
             True if the node did fire, and False otherwise.
         """
-
         assert n in self.graph.nodes
 
         current_activation = self.activation_of_node(n)
