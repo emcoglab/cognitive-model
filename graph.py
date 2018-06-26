@@ -30,7 +30,6 @@ class EdgeDataKey(object):
 def graph_from_distance_matrix(distance_matrix: ndarray,
                                length_granularity: int,
                                weighted_graph: bool,
-                               weight_factor: float = 1,
                                prune_connections_longer_than: int = None) -> Graph:
     """
     Produces a Graph of the correct format to underlie a TemporalSpreadingActivation.
@@ -49,11 +48,8 @@ def graph_from_distance_matrix(distance_matrix: ndarray,
     :param weighted_graph:
     Whether to use weights on the edges.
     If True, distances will be converted to weights using x ↦ 1-x.
+        (This means it's only suitable for things like cosine and correlation distances, not Euclidean.)
     If False, all edges get the same weight.
-    :param weight_factor:
-    (Default 1.)
-    If `weighted_graph` is True, this factor is multiplied by all weights.
-    If `weighted_graph` is false, this fixed weight given to each edge in the graph.
     :param prune_connections_longer_than:
     (Optional.) If provided and not None: Any connections with lengths (strictly) longer than this will be severed.
     :return:
@@ -63,9 +59,9 @@ def graph_from_distance_matrix(distance_matrix: ndarray,
     length_matrix = ceil(distance_matrix * length_granularity)
 
     if weighted_graph:
-        weight_matrix = weight_factor * (ones_like(distance_matrix) - distance_matrix)
+        weight_matrix = ones_like(distance_matrix) - distance_matrix
     else:
-        weight_matrix = weight_factor * ones_like(distance_matrix)
+        weight_matrix = ones_like(distance_matrix)
 
     graph = from_numpy_matrix(weight_matrix)
 
