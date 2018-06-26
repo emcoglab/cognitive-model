@@ -20,7 +20,8 @@ import networkx
 from matplotlib import pyplot
 from matplotlib.backends.backend_pdf import PdfPages
 
-from model.temporal_spreading_activation import TemporalSpreadingActivation, EdgeDataKey
+from model.temporal_spreading_activation import TemporalSpreadingActivation
+from model.graph import EdgeDataKey
 
 logger = logging.getLogger(__name__)
 

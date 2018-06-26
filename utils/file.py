@@ -1,6 +1,6 @@
 """
 ===========================
-Useful utility functions.
+Utility functions for files.
 ===========================
 
 Dr. Cai Wingfield
@@ -18,7 +18,7 @@ caiwingfield.net
 import os
 from os import path
 
-from pandas import Series, read_csv, DataFrame
+from pandas import read_csv, DataFrame, Series
 from pandas.errors import EmptyDataError
 
 
@@ -49,23 +49,3 @@ def add_column_to_csv(column, column_name: str, csv_path: str, index_col=None):
         raise Exception(f"{column_name} column already exists in csv")
     existing_data[column_name] = Series(data=column, index=None)
     existing_data.to_csv(csv_path, index=(index_col is not None), header=True)
-
-
-def partition(iterable, predicate):
-    """
-    Separates the an iterable into two sub-iterables; those which satisfy predicate and those which don't.
-    Thanks to https://stackoverflow.com/a/4578605/2883198 and https://stackoverflow.com/questions/949098/python-split-a-list-based-on-a-condition#comment24295861_12135169.
-    """
-    trues = []
-    falses = []
-    for item in iterable:
-        trues.append(item) if predicate(item) else falses.append(item)
-    return trues, falses
-
-
-def set_partition(iterable, predicate):
-    trues = set()
-    falses = set()
-    for item in iterable:
-        trues.add(item) if predicate(item) else falses.add(item)
-    return trues, falses

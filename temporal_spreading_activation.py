@@ -19,23 +19,18 @@ import logging
 from collections import namedtuple, defaultdict
 from typing import Set, Dict, DefaultDict
 
-from networkx import Graph, from_numpy_matrix, selfloop_edges
-from numpy import exp, ndarray, ones_like, ceil, float_power
+from networkx import Graph
+from numpy import exp, float_power
+
+from model.graph import EdgeDataKey
 
 logger = logging.getLogger()
 logger_format = '%(asctime)s | %(levelname)s | %(module)s | %(message)s'
 logger_dateformat = "%Y-%m-%d %H:%M:%S"
 
 
-class EdgeDataKey(object):
-    """Column names for edge data."""
-    WEIGHT = "weight"
-    LENGTH = "length"
-
-
 class NodeActivationRecord(namedtuple('NodeActivationRecord', ['activation',
-                                                               'time_activated'
-                                                               ])):
+                                                               'time_activated'])):
     """
     NodeActivationRecord stores a historical node activation event.
     It is immutable, so must be used in conjunction with TSA.node_decay_function in order to determine the
@@ -375,62 +370,3 @@ def decay_function_gaussian_with_sd_fraction(sd_frac: float, granularity: int, h
         centre=centre)
 
 
-def graph_from_distance_matrix(distance_matrix: ndarray,
-                               length_granularity: int,
-                               weighted_graph: bool,
-                               weight_factor: float = 1,
-                               prune_connections_longer_than: int = None) -> Graph:
-    """
-    Produces a Graph of the correct format to underlie a TemporalSpreadingActivation.
-
-    Nodes will be numbered according to the row/column indices of weight_matrix (and so can
-    be relabelled accordingly).
-
-    Distances will be converted to weights using x ↦ 1-x.
-
-    Distances will be converted to integer lengths using the supplied scaling factor.
-
-    :param distance_matrix:
-    A symmetric distance matrix in numpy format.
-    :param length_granularity:
-    Distances will be scaled into integer connection lengths using this granularity scaling factor.
-    :param weighted_graph:
-    Whether to use weights on the edges.
-    If True, distances will be converted to weights using x ↦ 1-x.
-    If False, all edges get the same weight.
-    :param weight_factor:
-    (Default 1.)
-    If `weighted_graph` is True, this factor is multiplied by all weights.
-    If `weighted_graph` is false, this fixed weight given to each edge in the graph.
-    :param prune_connections_longer_than:
-    (Optional.) If provided and not None: Any connections with lengths (strictly) longer than this will be severed.
-    :return:
-    A Graph of the correct format.
-    """
-
-    length_matrix = ceil(distance_matrix * length_granularity)
-
-    if weighted_graph:
-        weight_matrix = weight_factor * (ones_like(distance_matrix) - distance_matrix)
-    else:
-        weight_matrix = weight_factor * ones_like(distance_matrix)
-
-    graph = from_numpy_matrix(weight_matrix)
-
-    # Converting from a distance matrix creates self-loop edges, which we have to remove
-    graph.remove_edges_from(selfloop_edges(graph))
-
-    # Add lengths to graph data
-    for n1, n2, e_data in graph.edges(data=True):
-        e_data[EdgeDataKey.LENGTH] = length_matrix[n1][n2]
-
-    # Prune long connections
-    if prune_connections_longer_than is not None:
-        long_edges = [
-            (n1, n2)
-            for n1, n2, e_data in graph.edges(data=True)
-            if e_data[EdgeDataKey.LENGTH] > prune_connections_longer_than
-        ]
-        graph.remove_edges_from(long_edges)
-
-    return graph
