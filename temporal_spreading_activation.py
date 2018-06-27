@@ -279,10 +279,11 @@ class TemporalSpreadingActivation(object):
             if len(impulses_at_destination) > 0:
                 # Each such impulse activates its target node
                 for destination_node, impulses in impulses_at_destination.items():
-                    for impulse in impulses:
-                        node_did_fire = self.activate_node(destination_node, impulse.arrival_activation)
-                        if node_did_fire:
-                            nodes_caused_to_fire.add(destination_node)
+                    # Coalesce all impulses that arrive at this node simultaneously before applying this activation
+                    total_incoming_activation = sum([impulse.arrival_activation for impulse in impulses])
+                    node_did_fire = self.activate_node(destination_node, total_incoming_activation)
+                    if node_did_fire:
+                        nodes_caused_to_fire.add(destination_node)
 
         return nodes_caused_to_fire
 
@@ -368,5 +369,3 @@ def decay_function_gaussian_with_sd_fraction(sd_frac: float, granularity: int, h
         sd=sd,
         height_coef=height_coef,
         centre=centre)
-
-
