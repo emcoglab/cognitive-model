@@ -15,7 +15,7 @@ caiwingfield.net
 ---------------------------
 """
 
-from networkx import Graph, from_numpy_matrix, selfloop_edges
+from networkx import Graph, from_numpy_matrix, selfloop_edges, write_edgelist, read_edgelist
 from numpy import ones_like
 from numpy.core.multiarray import ndarray
 from numpy.core.umath import ceil
@@ -70,7 +70,7 @@ def graph_from_distance_matrix(distance_matrix: ndarray,
 
     # Add lengths to graph data
     for n1, n2, e_data in graph.edges(data=True):
-        e_data[EdgeDataKey.LENGTH] = length_matrix[n1][n2]
+        e_data[EdgeDataKey.LENGTH] = int(length_matrix[n1][n2])
 
     # Prune long connections
     if prune_connections_longer_than is not None:
@@ -82,3 +82,16 @@ def graph_from_distance_matrix(distance_matrix: ndarray,
         graph.remove_edges_from(long_edges)
 
     return graph
+
+
+def save_graph(graph: Graph, file_path: str):
+    write_edgelist(graph, file_path,
+                   data=[EdgeDataKey.WEIGHT,
+                         EdgeDataKey.LENGTH])
+
+
+def load_graph(file_path: str) -> Graph:
+    return read_edgelist(file_path,
+                         nodetype=int,
+                         data=[(EdgeDataKey.WEIGHT, float),
+                               (EdgeDataKey.LENGTH, int)])
