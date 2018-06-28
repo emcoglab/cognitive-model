@@ -15,10 +15,15 @@ caiwingfield.net
 ---------------------------
 """
 
+import logging
+import os
+
 from networkx import Graph, from_numpy_matrix, selfloop_edges, write_edgelist, read_edgelist
 from numpy import ones_like
 from numpy.core.multiarray import ndarray
 from numpy.core.umath import ceil
+
+logger = logging.getLogger()
 
 
 class EdgeDataKey(object):
@@ -95,3 +100,48 @@ def load_graph(file_path: str) -> Graph:
                          nodetype=int,
                          data=[(EdgeDataKey.WEIGHT, float),
                                (EdgeDataKey.LENGTH, int)])
+
+
+def save_graph_from_distance_matrix(file_path: str,
+                                    distance_matrix: ndarray,
+                                    length_granularity: int,
+                                    weighted_graph: bool,
+                                    prune_connections_longer_than: int = None):
+    """
+    Saves a graph of the correct form to underlie a TemporalSpreadingActivation.
+    Saved as a networkx edgelist format.
+
+    This can be loaded using `load_graph`.
+
+    It is often faster (and more memory efficient) to save this way than building the graph and then saving it.
+
+    :param file_path:
+    :param distance_matrix:
+    :param length_granularity:
+    :param weighted_graph:
+    :param prune_connections_longer_than:
+    :return:
+    """
+
+    temp_file_path = file_path + ".incomplete"
+
+    # Log progress every time we reach a percentage milestone
+    # Record here the most recently logged milestone
+    logged_percent_milestone = 0
+
+    with open(temp_file_path, mode="w", encoding="utf8") as temp_file:
+        for i in range(0, distance_matrix.shape[0]):
+            # Log progress
+            percent_done = int(ceil(100 * i / distance_matrix.shape[0]))
+            if (percent_done % 10 == 0) and (percent_done > logged_percent_milestone):
+                logger.info(f"\t{percent_done}% done")
+                logged_percent_milestone = percent_done
+            for j in range(i+1, distance_matrix.shape[1]):
+                distance = distance_matrix[i, j]
+                weight   = float(1.0 - distance if weighted_graph else 1.0)
+                length   = int(ceil(distance * length_granularity))
+                if (prune_connections_longer_than is not None) and (length > prune_connections_longer_than):
+                    continue
+                # Write edge to file
+                temp_file.write(f"{i} {j} {weight} {length}\n")
+    os.rename(temp_file_path, file_path)
