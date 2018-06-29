@@ -18,7 +18,7 @@ caiwingfield.net
 import logging
 from typing import Dict
 
-from networkx import Graph
+from model.graph import Graph, Edge
 
 logger = logging.getLogger()
 logger_format = '%(asctime)s | %(levelname)s | %(module)s | %(message)s'
@@ -88,7 +88,8 @@ class SpreadingActivationCleglowski(object):
 
         # Spread new energy to other nodes on next cycle
         # TODO: this loop might be parallelisable??
-        for node, neighbourhood in self.graph.adjacency():
+        for node in self.graph.nodes:
+            neighbourhood = self.graph.neighbourhood(node)
 
             # Each node only passes on the energy it recieved last cycle.
             #
@@ -111,8 +112,9 @@ class SpreadingActivationCleglowski(object):
             if presynaptic_energy > self.firing_threshold:
                 if verbose:
                     logger.info(f"'{node}' is above threshold!")
-                for neighbour, edge_attributes in neighbourhood.items():
-                    energy_transfer = presynaptic_energy * edge_attributes["weight"] * self.decay_factor
+                for neighbour in neighbourhood:
+                    edge_data = self.graph.edge_data[Edge((node, neighbour))]
+                    energy_transfer = presynaptic_energy * edge_data.weight * self.decay_factor
                     self.pending_energy[neighbour] += energy_transfer
 
     def spread_n_times(self, n):

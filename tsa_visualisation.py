@@ -21,7 +21,6 @@ from matplotlib import pyplot
 from matplotlib.backends.backend_pdf import PdfPages
 
 from model.temporal_spreading_activation import TemporalSpreadingActivation
-from model.graph import EdgeDataKey
 
 logger = logging.getLogger(__name__)
 
@@ -29,28 +28,30 @@ logger = logging.getLogger(__name__)
 def draw_graph(tsa: TemporalSpreadingActivation, pdf=None, pos=None, frame_label=None):
     """Draws and saves or shows the graph."""
 
+    nx_graph = tsa.graph.as_networkx_graph()
+
     # Use supplied position, or recompute
     if pos is None:
-        pos = networkx.spring_layout(tsa.graph, iterations=500)
+        pos = networkx.spring_layout(nx_graph, iterations=500)
 
     cmap = pyplot.get_cmap("autumn")
 
     # Prepare labels
 
     node_labels = {}
-    for n in tsa.graph.nodes:
+    for n in nx_graph.nodes:
         node_labels[n] = f"{tsa.node2label[n]}\n{tsa.activation_of_node(n):.3g}"
 
     edge_labels = {}
-    for v1, v2, e_data in tsa.graph.edges(data=True):
-        weight = e_data[EdgeDataKey.WEIGHT]
-        length = e_data[EdgeDataKey.LENGTH]
+    for v1, v2, e_data in nx_graph.edges(data=True):
+        weight = e_data["weight"]
+        length = e_data["length"]
         edge_labels[(v1, v2)] = f"w={weight:.3g}; l={length}"
 
     # Prepare impulse points and labels
     impulse_data = []
-    for v1, v2, e_data in tsa.graph.edges(data=True):
-        length = e_data[EdgeDataKey.LENGTH]
+    for v1, v2, e_data in nx_graph.edges(data=True):
+        length = e_data["length"]
         impulses_this_edge = tsa.impulses_by_edge(v1, v2)
         if len(impulses_this_edge) == 0:
             continue
@@ -83,17 +84,17 @@ def draw_graph(tsa: TemporalSpreadingActivation, pdf=None, pos=None, frame_label
 
     # Draw the nodes
     networkx.draw_networkx_nodes(
-        tsa.graph, pos=pos, with_labels=False,
+        nx_graph, pos=pos, with_labels=False,
         node_color=[tsa.activation_of_node(n) for n in tsa.graph.nodes],
         cmap=cmap, vmin=0, vmax=1,
         node_size=400)
-    networkx.draw_networkx_labels(tsa.graph, pos=pos, labels=node_labels)
+    networkx.draw_networkx_labels(nx_graph, pos=pos, labels=node_labels)
 
     # Draw the edges
     networkx.draw_networkx_edges(
-        tsa.graph, pos=pos, with_labels=False,
+        nx_graph, pos=pos, with_labels=False,
     )
-    networkx.draw_networkx_edge_labels(tsa.graph, pos=pos, edge_labels=edge_labels, font_size=6)
+    networkx.draw_networkx_edge_labels(nx_graph, pos=pos, edge_labels=edge_labels, font_size=6)
 
     # Draw impulses
     for x, y, colour, impulse, length in impulse_data:

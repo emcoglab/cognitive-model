@@ -19,10 +19,9 @@ import logging
 from collections import namedtuple, defaultdict
 from typing import Set, Dict, DefaultDict
 
-from networkx import Graph
 from numpy import exp, float_power
 
-from model.graph import EdgeDataKey
+from model.graph import Graph
 
 logger = logging.getLogger()
 logger_format = '%(asctime)s | %(levelname)s | %(module)s | %(message)s'
@@ -221,8 +220,9 @@ class TemporalSpreadingActivation(object):
         source_node = n
 
         # For each incident edge
-        for n1, n2, e_data in self.graph.edges(source_node, data=True):
-            # Determine source and target node
+        for edge in self.graph.incident_edges(source_node):
+            e_data = self.graph.edge_data[edge]
+            n1, n2 = edge.nodes
             if source_node == n1:
                 target_node = n2
             elif source_node == n2:
@@ -230,15 +230,14 @@ class TemporalSpreadingActivation(object):
             else:
                 raise ValueError()
 
-            edge_length: int = e_data[EdgeDataKey.LENGTH]
-            departure_activation = e_data[EdgeDataKey.WEIGHT] * new_activation
-            arrival_activation = self.edge_decay_function(edge_length, departure_activation)
+            departure_activation = e_data.weight * new_activation
+            arrival_activation = self.edge_decay_function(e_data.length, departure_activation)
 
             # Skip any impulses which will be too small on arrival
             if arrival_activation < self.impulse_pruning_threshold:
                 continue
 
-            arrival_time = int(self.clock + edge_length)
+            arrival_time = int(self.clock + e_data.length)
 
             # We pre-compute the impulses now rather than decaying them over time.
             # Intermediate activates can be computed for display purposes if necessary.
