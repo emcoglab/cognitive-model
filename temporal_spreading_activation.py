@@ -221,7 +221,7 @@ class TemporalSpreadingActivation(object):
 
         # For each incident edge
         for edge in self.graph.incident_edges(source_node):
-            e_data = self.graph.edge_data[edge]
+            edge_data = self.graph.edge_data[edge]
             n1, n2 = edge.nodes
             if source_node == n1:
                 target_node = n2
@@ -230,14 +230,14 @@ class TemporalSpreadingActivation(object):
             else:
                 raise ValueError()
 
-            departure_activation = e_data.weight * new_activation
-            arrival_activation = self.edge_decay_function(e_data.length, departure_activation)
+            departure_activation = edge_data.weight * new_activation
+            arrival_activation = self.edge_decay_function(edge_data.length, departure_activation)
 
             # Skip any impulses which will be too small on arrival
             if arrival_activation < self.impulse_pruning_threshold:
                 continue
 
-            arrival_time = int(self.clock + e_data.length)
+            arrival_time = int(self.clock + edge_data.length)
 
             # We pre-compute the impulses now rather than decaying them over time.
             # Intermediate activates can be computed for display purposes if necessary.
