@@ -32,7 +32,7 @@ EdgeData = namedtuple('EdgeData', ['weight', 'length'])
 class Edge(frozenset):
     def __init__(self, seq=()):
         assert len(seq) == 2
-        super().__init__(seq)
+        frozenset.__init__(seq)
 
     @property
     def nodes(self) -> Tuple[Node, Node]:
@@ -73,7 +73,7 @@ class Graph(object):
         for node in edge:
             if node not in self.nodes:
                 self.add_node(node)
-        self.edge_data[Edge] = edge_data
+        self.edge_data[edge] = edge_data
 
     def add_node(self, node: Node):
         if node not in self.nodes:
@@ -100,13 +100,13 @@ class Graph(object):
                 n1, n2 = sorted(edge)
                 weight = float(edge_data.weight)
                 length = int(edge_data.length)
-                edgelist_file.write(f"{Node(n1)} {Node(n2)} {weight}, {length}")
+                edgelist_file.write(f"{Node(n1)} {Node(n2)} {weight} {length}\n")
 
     @classmethod
     def load_from_edgelist(cls, file_path: str) -> 'Graph':
         """Loads a Graph from an edgelist file."""
         graph = Graph()
-        with open(file_path, mode="w", encoding="utf-8") as edgelist_file:
+        with open(file_path, mode="r", encoding="utf-8") as edgelist_file:
             for line in edgelist_file:
                 n1, n2, weight, length = line.split()
                 graph.add_edge(Edge((Node(n1), Node(n2))), EdgeData(weight=float(weight), length=int(length)))
@@ -150,8 +150,8 @@ class Graph(object):
         for n1 in range(0, n_nodes):
             for n2 in range(n1 + 1, n_nodes):
                 distance = distance_matrix[n1, n2]
-                length = ceil(distance * length_granularity)
-                weight = 1 - distance if weighted_graph else 1
+                length = int(ceil(distance * length_granularity))
+                weight = float(1 - distance if weighted_graph else 1)
                 if (prune_connections_longer_than is not None) and (length > prune_connections_longer_than):
                     continue
                 graph.add_edge(Edge((n1, n2)), EdgeData(weight=weight, length=length))
