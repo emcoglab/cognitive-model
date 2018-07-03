@@ -89,7 +89,7 @@ class SpreadingActivationCleglowski(object):
         # Spread new energy to other nodes on next cycle
         # TODO: this loop might be parallelisable??
         for node in self.graph.nodes:
-            neighbourhood = self.graph.neighbourhood(node)
+            neighbourhood = set(self.graph.neighbourhood(node))
 
             # Each node only passes on the energy it recieved last cycle.
             #

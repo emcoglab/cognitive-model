@@ -18,7 +18,7 @@ caiwingfield.net
 import logging
 import os
 from collections import namedtuple
-from typing import Dict, Set, Tuple
+from typing import Dict, Set, Tuple, Iterator
 
 from numpy.core.multiarray import ndarray
 from numpy.core.umath import ceil
@@ -79,17 +79,20 @@ class Graph(object):
         if node not in self.nodes:
             self.nodes.add(node)
 
-    def incident_edges(self, node: Node) -> Set[Edge]:
+    def incident_edges(self, node: Node) -> Iterator[Edge]:
         """The edges which have `node` as an endpoint."""
-        return set(edge
-                   for edge in self.edges
-                   if node in edge)
+        for edge in self.edge_data.keys():
+            if node in edge:
+                yield edge
 
-    def neighbourhood(self, node: Node) -> Set[Node]:
+    def neighbourhood(self, node: Node) -> Iterator[Node]:
         """The nodes which are connected to `node` by exactly one edge."""
-        return set(n
-                   for edge in self.incident_edges(node)
-                   for n in edge) - {node}
+        for edge in self.incident_edges(node):
+            for n in edge:
+                # Skip the source node
+                if n == node:
+                    continue
+                yield n
 
     # region IO
 

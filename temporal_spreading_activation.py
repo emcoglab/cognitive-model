@@ -221,7 +221,7 @@ class TemporalSpreadingActivation(object):
 
         # For each incident edge
         for edge in self.graph.incident_edges(source_node):
-            edge_data = self.graph.edge_data[edge]
+
             n1, n2 = edge.nodes
             if source_node == n1:
                 target_node = n2
@@ -229,6 +229,8 @@ class TemporalSpreadingActivation(object):
                 target_node = n1
             else:
                 raise ValueError()
+
+            edge_data = self.graph.edge_data[edge]
 
             departure_activation = edge_data.weight * new_activation
             arrival_activation = self.edge_decay_function(edge_data.length, departure_activation)
