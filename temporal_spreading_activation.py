@@ -177,7 +177,7 @@ class TemporalSpreadingActivation(object):
 
     def activate_node_with_label(self, n, activation: float) -> bool:
         """
-        Activates a node.
+        Activate a node.
         :param n:
         :param activation:
         :return:
@@ -187,7 +187,7 @@ class TemporalSpreadingActivation(object):
 
     def activate_node(self, n, activation: float) -> bool:
         """
-        Activates a node.
+        Activate a node.
         :param n:
         :param activation:
         :return:
