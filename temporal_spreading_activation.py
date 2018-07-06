@@ -47,25 +47,6 @@ def blank_node_activation_record() -> NodeActivationRecord:
     return NodeActivationRecord(activation=0, time_activated=-1)
 
 
-class Impulse(namedtuple("Impulse", ['source_node',
-                                     'target_node',
-                                     'departure_time',
-                                     'arrival_time',
-                                     'departure_activation',
-                                     'arrival_activation'
-                                     ])):
-    """
-    Stores information about an impulse.
-    Impulses are what I'm calling activation that is spreading along a connection.
-    """
-    # Tell Python no more fields can be added to this class, so it stays small in memory.
-    __slots__ = ()
-
-    def age_at_time(self, t) -> int:
-        """The age of this impulse at a specified time."""
-        return t - self.departure_time
-
-
 class TemporalSpreadingActivation(object):
 
     def __init__(self,
@@ -126,19 +107,18 @@ class TemporalSpreadingActivation(object):
         # Stores the most recent activation of each node, if any.
         self._node_activation_records: DefaultDict = defaultdict(blank_node_activation_record)
 
-        # Impulses are stored in an arrival-time-keyed dict of destination-node-keyed dicts of lists of impulses
+        # Impulses are stored in an arrival-time-keyed dict of destination-node-keyed dicts of cumulative activation
         # scheduled for arrival.
         # This way, when an arrival time is reached, we can .pop() a destination-node-keyed dict of impulses to process.
         # Nice!
-        # TODO: if this is still too slow, we could just store arrival_activations in the inner dict. This would give us
-        # TODO: everything we *need*, but would make display and tracking a bit harder.
         # ACTUALLY we'll use a defaultdict here, so we can quickly and easily add an impulse in the right place without
-        # verbose checks
-        self._impulses: DefaultDict = defaultdict(
+        # verbose checks.
+        self._impulses: DefaultDict[DefaultDict[float]] = defaultdict(
             # In case the aren't any impulses due to arrive at a particular time, we'll just find an empty dict
             lambda: defaultdict(
-                # In case there aren't any impulses due to arrive at a particular node, we'll just find an empty list
-                list
+                # In case there aren't any impulses due to arrive at a particular node, we'll just find 0 activation,
+                # which allows for handy use of +=
+                float
             ))
 
     def n_suprathreshold_nodes(self) -> int:
@@ -153,14 +133,13 @@ class TemporalSpreadingActivation(object):
             if self.activation_of_node(n) >= self.activation_threshold
         ])
 
-    def impulses_by_edge(self, n1, n2) -> Set:
-        """The set of impulses in the (undirected) edge with endpoints n1, n2."""
-        d = defaultdict(set)
-        for t, impulse_dict in self._impulses.items():
-            for destination_node, impulses in impulse_dict.items():
-                for i in impulses:
-                    d[(i.source_node, destination_node)].add(i)
-        return d[(n1, n2)].union(d[(n2, n1)])
+    def impulses_headed_for(self, n) -> Dict[int, float]:
+        """A time-keyed dict of cumulative activation due to arrive at a node."""
+        return {
+            t: activation_arriving_at_time_t[n]
+            for t, activation_arriving_at_time_t in self._impulses.items()
+            if n in activation_arriving_at_time_t.keys()
+        }
 
     def activation_of_node(self, n) -> float:
         """Returns the current activation of a node."""
@@ -241,22 +220,8 @@ class TemporalSpreadingActivation(object):
 
             arrival_time = int(self.clock + edge_data.length)
 
-            # We pre-compute the impulses now rather than decaying them over time.
-            # Intermediate activates can be computed for display purposes if necessary.
-            impulse = Impulse(
-                source_node=source_node,
-                target_node=target_node,
-                departure_time=self.clock,
-                arrival_time=arrival_time,
-                departure_activation=departure_activation,
-                arrival_activation=arrival_activation
-            )
-
-            # Since a node can only fire once when it first passes threshold, it should be logically impossible for
-            # there to be an existing impulse with the same age and target released from this node.
-            # This means we can just remember ALL impulses that are ever released, without fear that they'll ever be
-            # overlapping.
-            self._impulses[arrival_time][target_node].append(impulse)
+            # Accumulate activation at target node at time when it's due to arrive
+            self._impulses[arrival_time][target_node] += arrival_activation
 
         return True
 
@@ -274,15 +239,13 @@ class TemporalSpreadingActivation(object):
 
         if self.clock in self._impulses:
 
-            # This should be a destination-node-keyed dict of lists of impulses
-            impulses_at_destination: DefaultDict = self._impulses.pop(self.clock)
+            # This should be a destination-node-keyed dict of activation ready to arrive
+            activation_at_destination: DefaultDict = self._impulses.pop(self.clock)
 
-            if len(impulses_at_destination) > 0:
+            if len(activation_at_destination) > 0:
                 # Each such impulse activates its target node
-                for destination_node, impulses in impulses_at_destination.items():
-                    # Coalesce all impulses that arrive at this node simultaneously before applying this activation
-                    total_incoming_activation = sum([impulse.arrival_activation for impulse in impulses])
-                    node_did_fire = self.activate_node(destination_node, total_incoming_activation)
+                for destination_node, activation in activation_at_destination.items():
+                    node_did_fire = self.activate_node(destination_node, activation)
                     if node_did_fire:
                         nodes_caused_to_fire.add(destination_node)
 
@@ -302,21 +265,11 @@ class TemporalSpreadingActivation(object):
     def __str__(self):
 
         string_builder = f"CLOCK = {self.clock}\n"
-        string_builder += "Nodes:\n"
         for node in self.graph.nodes:
             # Skip unactivated nodes
             if self._node_activation_records[node].time_activated == -1:
                 continue
             string_builder += f"\t{self.node2label[node]}: {self.activation_of_node(node)}\n"
-
-        string_builder += "Edges:\n"
-        for n1, n2 in self.graph.edges():
-            impulses_this_edge = self.impulses_by_edge(n1, n2)
-            if len(impulses_this_edge) == 0:
-                continue
-            string_builder += f"\t{self.node2label[n1]}–{self.node2label[n2]}:\n"
-            for impulse in impulses_this_edge:
-                string_builder += f"\t\t{impulse}\n"
         return string_builder
 
     def log_graph(self):
