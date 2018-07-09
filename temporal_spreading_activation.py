@@ -42,6 +42,18 @@ class NodeActivationRecord(namedtuple('NodeActivationRecord', ['activation',
     __slots__ = ()
 
 
+class ActivatedNodeEvent(object):
+    """
+    A node activation event.
+    Used to pass out of TSA.tick().
+    Should be used for display and logging only, nothing high-performance!
+    """
+    def __init__(self, node: str, activation: float, tick_activated: int):
+        self.node: str = node
+        self.activation: float = activation
+        self.tick_activated:int = tick_activated
+
+
 def blank_node_activation_record() -> NodeActivationRecord:
     """A record for an unactivated node."""
     return NodeActivationRecord(activation=0, time_activated=-1)
@@ -251,7 +263,7 @@ class TemporalSpreadingActivation(object):
 
         return nodes_caused_to_fire
 
-    def tick(self) -> Set:
+    def tick(self) -> Set[ActivatedNodeEvent]:
         """
         Performs the spreading activation algorithm for one tick of the clock.
         :return:
@@ -260,7 +272,7 @@ class TemporalSpreadingActivation(object):
         self.clock += 1
         nodes_which_fired = self._propagate_impulses()
 
-        return nodes_which_fired
+        return set(ActivatedNodeEvent(self.node2label[node], self.activation_of_node(node), self.clock) for node in nodes_which_fired)
 
     def __str__(self):
 
