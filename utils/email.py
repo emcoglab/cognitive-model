@@ -57,7 +57,7 @@ class Emailer(object):
             server.login(self.__connection_details['user-name'], self.__connection_details['password'])
             server.sendmail(self.__connection_details['email-address'],
                             recipient_address,
-                            f"From: {self._connection_details['email-address']}\r\n"
+                            f"From: {self.__connection_details['email-address']}\r\n"
                             f"To: {recipient_address}\r\n"
                             f"Subject: {subject}\r\n\r\n"
                             f"{message}")
