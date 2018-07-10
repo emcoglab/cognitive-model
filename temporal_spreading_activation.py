@@ -51,7 +51,7 @@ class ActivatedNodeEvent(object):
     def __init__(self, node: str, activation: float, tick_activated: int):
         self.node: str = node
         self.activation: float = activation
-        self.tick_activated:int = tick_activated
+        self.tick_activated: int = tick_activated
 
 
 def blank_node_activation_record() -> NodeActivationRecord:
