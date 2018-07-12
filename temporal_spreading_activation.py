@@ -66,7 +66,7 @@ class TemporalSpreadingActivation(object):
     def __init__(self,
                  graph: Graph,
                  node_relabelling_dictionary: Dict,
-                 activation_threshold: float,
+                 firing_threshold: float,
                  impulse_pruning_threshold: float,
                  node_decay_function: callable,
                  edge_decay_function: callable):
@@ -79,7 +79,7 @@ class TemporalSpreadingActivation(object):
         :param node_relabelling_dictionary:
             A dictionary whose keys are nodes, and whose values are node labels.
             This lets us keep the graph data stored throughout as ints rather than strings, saving a bunch of memory.
-        :param activation_threshold:
+        :param firing_threshold:
             Firing threshold.
             A node will fire on receiving activation if its activation crosses this threshold.
         :param impulse_pruning_threshold
@@ -96,8 +96,8 @@ class TemporalSpreadingActivation(object):
         self.graph: Graph = graph
 
         # Thresholds
-        # Use < and >= to test for above/below
-        self.activation_threshold: float = activation_threshold
+        # Use >= and < to test for above/below
+        self.firing_threshold: float = firing_threshold
         self.impulse_pruning_threshold: float = impulse_pruning_threshold
 
         # These decay functions should be stateless, and convert an original activation and an age into a current
@@ -137,14 +137,14 @@ class TemporalSpreadingActivation(object):
 
     def n_suprathreshold_nodes(self) -> int:
         """
-        The number of nodes which are above the activation threshold.
+        The number of nodes which are above the firing threshold.
         May take a long time to compute.
         :return:
         """
         return len([
             n
             for n in self.graph.nodes
-            if self.activation_of_node(n) >= self.activation_threshold
+            if self.activation_of_node(n) >= self.firing_threshold
         ])
 
     def impulses_headed_for(self, n) -> Dict[int, float]:
@@ -192,7 +192,7 @@ class TemporalSpreadingActivation(object):
 
         # If this node is currently suprathreshold, it acts as a sink.
         # It doesn't accumulate new activation and cannot fire.
-        if current_activation >= self.activation_threshold:
+        if current_activation >= self.firing_threshold:
             return False
 
         # Otherwise, we proceed with the activation:
@@ -204,7 +204,7 @@ class TemporalSpreadingActivation(object):
         # Check if we reached the threshold
 
         # If not, we're done
-        if new_activation < self.activation_threshold:
+        if new_activation < self.firing_threshold:
             return False
 
         # If so, Fire!
