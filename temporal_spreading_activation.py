@@ -17,7 +17,7 @@ caiwingfield.net
 
 import logging
 from collections import namedtuple, defaultdict
-from typing import Set, Dict, DefaultDict, NamedTuple
+from typing import Set, Dict, DefaultDict, NamedTuple, Tuple
 
 from numpy import exp, float_power
 
@@ -67,6 +67,7 @@ class TemporalSpreadingActivation(object):
                  graph: Graph,
                  node_relabelling_dictionary: Dict,
                  firing_threshold: float,
+                 conscious_access_threshold: float,
                  impulse_pruning_threshold: float,
                  node_decay_function: callable,
                  edge_decay_function: callable):
@@ -82,6 +83,9 @@ class TemporalSpreadingActivation(object):
         :param firing_threshold:
             Firing threshold.
             A node will fire on receiving activation if its activation crosses this threshold.
+        :param conscious_access_threshold:
+            Conscious access threshold.
+            A node will be listed as activated if its activation reaches this threshold.
         :param impulse_pruning_threshold
             Any impulse which decays to less than this threshold before reaching its destination will be deleted.
         :param node_decay_function:
@@ -98,6 +102,7 @@ class TemporalSpreadingActivation(object):
         # Thresholds
         # Use >= and < to test for above/below
         self.firing_threshold: float = firing_threshold
+        self.conscious_access_threshold: float = conscious_access_threshold
         self.impulse_pruning_threshold: float = impulse_pruning_threshold
 
         # These decay functions should be stateless, and convert an original activation and an age into a current
@@ -168,32 +173,45 @@ class TemporalSpreadingActivation(object):
         """Returns the current activation of a node."""
         return self.activation_of_node(self.label2node[n])
 
-    def activate_node_with_label(self, n, activation: float) -> bool:
+    def activate_node_with_label(self, n, activation: float) -> Tuple[bool, bool]:
         """
         Activate a node.
         :param n:
         :param activation:
         :return:
-            True if the node did fire, and False otherwise.
+            A 2-tuple of bools: (
+                Node did fire,
+                Node's activation did cross conscious-access threshold
+            )
         """
         return self.activate_node(self.label2node[n], activation)
 
-    def activate_node(self, n, activation: float) -> bool:
+    def activate_node(self, n, activation: float) -> Tuple[bool, bool]:
         """
         Activate a node.
         :param n:
         :param activation:
         :return:
-            True if the node did fire, and False otherwise.
+            A 2-tuple of bools: (
+                Node did fire,
+                Node's activation did cross conscious-access threshold
+            )
         """
         assert n in self.graph.nodes
 
         current_activation = self.activation_of_node(n)
 
+        currently_below_conscious_access_threshold = current_activation < self.conscious_access_threshold
+
         # If this node is currently suprathreshold, it acts as a sink.
         # It doesn't accumulate new activation and cannot fire.
         if current_activation >= self.firing_threshold:
-            return False
+            return (
+                # Node didn't fire
+                False,
+                # Node's activation didn't change so it definitely didn't cross the conscious-access threshold
+                False
+            )
 
         # Otherwise, we proceed with the activation:
 
@@ -201,55 +219,68 @@ class TemporalSpreadingActivation(object):
         new_activation = current_activation + activation
         self._node_activation_records[n] = NodeActivationRecord(new_activation, self.clock)
 
-        # Check if we reached the threshold
+        # Check if we reached the conscious-access threshold
+        did_cross_conscious_access_threshold = currently_below_conscious_access_threshold and (new_activation > self.conscious_access_threshold)
 
-        # If not, we're done
+        # Check if we reached the firing threshold.
+
         if new_activation < self.firing_threshold:
-            return False
+            # If not, we're done
+            return (
+                # Node didn't fire
+                False,
+                did_cross_conscious_access_threshold
+            )
 
-        # If so, Fire!
+        else:
+            # If so, Fire!
 
-        # Fire and rebroadcast
-        source_node = n
+            # Fire and rebroadcast
+            source_node = n
 
-        # For each incident edge
-        for edge in self.graph.incident_edges(source_node):
+            # For each incident edge
+            for edge in self.graph.incident_edges(source_node):
 
-            n1, n2 = edge.nodes
-            if source_node == n1:
-                target_node = n2
-            elif source_node == n2:
-                target_node = n1
-            else:
-                raise ValueError()
+                n1, n2 = edge.nodes
+                if source_node == n1:
+                    target_node = n2
+                elif source_node == n2:
+                    target_node = n1
+                else:
+                    raise ValueError()
 
-            edge_data = self.graph.edge_data[edge]
+                edge_data = self.graph.edge_data[edge]
 
-            departure_activation = edge_data.weight * new_activation
-            arrival_activation = self.edge_decay_function(edge_data.length, departure_activation)
+                departure_activation = edge_data.weight * new_activation
+                arrival_activation = self.edge_decay_function(edge_data.length, departure_activation)
 
-            # Skip any impulses which will be too small on arrival
-            if arrival_activation < self.impulse_pruning_threshold:
-                continue
+                # Skip any impulses which will be too small on arrival
+                if arrival_activation < self.impulse_pruning_threshold:
+                    continue
 
-            arrival_time = int(self.clock + edge_data.length)
+                arrival_time = int(self.clock + edge_data.length)
 
-            # Accumulate activation at target node at time when it's due to arrive
-            self._impulses[arrival_time][target_node] += arrival_activation
+                # Accumulate activation at target node at time when it's due to arrive
+                self._impulses[arrival_time][target_node] += arrival_activation
 
-        return True
+            return (
+                # Node did fire
+                True,
+                did_cross_conscious_access_threshold and (new_activation > self.conscious_access_threshold)
+            )
 
     def _propagate_impulses(self) -> Set:
         """
         Propagates impulses along connections.
         :return:
-            Set of nodes which were caused to fire.
+            Set of nodes which became active.
         """
 
         # "Propagation" happens by just incrementing the global clock.
         # But we have to check if any impulses have reached their destination.
 
-        nodes_caused_to_fire = set()
+        nodes_which_fired = set()
+        nodes_which_crossed_conscious_access_threshold = set()
 
         if self.clock in self._impulses:
 
@@ -259,22 +290,24 @@ class TemporalSpreadingActivation(object):
             if len(activation_at_destination) > 0:
                 # Each such impulse activates its target node
                 for destination_node, activation in activation_at_destination.items():
-                    node_did_fire = self.activate_node(destination_node, activation)
+                    node_did_fire, node_did_cross_conscious_access_threshold = self.activate_node(destination_node, activation)
                     if node_did_fire:
-                        nodes_caused_to_fire.add(destination_node)
+                        nodes_which_fired.add(destination_node)
+                    if node_did_cross_conscious_access_threshold:
+                        nodes_which_crossed_conscious_access_threshold.add(destination_node)
 
-        return nodes_caused_to_fire
+        return nodes_which_crossed_conscious_access_threshold
 
     def tick(self) -> Set[ActivatedNodeEvent]:
         """
         Performs the spreading activation algorithm for one tick of the clock.
         :return:
-            Set of nodes which fired.
+            Set of nodes which became active.
         """
         self.clock += 1
-        nodes_which_fired = self._propagate_impulses()
+        nodes_which_became_active = self._propagate_impulses()
 
-        return set(ActivatedNodeEvent(self.node2label[node], self.activation_of_node(node), self.clock) for node in nodes_which_fired)
+        return set(ActivatedNodeEvent(self.node2label[node], self.activation_of_node(node), self.clock) for node in nodes_which_became_active)
 
     def __str__(self):
 
