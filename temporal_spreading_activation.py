@@ -17,11 +17,11 @@ caiwingfield.net
 
 import logging
 from collections import namedtuple, defaultdict
-from typing import Set, Dict, DefaultDict
+from typing import Set, Dict, DefaultDict, NamedTuple
 
 from numpy import exp, float_power
 
-from model.graph import Graph
+from model.graph import Graph, Node
 
 logger = logging.getLogger()
 logger_format = '%(asctime)s | %(levelname)s | %(module)s | %(message)s'
@@ -42,16 +42,18 @@ class NodeActivationRecord(namedtuple('NodeActivationRecord', ['activation',
     __slots__ = ()
 
 
-class ActivatedNodeEvent(object):
+class ActivatedNodeEvent(NamedTuple):
     """
     A node activation event.
     Used to pass out of TSA.tick().
     Should be used for display and logging only, nothing high-performance!
     """
-    def __init__(self, node: str, activation: float, tick_activated: int):
-        self.node: str = node
-        self.activation: float = activation
-        self.tick_activated: int = tick_activated
+    node: str
+    activation: float
+    tick_activated: int
+
+    def __repr__(self) -> str:
+        return f"<'{self.node}' ({self.activation}) @ {self.tick_activated}>"
 
 
 def blank_node_activation_record() -> NodeActivationRecord:
@@ -125,7 +127,7 @@ class TemporalSpreadingActivation(object):
         # Nice!
         # ACTUALLY we'll use a defaultdict here, so we can quickly and easily add an impulse in the right place without
         # verbose checks.
-        self._impulses: DefaultDict[DefaultDict[float]] = defaultdict(
+        self._impulses: DefaultDict[int, DefaultDict[Node, float]] = defaultdict(
             # In case the aren't any impulses due to arrive at a particular time, we'll just find an empty dict
             lambda: defaultdict(
                 # In case there aren't any impulses due to arrive at a particular node, we'll just find 0 activation,
