@@ -17,8 +17,8 @@ caiwingfield.net
 
 import logging
 import os
-from collections import namedtuple
-from typing import Dict, Set, Tuple, Iterator
+from collections import namedtuple, defaultdict
+from typing import Dict, Set, Tuple, Iterator, DefaultDict
 
 from numpy.core.multiarray import ndarray
 from numpy.core.umath import ceil
@@ -55,6 +55,8 @@ class Graph(object):
     def __init__(self, nodes: Set[Node] = None, edges: Dict[Edge, EdgeData] = None):
         self.nodes: Set[Node] = set()
         self.edge_data: Dict[Edge, EdgeData] = dict()
+        # Node-keyed dict of sets of incident edges
+        self._incident_edges: DefaultDict[Node, Set[Edge]] = defaultdict(set)
 
         if nodes is not None:
             for node in nodes:
@@ -68,12 +70,19 @@ class Graph(object):
         return self.edge_data.keys()
 
     def add_edge(self, edge: Edge, edge_data: EdgeData = None):
+        # Check if edge already added
         if edge in self.edges:
             raise GraphError(f"Edge {edge} already exists!")
+        # Add endpoint nodes
         for node in edge:
             if node not in self.nodes:
                 self.add_node(node)
+        # Add edge
         self.edge_data[edge] = edge_data
+        # Add incident edges information
+        nodes = list(edge)
+        self._incident_edges[nodes[0]].add(edge)
+        self._incident_edges[nodes[1]].add(edge)
 
     def add_node(self, node: Node):
         if node not in self.nodes:
@@ -81,13 +90,13 @@ class Graph(object):
 
     def incident_edges(self, node: Node) -> Iterator[Edge]:
         """The edges which have `node` as an endpoint."""
-        for edge in self.edge_data.keys():
-            if node in edge:
-                yield edge
+        for edge in self._incident_edges[node]:
+            yield edge
 
     def neighbourhood(self, node: Node) -> Iterator[Node]:
         """The nodes which are connected to `node` by exactly one edge."""
-        for edge in self.incident_edges(node):
+        assert node in self._incident_edges.keys()
+        for edge in self._incident_edges[node]:
             for n in edge:
                 # Skip the source node
                 if n == node:
