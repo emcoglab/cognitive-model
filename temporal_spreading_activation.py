@@ -251,7 +251,10 @@ class TemporalSpreadingActivation(object):
 
                 edge_data = self.graph.edge_data[edge]
 
-                departure_activation = edge_data.weight * new_activation
+                if self.graph.is_weighted:
+                    departure_activation = edge_data.weight * new_activation
+                else:
+                    departure_activation = new_activation
                 arrival_activation = self.edge_decay_function(edge_data.length, departure_activation)
 
                 # Skip any impulses which will be too small on arrival

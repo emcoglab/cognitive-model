@@ -114,7 +114,8 @@ class SpreadingActivationCleglowski(object):
                     logger.info(f"'{node}' is above threshold!")
                 for neighbour in neighbourhood:
                     edge_data = self.graph.edge_data[Edge((node, neighbour))]
-                    energy_transfer = presynaptic_energy * edge_data.weight * self.decay_factor
+                    weight = edge_data.weight if self.graph.is_weighted else 1.0
+                    energy_transfer = presynaptic_energy * weight * self.decay_factor
                     self.pending_energy[neighbour] += energy_transfer
 
     def spread_n_times(self, n):

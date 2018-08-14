@@ -17,8 +17,9 @@ caiwingfield.net
 
 import logging
 import os
+from abc import abstractmethod, ABCMeta
 from collections import namedtuple
-from typing import Dict, Set, Tuple, Iterator
+from typing import Dict, Set, Tuple, Iterator, TypeVar
 
 from numpy.core.multiarray import ndarray
 from numpy.core.umath import ceil
@@ -26,7 +27,10 @@ from numpy.core.umath import ceil
 logger = logging.getLogger()
 
 Node = int
-EdgeData = namedtuple('EdgeData', ['weight', 'length'])
+EdgeDataWeighted = namedtuple('EdgeDataWeighted', ['weight', 'length'])
+EdgeDataUnweighted = namedtuple('EdgeDataUnweighted', ['length'])
+EdgeDataType = TypeVar('EdgeDataType',
+                       EdgeDataWeighted, EdgeDataUnweighted)
 
 
 class Edge(frozenset):
@@ -43,7 +47,7 @@ class GraphError(Exception):
     pass
 
 
-class Graph(object):
+class Graph(metaclass=ABCMeta):
     """
     This is a fragile class that needs to be made more robust.
     Right now Graph.nodes and Graph.edges are Dicts that can be modified at will.
@@ -52,9 +56,9 @@ class Graph(object):
 
     # TODO: Make it more robust by protecting dictionaries from editing outside of the add_* methods.
 
-    def __init__(self, nodes: Set[Node] = None, edges: Dict[Edge, EdgeData] = None):
+    def __init__(self, nodes: Set[Node] = None, edges: Dict[Edge, EdgeDataType] = None):
         self.nodes: Set[Node] = set()
-        self.edge_data: Dict[Edge, EdgeData] = dict()
+        self.edge_data: Dict[Edge, EdgeDataType] = dict()
 
         if nodes is not None:
             for node in nodes:
@@ -64,10 +68,15 @@ class Graph(object):
                 self.add_edge(edge, edge_data)
 
     @property
+    @abstractmethod
+    def is_weighted(self) -> bool:
+        pass
+
+    @property
     def edges(self):
         return self.edge_data.keys()
 
-    def add_edge(self, edge: Edge, edge_data: EdgeData = None):
+    def add_edge(self, edge: Edge, edge_data: EdgeDataType = None):
         if edge in self.edges:
             raise GraphError(f"Edge {edge} already exists!")
         for node in edge:
@@ -96,31 +105,28 @@ class Graph(object):
 
     # region IO
 
+    @abstractmethod
     def save_as_edgelist(self, file_path: str):
         """Saves a Graph as an edgelist. Disconnected nodes will not be included."""
-        with open(file_path, mode="w", encoding="utf-8") as edgelist_file:
-            for edge, edge_data in self.edge_data.items():
-                n1, n2 = sorted(edge)
-                weight = float(edge_data.weight)
-                length = int(edge_data.length)
-                edgelist_file.write(f"{Node(n1)} {Node(n2)} {weight} {length}\n")
+        pass
 
     @classmethod
+    @abstractmethod
     def load_from_edgelist(cls, file_path: str) -> 'Graph':
         """Loads a Graph from an edgelist file."""
-        graph = Graph()
-        with open(file_path, mode="r", encoding="utf-8") as edgelist_file:
-            for line in edgelist_file:
-                n1, n2, weight, length = line.split()
-                graph.add_edge(Edge((Node(n1), Node(n2))), EdgeData(weight=float(weight), length=int(length)))
-        return graph
+        pass
 
     @classmethod
-    def from_distance_matrix(cls,
-                             distance_matrix: ndarray,
-                             length_granularity: int,
-                             weighted_graph: bool,
-                             prune_connections_longer_than: int = None) -> 'Graph':
+    @abstractmethod
+    def from_distance_matrix(cls, distance_matrix: ndarray, length_granularity: int, prune_connections_longer_than: int = None):
+        pass
+
+    @classmethod
+    def _from_distance_matrix(cls,
+                              distance_matrix: ndarray,
+                              length_granularity: int,
+                              weighted_graph: bool,
+                              prune_connections_longer_than: int = None) -> 'Graph':
         """
         Produces a Graph of the correct format to underlie a TemporalSpreadingActivation.
 
@@ -154,10 +160,15 @@ class Graph(object):
             for n2 in range(n1 + 1, n_nodes):
                 distance = distance_matrix[n1, n2]
                 length = int(ceil(distance * length_granularity))
-                weight = float(1 - distance if weighted_graph else 1)
+                # Skip the edge if we're pruning and it's too long
                 if (prune_connections_longer_than is not None) and (length > prune_connections_longer_than):
                     continue
-                graph.add_edge(Edge((n1, n2)), EdgeData(weight=weight, length=length))
+                # Add the edge
+                if weighted_graph:
+                    weight = float(1 - distance)
+                    graph.add_edge(Edge((n1, n2)), EdgeDataWeighted(weight=weight, length=length))
+                else:
+                    graph.add_edge(Edge((n1, n2)), EdgeDataUnweighted(length=length))
 
         return graph
 
@@ -167,13 +178,99 @@ class Graph(object):
 
     def as_networkx_graph(self):
         """Converts the Graph into a NetworkX Graph."""
+        pass
+
+    # endregion conversion
+
+
+class WeightedGraph(Graph):
+
+    @property
+    def is_weighted(self):
+        return True
+
+    # region IO
+
+    def save_as_edgelist(self, file_path: str):
+        """Saves a Graph as an edgelist. Disconnected nodes will not be included."""
+        with open(file_path, mode="w", encoding="utf-8") as edgelist_file:
+            for edge, edge_data in self.edge_data.items():
+                n1, n2 = sorted(edge)
+                weight = float(edge_data.weight)
+                length = int(edge_data.length)
+                edgelist_file.write(f"{Node(n1)} {Node(n2)} {weight} {length}\n")
+
+    @classmethod
+    def load_from_edgelist(cls, file_path: str) -> 'WeightedGraph':
+        """Loads a Graph from an edgelist file."""
+        graph = cls()
+        with open(file_path, mode="r", encoding="utf-8") as edgelist_file:
+            for line in edgelist_file:
+                n1, n2, weight, length = line.split()
+                graph.add_edge(Edge((Node(n1), Node(n2))), EdgeDataWeighted(weight=float(weight), length=int(length)))
+        return graph
+
+    @classmethod
+    def from_distance_matrix(cls, distance_matrix: ndarray, length_granularity: int, prune_connections_longer_than: int = None):
+        return cls._from_distance_matrix(distance_matrix=distance_matrix, length_granularity=length_granularity, weighted_graph=True, prune_connections_longer_than=prune_connections_longer_than)
+
+    # endregion
+
+    # region conversion
+
+    def as_networkx_graph(self):
         import networkx
         g = networkx.Graph()
         for edge, edge_data in self.edge_data.items():
             g.add_edge(*edge.nodes, weight=edge_data.weight, length=edge_data.length)
         return g
 
-    # endregion conversion
+    # endregion
+
+
+class UnweightedGraph(Graph):
+
+    @property
+    def is_weighted(self):
+        return False
+
+    # region IO
+
+    def save_as_edgelist(self, file_path: str):
+        _default_weight: float = 1.0
+        with open(file_path, mode="w", encoding="utf-8") as edgelist_file:
+            for edge, edge_data in self.edge_data.items():
+                n1, n2 = sorted(edge)
+                weight = _default_weight
+                length = int(edge_data.length)
+                edgelist_file.write(f"{Node(n1)} {Node(n2)} {weight} {length}\n")
+
+    @classmethod
+    def load_from_edgelist(cls, file_path: str) -> 'UnweightedGraph':
+        graph = cls()
+        with open(file_path, mode="r", encoding="utf-8") as edgelist_file:
+            for line in edgelist_file:
+                # Edgelists are weighted, so we just ignore the weight
+                n1, n2, _weight, length = line.split()
+                graph.add_edge(Edge((Node(n1), Node(n2))), EdgeDataUnweighted(length=int(length)))
+        return graph
+
+    @classmethod
+    def from_distance_matrix(cls, distance_matrix: ndarray, length_granularity: int, prune_connections_longer_than: int = None):
+        return cls._from_distance_matrix(distance_matrix=distance_matrix, length_granularity=length_granularity, weighted_graph=False, prune_connections_longer_than=prune_connections_longer_than)
+
+    # endregion
+
+    # region conversion
+
+    def as_networkx_graph(self):
+        import networkx
+        g = networkx.Graph()
+        for edge, edge_data in self.edge_data.items():
+            g.add_edge(*edge.nodes, length=edge_data.length)
+        return g
+
+    # endregion
 
 
 def save_edgelist_from_distance_matrix(file_path: str,
