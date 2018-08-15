@@ -18,7 +18,7 @@ caiwingfield.net
 import logging
 from typing import Dict
 
-from model.graph import Graph, Edge
+from model.graph import Graph
 
 logger = logging.getLogger()
 logger_format = '%(asctime)s | %(levelname)s | %(module)s | %(message)s'
@@ -113,9 +113,7 @@ class SpreadingActivationCleglowski(object):
                 if verbose:
                     logger.info(f"'{node}' is above threshold!")
                 for neighbour in neighbourhood:
-                    edge_data = self.graph.edge_data[Edge((node, neighbour))]
-                    weight = edge_data.weight if self.graph.is_weighted else 1.0
-                    energy_transfer = presynaptic_energy * weight * self.decay_factor
+                    energy_transfer = presynaptic_energy * self.decay_factor
                     self.pending_energy[neighbour] += energy_transfer
 
     def spread_n_times(self, n):

@@ -251,11 +251,7 @@ class TemporalSpreadingActivation(object):
 
                 edge_data = self.graph.edge_data[edge]
 
-                if self.graph.is_weighted:
-                    departure_activation = edge_data.weight * new_activation
-                else:
-                    departure_activation = new_activation
-                arrival_activation = self.edge_decay_function(edge_data.length, departure_activation)
+                arrival_activation = self.edge_decay_function(edge_data.length, new_activation)
 
                 # Skip any impulses which will be too small on arrival
                 if arrival_activation < self.impulse_pruning_threshold:
