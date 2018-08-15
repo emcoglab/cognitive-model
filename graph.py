@@ -161,7 +161,7 @@ class Graph(metaclass=ABCMeta):
         A Graph of the correct format.
         """
 
-        graph = Graph()
+        graph = cls()
 
         n_nodes = distance_matrix.shape[0]
 
