@@ -157,6 +157,7 @@ class Graph:
         n_nodes = distance_matrix.shape[0]
 
         for n1 in range(0, n_nodes):
+            graph.add_node(n1)
             for n2 in range(n1 + 1, n_nodes):
                 distance = distance_matrix[n1, n2]
                 length = int(ceil(distance * length_granularity))
@@ -168,19 +169,54 @@ class Graph:
 
         return graph
 
+    @classmethod
+    def from_adjacency_matrix(cls, adjacency_matrix: ndarray, length: int = None) -> 'Graph':
+        graph = cls()
+
+        n_nodes = adjacency_matrix.shape[0]
+
+        for n1 in range(0, n_nodes):
+            graph.add_node(n1)
+            for n2 in range(n1 + 1, n_nodes):
+                if adjacency_matrix[n1, n2]:
+                    if length is not None:
+                        graph.add_edge(Edge((n1, n2)), EdgeData(length=length))
+                    else:
+                        graph.add_edge(Edge((n1, n2)))
+
+        return graph
+
     # endregion IO
 
-    # region conversion
+    def is_connected(self) -> bool:
+        """Returns True if the graph is connected, and False otherwise."""
+        # We pick a node at random, and see how many other nodes we can visit from it, then see if we've got everywhere.
+        # Use a breadth-first search
+        visited_nodes = set()
+        search_queue = set()
+        starting_node = list(self.nodes)[0]
+        visited_nodes.add(starting_node)
+        search_queue.add(starting_node)
+        while len(search_queue) > 0:
+            current_node = search_queue.pop()
+            neighbouring_nodes = set(node for edge in self._incident_edges[current_node] for node in edge)
+            for node in neighbouring_nodes:
+                if node not in visited_nodes:
+                    visited_nodes.add(node)
+                    search_queue.add(node)
+        # Check if we visited all the nodes
+        if len(visited_nodes) == len(self.nodes):
+            return True
+        else:
+            return False
 
-    def as_networkx_graph(self):
-        """Converts the Graph into a NetworkX Graph."""
-        import networkx
-        g = networkx.Graph()
-        for edge, edge_data in self.edge_data.items():
-            g.add_edge(*edge.nodes, length=edge_data.length)
-        return g
-
-    # endregion conversion
+    def has_orphaned_nodes(self) -> bool:
+        """Returns True if the graph has an orphaned node, and False otherwise."""
+        for node in self.nodes:
+            # Orphaned nodes have no incident edges
+            if len(self._incident_edges[node]) == 0:
+                return True
+        return False
 
 
 def save_edgelist_from_distance_matrix(file_path: str,
