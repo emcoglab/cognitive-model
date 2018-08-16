@@ -20,6 +20,7 @@ import os
 from collections import namedtuple, defaultdict
 from typing import Dict, Set, Tuple, Iterator, DefaultDict
 
+from numpy import percentile
 from numpy.core.multiarray import ndarray
 from numpy.core.umath import ceil
 
@@ -53,9 +54,14 @@ class Graph:
     # TODO: Make it more robust by protecting dictionaries from editing outside of the add_* methods.
 
     def __init__(self, nodes: Set[Node] = None, edges: Dict[Edge, EdgeData] = None):
+        # The set of nodes of the graph
+        # If modifying, you must also modify .edge_data, else we'll end up with edges without endpoints
         self.nodes: Set[Node] = set()
+        # The data associated with each edge.
+        # If modifying this, you must also modify ._incident_edges, which caches incidence information.
         self.edge_data: Dict[Edge, EdgeData] = dict()
         # Node-keyed dict of sets of incident edges
+        # Redundant cache for fast lookup.
         self._incident_edges: DefaultDict[Node, Set[Edge]] = defaultdict(set)
 
         if nodes is not None:
@@ -137,7 +143,7 @@ class Graph:
     def from_distance_matrix(cls,
                              distance_matrix: ndarray,
                              length_granularity: int,
-                             prune_connections_longer_than: int = None) -> 'Graph':
+                             ignore_edges_longer_than: int = None) -> 'Graph':
         """
         Produces a Graph of the correct format to underlie a TemporalSpreadingActivation.
 
@@ -149,17 +155,17 @@ class Graph:
         Distances will be converted to integer lengths using the supplied scaling factor.
 
         :param distance_matrix:
-        A symmetric distance matrix in numpy format.
+            A symmetric distance matrix in numpy format.
         :param length_granularity:
-        Distances will be scaled into integer connection lengths using this granularity scaling factor.
-        Whether to use weights on the edges.
-        If True, distances will be converted to weights using x ↦ 1-x.
-            (This means it's only suitable for things like cosine and correlation distances, not Euclidean.)
-        If False, all edges get the same weight.
-        :param prune_connections_longer_than:
-        (Optional.) If provided and not None: Any connections with lengths (strictly) longer than this will be severed.
+            Distances will be scaled into integer connection lengths using this granularity scaling factor.
+            Whether to use weights on the edges.
+            If True, distances will be converted to weights using x ↦ 1-x.
+                (This means it's only suitable for things like cosine and correlation distances, not Euclidean.)
+            If False, all edges get the same weight.
+        :param ignore_edges_longer_than:
+            (Optional.) If provided and not None: Any connections with lengths (strictly) longer than this will be severed.
         :return:
-        A Graph of the correct format.
+            A Graph of the correct format.
         """
 
         graph = cls()
@@ -172,7 +178,7 @@ class Graph:
                 distance = distance_matrix[n1, n2]
                 length = int(ceil(distance * length_granularity))
                 # Skip the edge if we're pruning and it's too long
-                if (prune_connections_longer_than is not None) and (length > prune_connections_longer_than):
+                if (ignore_edges_longer_than is not None) and (length > ignore_edges_longer_than):
                     continue
                 # Add the edge
                 graph.add_edge(Edge((n1, n2)), EdgeData(length=length))
@@ -197,6 +203,8 @@ class Graph:
         return graph
 
     # endregion IO
+
+    # region topology
 
     def is_connected(self) -> bool:
         """Returns True if the graph is connected, and False otherwise."""
@@ -228,11 +236,69 @@ class Graph:
                 return True
         return False
 
+    # endregion
+
+    # region topography and length metrics
+
+    def edge_length_quantile(self, quantile):
+        """
+        Return the quantile(s) at a specified length.
+        :param quantile:
+            float in range of [0,1] (or sequence of floats)
+        :return:
+            length (or sequence of lengths) marking specified quantile.
+            Returned lengths will not be interpolated - nearest lengths to the quantile will be given.
+        """
+        return percentile((self.edge_data[edge].length for edge in self.edges),
+                          # I don't know why this says it's expecting an int — it's not.
+                          q=quantile * 100, interpolation="nearest")
+
+    # endregion
+
+    # region pruning
+
+    def prune_longest_edges_by_length(self, length_threshold: int):
+        """
+        Prune the longest edges in the graph by length.
+        :param length_threshold:
+            Edges will be pruned if they are strictly longer than this threshold.
+        :return:
+        """
+        edges_to_prune = []
+        for edge in self.edges:
+            length = self.edge_data[edge].length
+            if length > length_threshold:
+                edges_to_prune.append(edge)
+        for edge in edges_to_prune:
+            self.remove_edge(edge)
+
+    def remove_edge(self, edge: Edge):
+        """Remove an edge from the graph. Does not remove endpoint nodes."""
+        # Remove from edge dictionary
+        self.edge_data.pop(edge)
+        # Remove from redundant adjacency dictionary
+        n1, n2 = edge.nodes
+        self._incident_edges[n1].remove(edge)
+        self._incident_edges[n2].remove(edge)
+
+    def prune_longest_edges_by_quantile(self, quantile: float):
+        """
+        Prune the longest edges in the graph by quantile.
+        :param quantile:
+            The quantile by which to prune the graph.
+            So a value of 0.1 will result in the longest 10% of edges being pruned.
+        :return:
+        """
+        # We invert the quantile, so that
+        pruning_quantile = 1 - quantile
+        self.prune_longest_edges_by_length(self.edge_length_quantile(quantile))
+
+    # endregion
+
 
 def save_edgelist_from_distance_matrix(file_path: str,
                                        distance_matrix: ndarray,
-                                       length_granularity: int,
-                                       prune_connections_longer_than: int = None):
+                                       length_granularity: int):
     """
     Saves a graph of the correct form to underlie a TemporalSpreadingActivation.
     Saved as a networkx-compatible edgelist format.
@@ -244,7 +310,6 @@ def save_edgelist_from_distance_matrix(file_path: str,
     :param file_path:
     :param distance_matrix:
     :param length_granularity:
-    :param prune_connections_longer_than:
     :return:
     """
 
@@ -264,8 +329,6 @@ def save_edgelist_from_distance_matrix(file_path: str,
             for j in range(i + 1, distance_matrix.shape[1]):
                 distance = distance_matrix[i, j]
                 length = int(ceil(distance * length_granularity))
-                if (prune_connections_longer_than is not None) and (length > prune_connections_longer_than):
-                    continue
                 # Write edge to file
                 temp_file.write(f"{i} {j} {length}\n")
     os.rename(temp_file_path, file_path)
