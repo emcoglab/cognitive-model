@@ -114,13 +114,23 @@ class Graph:
                 edgelist_file.write(f"{Node(n1)} {Node(n2)} {length}\n")
 
     @classmethod
-    def load_from_edgelist(cls, file_path: str) -> 'Graph':
-        """Loads a Graph from an edgelist file."""
+    def load_from_edgelist(cls, file_path: str, ignore_edges_longer_than: int = None) -> 'Graph':
+        """
+        Loads a Graph from an edgelist file.
+        :param file_path:
+        :param ignore_edges_longer_than:
+            If provided and not None, edges longer than this will not be included in the graph (but the endpoint nodes will).
+        :return:
+        """
         graph = cls()
-        with open(file_path, mode="r", encoding="utf-8") as edgelist_file:
-            for line in edgelist_file:
-                n1, n2, length = line.split()
-                graph.add_edge(Edge((Node(n1), Node(n2))), EdgeData(length=int(length)))
+        for edge, edge_data in edge_data_from_edgelist(file_path):
+            if ignore_edges_longer_than is not None and edge_data.length > ignore_edges_longer_than:
+                n1, n2 = edge.nodes
+                # Add nodes but not edge
+                graph.add_node(n1)
+                graph.add_node(n2)
+                continue
+            graph.add_edge(edge, edge_data)
         return graph
 
     @classmethod
@@ -259,3 +269,11 @@ def save_edgelist_from_distance_matrix(file_path: str,
                 # Write edge to file
                 temp_file.write(f"{i} {j} {length}\n")
     os.rename(temp_file_path, file_path)
+
+
+def edge_data_from_edgelist(file_path: str) -> Iterator[Tuple[Edge, EdgeData]]:
+    """Yields tuples of (edge: Edge, edge_data: EdgeData) from an edgelist file."""
+    with open(file_path, mode="r", encoding="utf-8") as edgelist_file:
+        for line in edgelist_file:
+            n1, n2, length = line.split()
+            yield Edge((Node(n1), Node(n2))), EdgeData(length=int(length))
