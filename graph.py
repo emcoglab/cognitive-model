@@ -17,7 +17,7 @@ caiwingfield.net
 
 import logging
 import os
-from collections import namedtuple, defaultdict
+from collections import namedtuple, defaultdict, Sequence
 from typing import Dict, Set, Tuple, Iterator, DefaultDict
 
 from numpy import percentile
@@ -249,9 +249,18 @@ class Graph:
             length (or sequence of lengths) marking specified quantile.
             Returned lengths will not be interpolated - nearest lengths to the quantile will be given.
         """
-        return percentile((self.edge_data[edge].length for edge in self.edges),
-                          # I don't know why this says it's expecting an int — it's not.
-                          q=quantile * 100, interpolation="nearest")
+        # If one quantile provided
+        if isinstance(quantile, float):
+            centile = 100 * quantile
+        # If sequence of quantiles provided
+        elif isinstance(quantile, Sequence):
+            centile = [100 * q for q in quantile]
+        else:
+            raise TypeError()
+
+        length = percentile([self.edge_data[edge].length for edge in self.edges], centile, interpolation="nearest")
+
+        return length
 
     # endregion
 
@@ -289,9 +298,10 @@ class Graph:
             So a value of 0.1 will result in the longest 10% of edges being pruned.
         :return:
         """
-        # We invert the quantile, so that
+        # We invert the quantile, so that if `quantile` is 0.1, we prune the TOP 10% (i.e. prune at the 90th centile)
         pruning_quantile = 1 - quantile
-        self.prune_longest_edges_by_length(self.edge_length_quantile(quantile))
+        pruning_length = self.edge_length_quantile(pruning_quantile)
+        self.prune_longest_edges_by_length(pruning_length)
 
     # endregion
 
