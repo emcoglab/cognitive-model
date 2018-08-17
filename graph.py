@@ -228,13 +228,22 @@ class Graph:
         else:
             return False
 
+    def _is_orphaned(self, node: Node) -> bool:
+        return len(self._incident_edges[node]) == 0
+
+    def _iter_orphaned_nodes(self) -> Iterator[Node]:
+        """Iterator of orphaned nodes."""
+        for node in self.nodes:
+            if self._is_orphaned(node):
+                yield node
+
+    def orphaned_nodes(self) -> Set[Node]:
+        """The set of orphaned nodes."""
+        return set(self._iter_orphaned_nodes())
+
     def has_orphaned_nodes(self) -> bool:
         """Returns True if the graph has an orphaned node, and False otherwise."""
-        for node in self.nodes:
-            # Orphaned nodes have no incident edges
-            if len(self._incident_edges[node]) == 0:
-                return True
-        return False
+        return any(True for _ in self._iter_orphaned_nodes())
 
     # endregion
 
@@ -258,7 +267,9 @@ class Graph:
         else:
             raise TypeError()
 
-        length = percentile([self.edge_data[edge].length for edge in self.edges], centile, interpolation="nearest")
+        length = percentile([self.edge_data[edge].length for edge in self.edges],
+                            # I don't know why Pycharm thinks its expecting an int here; it shouldn't be
+                            centile, interpolation="nearest")
 
         return length
 
