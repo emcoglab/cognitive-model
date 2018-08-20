@@ -129,7 +129,7 @@ class Graph:
         :return:
         """
         graph = cls()
-        for edge, edge_data in edge_data_from_edgelist(file_path):
+        for edge, edge_data in iter_edge_data_from_edgelist(file_path):
             if ignore_edges_longer_than is not None and edge_data.length > ignore_edges_longer_than:
                 n1, n2 = edge.nodes
                 # Add nodes but not edge
@@ -355,7 +355,7 @@ def save_edgelist_from_distance_matrix(file_path: str,
     os.rename(temp_file_path, file_path)
 
 
-def edge_data_from_edgelist(file_path: str) -> Iterator[Tuple[Edge, EdgeData]]:
+def iter_edge_data_from_edgelist(file_path: str) -> Iterator[Tuple[Edge, EdgeData]]:
     """Yields tuples of (edge: Edge, edge_data: EdgeData) from an edgelist file."""
     with open(file_path, mode="r", encoding="utf-8") as edgelist_file:
         for line in edgelist_file:

@@ -49,3 +49,8 @@ def add_column_to_csv(column, column_name: str, csv_path: str, index_col=None):
         raise Exception(f"{column_name} column already exists in csv")
     existing_data[column_name] = Series(data=column, index=None)
     existing_data.to_csv(csv_path, index=(index_col is not None), header=True)
+
+
+def comment_line_from_str(message: str) -> str:
+    """Converts a string into a commented line (with trailing newline)."""
+    return f"# {message}\n"
