@@ -249,15 +249,15 @@ class TemporalSpreadingActivation(object):
                 else:
                     raise ValueError()
 
-                edge_data = self.graph.edge_data[edge]
+                length = self.graph.edge_lengths[edge]
 
-                arrival_activation = self.edge_decay_function(edge_data.length, new_activation)
+                arrival_activation = self.edge_decay_function(length, new_activation)
 
                 # Skip any impulses which will be too small on arrival
                 if arrival_activation < self.impulse_pruning_threshold:
                     continue
 
-                arrival_time = int(self.clock + edge_data.length)
+                arrival_time = int(self.clock + length)
 
                 # Accumulate activation at target node at time when it's due to arrive
                 self._impulses[arrival_time][target_node] += arrival_activation

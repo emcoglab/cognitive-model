@@ -17,7 +17,7 @@ caiwingfield.net
 
 import logging
 import os
-from collections import namedtuple, defaultdict
+from collections import defaultdict
 from typing import Dict, Set, Tuple, Iterator, DefaultDict
 
 from numpy.core.multiarray import ndarray
@@ -26,7 +26,7 @@ from numpy.core.umath import ceil
 logger = logging.getLogger()
 
 Node = int
-EdgeData = namedtuple('EdgeData', ['length'])
+Length = int
 
 
 class Edge(frozenset):
@@ -52,9 +52,9 @@ class Graph:
 
     # TODO: Make it more robust by protecting dictionaries from editing outside of the add_* methods.
 
-    def __init__(self, nodes: Set[Node] = None, edges: Dict[Edge, EdgeData] = None):
+    def __init__(self, nodes: Set[Node] = None, edges: Dict[Edge, Length] = None):
         self.nodes: Set[Node] = set()
-        self.edge_data: Dict[Edge, EdgeData] = dict()
+        self.edge_lengths: Dict[Edge, Length] = dict()
         # Node-keyed dict of sets of incident edges
         self._incident_edges: DefaultDict[Node, Set[Edge]] = defaultdict(set)
 
@@ -62,14 +62,14 @@ class Graph:
             for node in nodes:
                 self.add_node(node)
         if edges is not None:
-            for edge, edge_data in edges.items():
-                self.add_edge(edge, edge_data)
+            for edge, length in edges.items():
+                self.add_edge(edge, length)
 
     @property
     def edges(self):
-        return self.edge_data.keys()
+        return self.edge_lengths.keys()
 
-    def add_edge(self, edge: Edge, edge_data: EdgeData = None):
+    def add_edge(self, edge: Edge, length: Length = None):
         # Check if edge already added
         if edge in self.edges:
             raise GraphError(f"Edge {edge} already exists!")
@@ -78,7 +78,7 @@ class Graph:
             if node not in self.nodes:
                 self.add_node(node)
         # Add edge
-        self.edge_data[edge] = edge_data
+        self.edge_lengths[edge] = length
         # Add incident edges information
         nodes = list(edge)
         self._incident_edges[nodes[0]].add(edge)
@@ -108,9 +108,8 @@ class Graph:
     def save_as_edgelist(self, file_path: str):
         """Saves a Graph as an edgelist. Disconnected nodes will not be included."""
         with open(file_path, mode="w", encoding="utf-8") as edgelist_file:
-            for edge, edge_data in self.edge_data.items():
+            for edge, length in self.edge_lengths.items():
                 n1, n2 = sorted(edge)
-                length = int(edge_data.length)
                 edgelist_file.write(f"{Node(n1)} {Node(n2)} {length}\n")
 
     @classmethod
@@ -120,7 +119,7 @@ class Graph:
         with open(file_path, mode="r", encoding="utf-8") as edgelist_file:
             for line in edgelist_file:
                 n1, n2, length = line.split()
-                graph.add_edge(Edge((Node(n1), Node(n2))), EdgeData(length=int(length)))
+                graph.add_edge(Edge((Node(n1), Node(n2))), Length(length))
         return graph
 
     @classmethod
@@ -164,7 +163,7 @@ class Graph:
                 if (prune_connections_longer_than is not None) and (length > prune_connections_longer_than):
                     continue
                 # Add the edge
-                graph.add_edge(Edge((n1, n2)), EdgeData(length=length))
+                graph.add_edge(Edge((n1, n2)), Length(length))
 
         return graph
 
@@ -176,8 +175,8 @@ class Graph:
         """Converts the Graph into a NetworkX Graph."""
         import networkx
         g = networkx.Graph()
-        for edge, edge_data in self.edge_data.items():
-            g.add_edge(*edge.nodes, length=edge_data.length)
+        for edge, length in self.edge_lengths.items():
+            g.add_edge(*edge.nodes, length=length)
         return g
 
     # endregion conversion
