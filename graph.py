@@ -23,6 +23,7 @@ from typing import Dict, Set, Tuple, Iterator, DefaultDict
 from numpy import percentile
 from numpy.core.multiarray import ndarray
 from numpy.core.umath import ceil
+from sortedcontainers import SortedSet
 
 logger = logging.getLogger()
 
@@ -41,6 +42,14 @@ class Edge(frozenset):
 
 
 class GraphError(Exception):
+    pass
+
+
+class EdgeExistsError(GraphError):
+    pass
+
+
+class EdgeNotExistsError(GraphError):
     pass
 
 
@@ -76,9 +85,16 @@ class Graph:
         return self.edge_lengths.keys()
 
     def add_edge(self, edge: Edge, length: Length = None):
+        """
+        Add an edge to the graph, and endpoint nodes.
+        :param edge:
+        :param length:
+        :raises EdgeExistsError if edge already exists in graph.
+        :return:
+        """
         # Check if edge already added
         if edge in self.edges:
-            raise GraphError(f"Edge {edge} already exists!")
+            raise EdgeExistsError(f"Edge {edge} already exists!")
         # Add endpoint nodes
         for node in edge:
             if node not in self.nodes:
@@ -91,6 +107,7 @@ class Graph:
         self._incident_edges[nodes[1]].add(edge)
 
     def add_node(self, node: Node):
+        """Add a bare node to the graph if it's not already there."""
         if node not in self.nodes:
             self.nodes.add(node)
 
@@ -116,33 +133,101 @@ class Graph:
         with open(file_path, mode="w", encoding="utf-8") as edgelist_file:
             for edge, length in self.edge_lengths.items():
                 n1, n2 = sorted(edge)
-                edgelist_file.write(f"{Node(n1)} {Node(n2)} {Length(length)}\n")
+                edgelist_file.write(f"{Node(n1)} {Node(n2)} {length}\n")
 
     @classmethod
-    def load_from_edgelist(cls, file_path: str, ignore_edges_longer_than: Length = None) -> 'Graph':
+    def load_from_edgelist(cls,
+                           file_path: str,
+                           ignore_edges_longer_than: Length = None,
+                           keep_at_least_n_edges: int = 0) -> 'Graph':
         """
         Loads a Graph from an edgelist file.
         :param file_path:
         :param ignore_edges_longer_than:
-            If provided and not None, edges longer than this will not be included in the graph (but the endpoint nodes will).
+            If provided and not None, edges longer than this will not be included in the graph (but the endpoint nodes
+            will).
+        :param keep_at_least_n_edges:
+            Default 0.
+            Make sure each node keeps at least this number of edges.
         :return:
         """
+        ignoring_long_edges = (ignore_edges_longer_than is not None)
+        if not ignoring_long_edges:
+            assert not keep_at_least_n_edges
+
+        edges_to_keep = defaultdict(lambda: SortedSet(key=lambda x: x[1]))
+
         graph = cls()
         for edge, length in iter_edge_data_from_edgelist(file_path):
-            if ignore_edges_longer_than is not None and length > ignore_edges_longer_than:
-                n1, n2 = edge.nodes
+            if ignoring_long_edges and length > ignore_edges_longer_than:
                 # Add nodes but not edge
-                graph.add_node(n1)
-                graph.add_node(n2)
+                for node in edge:
+                    graph.add_node(node)
+
+                # Keep some edges around to avoid orphans
+                if keep_at_least_n_edges:
+                    for node in edge:
+                        edges_to_keep[node].add((edge, length))
+                        # We only want to force-keep the n smallest edges per node, so discard the largest ones once we
+                        # have too many
+                        if len(edges_to_keep[node]) > keep_at_least_n_edges:
+                            edges_to_keep[node].pop(-1)
+
                 continue
             graph.add_edge(edge, length)
+
+        # Add in the edges we decided to keep anyway
+        if keep_at_least_n_edges:
+            graph.__add_kept_edges(edges_to_keep, keep_at_least_n_edges)
+
         return graph
+
+    def __add_kept_edges(self, edges_to_keep_buffer: DefaultDict[Node, SortedSet], keep_at_least_n_edges: int):
+        """
+        When not keeping all edges, we will want to add some back in, but not all of them.
+        This reusable code keeps the logic of which edges we actually want to keep.
+        :param edges_to_keep_buffer:
+            Node-keyed defaultdict of sortedsets of (edge, length) tuples
+        :param keep_at_least_n_edges:
+        :return:
+        """
+        for node, edges_to_keep_this_node in edges_to_keep_buffer.items():
+            # We only want to force-keep *up-to* n edges, so if we've already got some, we don't need to force-add
+            # all n in the buffer.
+            # So we first forget to add any edges the node already has...
+            forget = []
+            for edge, length in edges_to_keep_this_node:
+                if edge in self.incident_edges(node):
+                    forget.append((edge, length))
+            for f in forget:
+                edges_to_keep_this_node.remove(f)
+            # ... and then forget as many others as necessary.
+            n_excess_kept_edges = (len(self._incident_edges[node])
+                                   + len(edges_to_keep_this_node)
+                                   - keep_at_least_n_edges)
+            for _ in range(n_excess_kept_edges):
+                try:
+                    edges_to_keep_this_node.pop(-1)
+                # In case many edges have already been added back for this node as the endpoint for edges incident
+                # to other nodes, we may have already exceeded our quotient
+                # In this case we will try to over-empty this set
+                except IndexError:
+                    break
+
+            # Finally we add the remaining ones
+            for edge, length in edges_to_keep_this_node:
+                try:
+                    self.add_edge(edge, length)
+                # Each edge will end up being recorded twice
+                except EdgeExistsError:
+                    pass
 
     @classmethod
     def from_distance_matrix(cls,
                              distance_matrix: ndarray,
                              length_granularity: int,
-                             ignore_edges_longer_than: Length = None) -> 'Graph':
+                             ignore_edges_longer_than: Length = None,
+                             keep_at_least_n_edges: int = 0) -> 'Graph':
         """
         Produces a Graph of the correct format to underlie a TemporalSpreadingActivation.
 
@@ -162,10 +247,19 @@ class Graph:
                 (This means it's only suitable for things like cosine and correlation distances, not Euclidean.)
             If False, all edges get the same weight.
         :param ignore_edges_longer_than:
-            (Optional.) If provided and not None: Any connections with lengths (strictly) longer than this will be severed.
+            (Optional.) If provided and not None: Any connections with lengths (strictly) longer than this will be
+            severed.
+        :param keep_at_least_n_edges:
+            Default 0.
+            Make sure each node keeps at least this number of edges.
         :return:
             A Graph of the correct format.
         """
+        ignoring_long_edges = (ignore_edges_longer_than is not None)
+        if not ignoring_long_edges:
+            assert not keep_at_least_n_edges
+
+        edges_to_keep = defaultdict(lambda: SortedSet(key=lambda x: x[1]))
 
         graph = cls()
 
@@ -174,13 +268,27 @@ class Graph:
         for n1 in range(0, n_nodes):
             graph.add_node(n1)
             for n2 in range(n1 + 1, n_nodes):
+                graph.add_node(n2)
+                edge = Edge((n1, n2))
                 distance = distance_matrix[n1, n2]
                 length = Length(ceil(distance * length_granularity))
                 # Skip the edge if we're pruning and it's too long
-                if (ignore_edges_longer_than is not None) and (length > ignore_edges_longer_than):
-                    continue
-                # Add the edge
-                graph.add_edge(Edge((n1, n2)), length)
+                if not ignoring_long_edges or length <= ignore_edges_longer_than:
+                    graph.add_edge(edge, length)
+                else:
+                    # But keep a few around so we don't get orphans
+                    if keep_at_least_n_edges:
+                        edges_to_keep[n1].add((edge, length))
+                        edges_to_keep[n2].add((edge, length))
+                        # But don't keep too many
+                        if len(edges_to_keep[n1]) > keep_at_least_n_edges:
+                            edges_to_keep[n1].pop(-1)
+                        if len(edges_to_keep[n2]) > keep_at_least_n_edges:
+                            edges_to_keep[n2].pop(-1)
+
+        # Add in the edges we decided to keep anyway
+        if keep_at_least_n_edges:
+            graph.__add_kept_edges(edges_to_keep, keep_at_least_n_edges)
 
         return graph
 
@@ -276,23 +384,49 @@ class Graph:
 
     # region pruning
 
-    def prune_longest_edges_by_length(self, length_threshold: Length):
+    def prune_longest_edges_by_length(self, length_threshold: Length, keep_at_least_n_edges: int = 0):
         """
         Prune the longest edges in the graph by length.
         :param length_threshold:
             Edges will be pruned if they are strictly longer than this threshold.
+        :param keep_at_least_n_edges:
+            Default 0.
+            Make sure each node keeps at least this number of edges.
         :return:
         """
-        edges_to_prune = []
+
+        edges_to_prune = set()
+        edges_to_keep = defaultdict(lambda: SortedSet(key=lambda x: x[1]))
+
         for edge in self.edges:
             length = self.edge_lengths[edge]
             if length > length_threshold:
-                edges_to_prune.append(edge)
+                edges_to_prune.add(edge)
+
+                if keep_at_least_n_edges:
+                    for node in edge.nodes:
+                        edges_to_keep[node].add((edge, length))
+                        # If we've got too many edges to keep now, drop the largest
+                        if len(edges_to_keep[node]) > keep_at_least_n_edges:
+                            edges_to_keep[node].pop(-1)
+
+        # Prune the edges
         for edge in edges_to_prune:
             self.remove_edge(edge)
 
+        # Add back in the edges we wanted to keep anyway
+        if keep_at_least_n_edges:
+            self.__add_kept_edges(edges_to_keep, keep_at_least_n_edges)
+
     def remove_edge(self, edge: Edge):
-        """Remove an edge from the graph. Does not remove endpoint nodes."""
+        """
+        Remove an edge from the graph. Does not remove endpoint nodes.
+        :param edge:
+        :raises EdgeNotExistsError if edge does not exist in the graph.
+        :return:
+        """
+        if edge not in self.edges:
+            raise EdgeNotExistsError(f"Edge {edge} does not exist.")
         # Remove from edge dictionary
         self.edge_lengths.pop(edge)
         # Remove from redundant adjacency dictionary
@@ -300,18 +434,21 @@ class Graph:
         self._incident_edges[n1].remove(edge)
         self._incident_edges[n2].remove(edge)
 
-    def prune_longest_edges_by_quantile(self, quantile: float):
+    def prune_longest_edges_by_quantile(self, quantile: float, keep_at_least_n_edges: int = 0):
         """
         Prune the longest edges in the graph by quantile.
         :param quantile:
             The quantile by which to prune the graph.
             So a value of 0.1 will result in the longest 10% of edges being pruned.
+        :param keep_at_least_n_edges:
+            Default 0.
+            Make sure each node keeps at least this number of edges.
         :return:
         """
         # We invert the quantile, so that if `quantile` is 0.1, we prune the TOP 10% (i.e. prune at the 90th centile)
         pruning_quantile = 1 - quantile
         pruning_length = self.edge_length_quantile(pruning_quantile)
-        self.prune_longest_edges_by_length(pruning_length)
+        self.prune_longest_edges_by_length(pruning_length, keep_at_least_n_edges)
 
     # endregion
 
