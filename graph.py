@@ -158,7 +158,7 @@ class Graph:
         edges_to_keep = defaultdict(lambda: SortedSet(key=lambda x: x[1]))
 
         graph = cls()
-        for edge, length in iter_edge_data_from_edgelist(file_path):
+        for edge, length in iter_edges_from_edgelist(file_path):
             if ignoring_long_edges and length > ignore_edges_longer_than:
                 # Add nodes but not edge
                 for node in edge:
@@ -491,7 +491,7 @@ def save_edgelist_from_distance_matrix(file_path: str,
     os.rename(temp_file_path, file_path)
 
 
-def iter_edge_data_from_edgelist(file_path: str) -> Iterator[Tuple[Edge, Length]]:
+def iter_edges_from_edgelist(file_path: str) -> Iterator[Tuple[Edge, Length]]:
     """Yields tuples of (edge: Edge, edge_lengths: EdgeData) from an edgelist file."""
     with open(file_path, mode="r", encoding="utf-8") as edgelist_file:
         for line in edgelist_file:
