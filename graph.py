@@ -354,34 +354,6 @@ class Graph:
 
     # endregion
 
-    # region topography and length metrics
-
-    def edge_length_quantile(self, quantile):
-        """
-        Return the quantile(s) at a specified length.
-        :param quantile:
-            float in range of [0,1] (or sequence of floats)
-        :return:
-            length (or sequence of lengths) marking specified quantile.
-            Returned lengths will not be interpolated - nearest lengths to the quantile will be given.
-        """
-        # If one quantile provided
-        if isinstance(quantile, float):
-            centile = 100 * quantile
-        # If sequence of quantiles provided
-        elif isinstance(quantile, Sequence):
-            centile = [100 * q for q in quantile]
-        else:
-            raise TypeError()
-
-        length = percentile([self.edge_lengths[edge] for edge in self.edges],
-                            # I don't know why Pycharm thinks its expecting an int here; it shouldn't be
-                            centile, interpolation="nearest")
-
-        return length
-
-    # endregion
-
     # region pruning
 
     def prune_longest_edges_by_length(self, length_threshold: Length, keep_at_least_n_edges: int = 0):
@@ -447,7 +419,7 @@ class Graph:
         """
         # We invert the quantile, so that if `quantile` is 0.1, we prune the TOP 10% (i.e. prune at the 90th centile)
         pruning_quantile = 1 - quantile
-        pruning_length = self.edge_length_quantile(pruning_quantile)
+        pruning_length = edge_length_quantile([length for edge, length in self.edge_lengths], pruning_quantile)
         self.prune_longest_edges_by_length(pruning_length, keep_at_least_n_edges)
 
     # endregion
@@ -489,6 +461,32 @@ def save_edgelist_from_distance_matrix(file_path: str,
                 # Write edge to file
                 temp_file.write(f"{i} {j} {length}\n")
     os.rename(temp_file_path, file_path)
+
+
+def edge_length_quantile(lengths, quantile):
+    """
+    Return the quantile(s) at a specified length.
+    :param lengths
+        Sequence of lengths from which to form a distribution.
+    :param quantile:
+        float in range of [0,1] (or sequence of floats)
+    :return:
+        length (or sequence of lengths) marking specified quantile.
+        Returned lengths will not be interpolated - nearest lengths to the quantile will be given.
+    """
+    # If one quantile provided
+    if isinstance(quantile, float):
+        centile = 100 * quantile
+    # If sequence of quantiles provided
+    elif isinstance(quantile, Sequence):
+        centile = [100 * q for q in quantile]
+    else:
+        raise TypeError()
+    # noinspection PyTypeChecker
+    length = percentile(lengths,
+                        # I don't know why Pycharm thinks its expecting an int here; it shouldn't be
+                        centile, interpolation="nearest")
+    return length
 
 
 def iter_edges_from_edgelist(file_path: str) -> Iterator[Tuple[Edge, Length]]:
