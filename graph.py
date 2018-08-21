@@ -17,7 +17,7 @@ caiwingfield.net
 
 import logging
 import os
-from collections import namedtuple, defaultdict, Sequence
+from collections import defaultdict, Sequence
 from typing import Dict, Set, Tuple, Iterator, DefaultDict
 
 from numpy import percentile
@@ -27,7 +27,7 @@ from numpy.core.umath import ceil
 logger = logging.getLogger()
 
 Node = int
-EdgeData = namedtuple('EdgeData', ['length'])
+Length = int
 
 
 class Edge(frozenset):
@@ -53,13 +53,13 @@ class Graph:
 
     # TODO: Make it more robust by protecting dictionaries from editing outside of the add_* methods.
 
-    def __init__(self, nodes: Set[Node] = None, edges: Dict[Edge, EdgeData] = None):
+    def __init__(self, nodes: Set[Node] = None, edges: Dict[Edge, Length] = None):
         # The set of nodes of the graph
-        # If modifying, you must also modify .edge_data, else we'll end up with edges without endpoints
+        # If modifying, you must also modify .edge_lengths, else we'll end up with edges without endpoints
         self.nodes: Set[Node] = set()
-        # The data associated with each edge.
+        # The length associated with each edge.
         # If modifying this, you must also modify ._incident_edges, which caches incidence information.
-        self.edge_data: Dict[Edge, EdgeData] = dict()
+        self.edge_lengths: Dict[Edge, Length] = dict()
         # Node-keyed dict of sets of incident edges
         # Redundant cache for fast lookup.
         self._incident_edges: DefaultDict[Node, Set[Edge]] = defaultdict(set)
@@ -68,14 +68,14 @@ class Graph:
             for node in nodes:
                 self.add_node(node)
         if edges is not None:
-            for edge, edge_data in edges.items():
-                self.add_edge(edge, edge_data)
+            for edge, length in edges.items():
+                self.add_edge(edge, length)
 
     @property
     def edges(self):
-        return self.edge_data.keys()
+        return self.edge_lengths.keys()
 
-    def add_edge(self, edge: Edge, edge_data: EdgeData = None):
+    def add_edge(self, edge: Edge, length: Length = None):
         # Check if edge already added
         if edge in self.edges:
             raise GraphError(f"Edge {edge} already exists!")
@@ -84,7 +84,7 @@ class Graph:
             if node not in self.nodes:
                 self.add_node(node)
         # Add edge
-        self.edge_data[edge] = edge_data
+        self.edge_lengths[edge] = length
         # Add incident edges information
         nodes = list(edge)
         self._incident_edges[nodes[0]].add(edge)
@@ -114,13 +114,12 @@ class Graph:
     def save_as_edgelist(self, file_path: str):
         """Saves a Graph as an edgelist. Disconnected nodes will not be included."""
         with open(file_path, mode="w", encoding="utf-8") as edgelist_file:
-            for edge, edge_data in self.edge_data.items():
+            for edge, length in self.edge_lengths.items():
                 n1, n2 = sorted(edge)
-                length = int(edge_data.length)
-                edgelist_file.write(f"{Node(n1)} {Node(n2)} {length}\n")
+                edgelist_file.write(f"{Node(n1)} {Node(n2)} {Length(length)}\n")
 
     @classmethod
-    def load_from_edgelist(cls, file_path: str, ignore_edges_longer_than: int = None) -> 'Graph':
+    def load_from_edgelist(cls, file_path: str, ignore_edges_longer_than: Length = None) -> 'Graph':
         """
         Loads a Graph from an edgelist file.
         :param file_path:
@@ -129,21 +128,21 @@ class Graph:
         :return:
         """
         graph = cls()
-        for edge, edge_data in iter_edge_data_from_edgelist(file_path):
-            if ignore_edges_longer_than is not None and edge_data.length > ignore_edges_longer_than:
+        for edge, length in iter_edge_data_from_edgelist(file_path):
+            if ignore_edges_longer_than is not None and length > ignore_edges_longer_than:
                 n1, n2 = edge.nodes
                 # Add nodes but not edge
                 graph.add_node(n1)
                 graph.add_node(n2)
                 continue
-            graph.add_edge(edge, edge_data)
+            graph.add_edge(edge, length)
         return graph
 
     @classmethod
     def from_distance_matrix(cls,
                              distance_matrix: ndarray,
                              length_granularity: int,
-                             ignore_edges_longer_than: int = None) -> 'Graph':
+                             ignore_edges_longer_than: Length = None) -> 'Graph':
         """
         Produces a Graph of the correct format to underlie a TemporalSpreadingActivation.
 
@@ -176,12 +175,12 @@ class Graph:
             graph.add_node(n1)
             for n2 in range(n1 + 1, n_nodes):
                 distance = distance_matrix[n1, n2]
-                length = int(ceil(distance * length_granularity))
+                length = Length(ceil(distance * length_granularity))
                 # Skip the edge if we're pruning and it's too long
                 if (ignore_edges_longer_than is not None) and (length > ignore_edges_longer_than):
                     continue
                 # Add the edge
-                graph.add_edge(Edge((n1, n2)), EdgeData(length=length))
+                graph.add_edge(Edge((n1, n2)), length)
 
         return graph
 
@@ -196,7 +195,7 @@ class Graph:
             for n2 in range(n1 + 1, n_nodes):
                 if adjacency_matrix[n1, n2]:
                     if length is not None:
-                        graph.add_edge(Edge((n1, n2)), EdgeData(length=length))
+                        graph.add_edge(Edge((n1, n2)), length)
                     else:
                         graph.add_edge(Edge((n1, n2)))
 
@@ -267,7 +266,7 @@ class Graph:
         else:
             raise TypeError()
 
-        length = percentile([self.edge_data[edge].length for edge in self.edges],
+        length = percentile([self.edge_lengths[edge] for edge in self.edges],
                             # I don't know why Pycharm thinks its expecting an int here; it shouldn't be
                             centile, interpolation="nearest")
 
@@ -277,7 +276,7 @@ class Graph:
 
     # region pruning
 
-    def prune_longest_edges_by_length(self, length_threshold: int):
+    def prune_longest_edges_by_length(self, length_threshold: Length):
         """
         Prune the longest edges in the graph by length.
         :param length_threshold:
@@ -286,7 +285,7 @@ class Graph:
         """
         edges_to_prune = []
         for edge in self.edges:
-            length = self.edge_data[edge].length
+            length = self.edge_lengths[edge]
             if length > length_threshold:
                 edges_to_prune.append(edge)
         for edge in edges_to_prune:
@@ -295,7 +294,7 @@ class Graph:
     def remove_edge(self, edge: Edge):
         """Remove an edge from the graph. Does not remove endpoint nodes."""
         # Remove from edge dictionary
-        self.edge_data.pop(edge)
+        self.edge_lengths.pop(edge)
         # Remove from redundant adjacency dictionary
         n1, n2 = edge.nodes
         self._incident_edges[n1].remove(edge)
@@ -349,15 +348,15 @@ def save_edgelist_from_distance_matrix(file_path: str,
                 logged_percent_milestone = percent_done
             for j in range(i + 1, distance_matrix.shape[1]):
                 distance = distance_matrix[i, j]
-                length = int(ceil(distance * length_granularity))
+                length = Length(ceil(distance * length_granularity))
                 # Write edge to file
                 temp_file.write(f"{i} {j} {length}\n")
     os.rename(temp_file_path, file_path)
 
 
-def iter_edge_data_from_edgelist(file_path: str) -> Iterator[Tuple[Edge, EdgeData]]:
-    """Yields tuples of (edge: Edge, edge_data: EdgeData) from an edgelist file."""
+def iter_edge_data_from_edgelist(file_path: str) -> Iterator[Tuple[Edge, Length]]:
+    """Yields tuples of (edge: Edge, edge_lengths: EdgeData) from an edgelist file."""
     with open(file_path, mode="r", encoding="utf-8") as edgelist_file:
         for line in edgelist_file:
             n1, n2, length = line.split()
-            yield Edge((Node(n1), Node(n2))), EdgeData(length=int(length))
+            yield Edge((Node(n1), Node(n2))), Length(length)
