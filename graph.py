@@ -455,6 +455,7 @@ def save_edgelist_from_distance_matrix(file_path: str,
             if (percent_done % 10 == 0) and (percent_done > logged_percent_milestone):
                 logger.info(f"\t{percent_done}% done")
                 logged_percent_milestone = percent_done
+            # Write
             for j in range(i + 1, distance_matrix.shape[1]):
                 distance = distance_matrix[i, j]
                 length = Length(ceil(distance * length_granularity))
