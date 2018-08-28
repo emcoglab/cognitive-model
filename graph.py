@@ -31,14 +31,11 @@ Node = int
 Length = int
 
 
-class Edge(frozenset):
-    def __init__(self, seq=()):
+class Edge(tuple):
+    def __new__(cls, seq=()):
         assert len(seq) == 2
-        frozenset.__init__(seq)
-
-    @property
-    def nodes(self) -> Tuple[Node, Node]:
-        return tuple(self)
+        # By sorting on init, we guarantee that two edges are equal if their nodes are equal, regardless of order.
+        return tuple.__new__(tuple, sorted(seq))
 
 
 class GraphError(Exception):
@@ -376,7 +373,7 @@ class Graph:
                 edges_to_prune.add(edge)
 
                 if keep_at_least_n_edges:
-                    for node in edge.nodes:
+                    for node in edge:
                         edges_to_keep[node].add((edge, length))
                         # If we've got too many edges to keep now, drop the largest
                         if len(edges_to_keep[node]) > keep_at_least_n_edges:
@@ -402,7 +399,7 @@ class Graph:
         # Remove from edge dictionary
         self.edge_lengths.pop(edge)
         # Remove from redundant adjacency dictionary
-        n1, n2 = edge.nodes
+        n1, n2 = edge
         self._incident_edges[n1].remove(edge)
         self._incident_edges[n2].remove(edge)
 

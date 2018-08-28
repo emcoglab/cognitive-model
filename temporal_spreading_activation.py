@@ -241,7 +241,7 @@ class TemporalSpreadingActivation(object):
             # For each incident edge
             for edge in self.graph.incident_edges(source_node):
 
-                n1, n2 = edge.nodes
+                n1, n2 = edge
                 if source_node == n1:
                     target_node = n2
                 elif source_node == n2:
