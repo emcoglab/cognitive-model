@@ -18,7 +18,7 @@ caiwingfield.net
 import logging
 import os
 from collections import defaultdict
-from typing import Dict, Set, Tuple, Iterator, DefaultDict
+from typing import Dict, Set, Iterator, DefaultDict
 
 from numpy.core.multiarray import ndarray
 from numpy.core.umath import ceil
@@ -29,14 +29,11 @@ Node = int
 Length = int
 
 
-class Edge(frozenset):
-    def __init__(self, seq=()):
+class Edge(tuple):
+    def __new__(cls, seq=()):
         assert len(seq) == 2
-        frozenset.__init__(seq)
-
-    @property
-    def nodes(self) -> Tuple[Node, Node]:
-        return tuple(self)
+        # By sorting on init, we guarantee that two edges are equal if their nodes are equal, regardless of order.
+        return tuple.__new__(tuple, sorted(seq))
 
 
 class GraphError(Exception):
@@ -176,7 +173,7 @@ class Graph:
         import networkx
         g = networkx.Graph()
         for edge, length in self.edge_lengths.items():
-            g.add_edge(*edge.nodes, length=length)
+            g.add_edge(*edge, length=length)
         return g
 
     # endregion conversion
