@@ -18,7 +18,8 @@ caiwingfield.net
 import logging
 import os
 from collections import defaultdict, Sequence
-from typing import Dict, Set, Tuple, Iterator, DefaultDict
+from numbers import Real
+from typing import Dict, Set, Tuple, Iterator, DefaultDict, Callable
 
 from numpy import percentile
 from numpy.core.multiarray import ndarray
@@ -133,6 +134,60 @@ class Graph:
                 edgelist_file.write(f"{Node(n1)} {Node(n2)} {length}\n")
 
     @classmethod
+    def load_from_edgelist_with_arbitrary_stat(cls,
+                                               file_path: str,
+                                               stat_from_length: Callable[[Edge, Length], Real],
+                                               ignore_edges_with_stat_greater_than=None,
+                                               keep_at_least_n_edges: int = 0):
+        """
+        Loads a Graph from an edgelist file, allowing for pruning using an arbitrary statistic derived from length.
+
+        :param file_path:
+        :param stat_from_length:
+            A function which converts (edge, length) pairs to the statistic based on which edges will be pruned.
+        :param ignore_edges_with_stat_greater_than:
+            If provided and not None, edges with stat greater than this will not be included in the graph (but the
+            endpoint nodes will).
+        :param keep_at_least_n_edges:
+            Default 0.
+            Make sure each node keeps at least this number of edges.
+        :return:
+        """
+        ignoring_outlier_edges = (ignore_edges_with_stat_greater_than is not None)
+        if not ignoring_outlier_edges and keep_at_least_n_edges:
+            logger.warning(
+                f"Requested to keep {keep_at_least_n_edges} but not pruning. This parameter is therefore being ignored.")
+
+        # Keep some edges, selected by the stat
+        edges_to_keep = defaultdict(lambda: SortedSet(key=lambda edge_length_pair: stat_from_length(*edge_length_pair)))
+
+        graph = cls()
+        for edge, length in iter_edges_from_edgelist(file_path):
+            stat = stat_from_length(edge, length)
+            if ignoring_outlier_edges and stat > ignore_edges_with_stat_greater_than:
+                # Add nodes but not edge
+                for node in edge:
+                    graph.add_node(node)
+
+                # Keep some edges around to avoid orphans
+                if keep_at_least_n_edges:
+                    for node in edge:
+                        edges_to_keep[node].add((edge, length))
+                        # We only want to force-keep the n smallest edges per node, so discard the largest ones once we
+                        # have too many
+                        if len(edges_to_keep[node]) > keep_at_least_n_edges:
+                            edges_to_keep[node].pop(-1)
+
+            else:
+                graph.add_edge(edge, length)
+
+        # Add in the edges we decided to keep anyway
+        if keep_at_least_n_edges:
+            graph.__add_kept_edges(edges_to_keep, keep_at_least_n_edges)
+
+        return graph
+
+    @classmethod
     def load_from_edgelist(cls,
                            file_path: str,
                            ignore_edges_longer_than: Length = None,
@@ -148,43 +203,20 @@ class Graph:
             Make sure each node keeps at least this number of edges.
         :return:
         """
-        ignoring_long_edges = (ignore_edges_longer_than is not None)
-        if not ignoring_long_edges and keep_at_least_n_edges:
-            logger.warning(f"Requested to keep {keep_at_least_n_edges} but not pruning. This parameter is therefore being ignored.")
-
-        edges_to_keep = defaultdict(lambda: SortedSet(key=lambda x: x[1]))
-
-        graph = cls()
-        for edge, length in iter_edges_from_edgelist(file_path):
-            if ignoring_long_edges and length > ignore_edges_longer_than:
-                # Add nodes but not edge
-                for node in edge:
-                    graph.add_node(node)
-
-                # Keep some edges around to avoid orphans
-                if keep_at_least_n_edges:
-                    for node in edge:
-                        edges_to_keep[node].add((edge, length))
-                        # We only want to force-keep the n smallest edges per node, so discard the largest ones once we
-                        # have too many
-                        if len(edges_to_keep[node]) > keep_at_least_n_edges:
-                            edges_to_keep[node].pop(-1)
-
-                continue
-            graph.add_edge(edge, length)
-
-        # Add in the edges we decided to keep anyway
-        if keep_at_least_n_edges:
-            graph.__add_kept_edges(edges_to_keep, keep_at_least_n_edges)
-
-        return graph
+        return cls.load_from_edgelist_with_arbitrary_stat(
+            file_path=file_path,
+            # The stat is just the length
+            stat_from_length=lambda edge, length: length,
+            ignore_edges_with_stat_greater_than=ignore_edges_longer_than,
+            keep_at_least_n_edges=keep_at_least_n_edges
+        )
 
     def __add_kept_edges(self, edges_to_keep_buffer: DefaultDict[Node, SortedSet], keep_at_least_n_edges: int):
         """
         When not keeping all edges, we will want to add some back in, but not all of them.
         This reusable code keeps the logic of which edges we actually want to keep.
         :param edges_to_keep_buffer:
-            Node-keyed defaultdict of sortedsets of (edge, length) tuples
+            Node-keyed defaultdict of sortedsets of (edge, stat) tuples
         :param keep_at_least_n_edges:
         :return:
         """
