@@ -149,8 +149,8 @@ class Graph:
         :return:
         """
         ignoring_long_edges = (ignore_edges_longer_than is not None)
-        if not ignoring_long_edges:
-            assert not keep_at_least_n_edges
+        if not ignoring_long_edges and keep_at_least_n_edges:
+            logger.warning(f"Requested to keep {keep_at_least_n_edges} but not pruning. This parameter is therefore being ignored.")
 
         edges_to_keep = defaultdict(lambda: SortedSet(key=lambda x: x[1]))
 
