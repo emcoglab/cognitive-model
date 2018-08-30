@@ -19,7 +19,7 @@ from typing import Iterable
 from pandas import DataFrame, read_csv
 
 from ldm.core.utils.exceptions import WordNotFoundError
-from model.temporal_spatial_expansion import PointsInSpace
+from model.points_in_space import PointsInSpace
 from preferences import Preferences
 
 
