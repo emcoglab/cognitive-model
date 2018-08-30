@@ -19,12 +19,15 @@ import logging
 import os
 from collections import defaultdict, Sequence
 from numbers import Real
-from typing import Dict, Set, Tuple, Iterator, DefaultDict, Callable
+from typing import Dict, Set, Tuple, Iterator, DefaultDict, Callable, List
 
 from numpy import percentile
 from numpy.core.multiarray import ndarray
 from numpy.core.umath import ceil
+from scipy.stats import percentileofscore
 from sortedcontainers import SortedSet
+
+from model.utils.math import mean
 
 logger = logging.getLogger()
 
@@ -525,3 +528,27 @@ def iter_edges_from_edgelist(file_path: str) -> Iterator[Tuple[Edge, Length]]:
         for line in edgelist_file:
             n1, n2, length = line.split()
             yield Edge((Node(n1), Node(n2))), Length(length)
+
+
+def importance(edge_lengths_from_node: Dict[Node, List[Length]]) -> Callable[[Edge, Length], Real]:
+    """
+    The importance of an edge is the average of the percentile ranks of its length in the distributions of lengths
+    of edges incident to its endpoints.
+
+    An importance of 0 indicates the edge is the shortest incident to each of its endpoints.
+    An importance of 100 indicates the edge is longest incident to each of its endpoints.
+    An importance of 50 could reflect middling importance to both nodes or a highly imbalanced importance.
+
+    When using for pruning, prune LARGE importance, NOT SMALL!
+
+    This function produces an importance function based on the provided dictionary of edge lengths per node.
+    """
+    def _importance(e: Edge, l: Length) -> float:
+
+        n1, n2 = e
+        per1: float = percentileofscore(edge_lengths_from_node[n1], l)
+        per2: float = percentileofscore(edge_lengths_from_node[n2], l)
+        return mean(per1, per2)
+
+    return _importance
+
