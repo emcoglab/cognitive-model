@@ -55,7 +55,6 @@ class PointsInSpace:
 
     @property
     def n_points(self) -> int:
-        # TODO: verify this is the correct ordinate
         return 0 if self.data_matrix is None else self.data_matrix.shape[0]
 
     @property
@@ -64,7 +63,6 @@ class PointsInSpace:
         The number of dimensions in the space in which the points live.
         None if there are no points.
         """
-        # TODO: verify this is the correct ordinate
         return None if self.data_matrix is None else self.data_matrix.shape[1]
 
     @property
