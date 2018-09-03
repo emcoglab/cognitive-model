@@ -19,7 +19,7 @@ import logging
 import os
 from collections import defaultdict, Sequence
 from numbers import Real
-from typing import Dict, Set, Tuple, Iterator, DefaultDict, Callable, List
+from typing import Dict, Set, Tuple, Iterator, DefaultDict
 
 from numpy import percentile
 from numpy.core.multiarray import ndarray
@@ -137,54 +137,58 @@ class Graph:
                 edgelist_file.write(f"{Node(n1)} {Node(n2)} {length}\n")
 
     @classmethod
-    def load_from_edgelist_with_arbitrary_stat(cls,
-                                               file_path: str,
-                                               stat_from_length: Callable[[Edge, Length], Real],
-                                               ignore_edges_with_stat_greater_than=None,
-                                               keep_at_least_n_edges: int = 0):
-        """
-        Loads a Graph from an edgelist file, allowing for pruning using an arbitrary statistic derived from length.
-
-        :param file_path:
-        :param stat_from_length:
-            A function which converts (edge, length) pairs to the statistic based on which edges will be pruned.
-        :param ignore_edges_with_stat_greater_than:
-            If provided and not None, edges with stat greater than this will not be included in the graph (but the
-            endpoint nodes will).
-        :param keep_at_least_n_edges:
-            Default 0.
-            Make sure each node keeps at least this number of edges.
-        :return:
-        """
-        ignoring_outlier_edges = (ignore_edges_with_stat_greater_than is not None)
-        if not ignoring_outlier_edges and keep_at_least_n_edges:
+    def load_from_edgelist_with_importance_pruning(cls,
+                                                   file_path: str,
+                                                   ignore_edges_with_importance_greater_than: Real = None,
+                                                   keep_at_least_n_edges: int = 0):
+        ignoring_outlier_edges = (ignore_edges_with_importance_greater_than is not None)
+        if not ignore_edges_with_importance_greater_than and keep_at_least_n_edges:
             logger.warning(
-                f"Requested to keep {keep_at_least_n_edges} but not pruning. This parameter is therefore being ignored.")
+                f"Requested to keep {keep_at_least_n_edges} edges but not pruning. "
+                f"This parameter is therefore being ignored.")
 
-        # Keep some edges, selected by the stat
-        edges_to_keep = defaultdict(lambda: SortedSet(key=lambda edge_length_pair: stat_from_length(*edge_length_pair)))
+        # Run through edgelist first, and build distributions of lengths
+        edge_length_distributions = defaultdict(list)
+        for edge, length in iter_edges_from_edgelist(file_path):
+            for node in edge:
+                edge_length_distributions[node].append(length)
+
+        # Run through distributions, compute length -> per-node percentile mapping
+        # node -> length -> percentile
+        length_percentile_mapping = defaultdict(lambda: defaultdict(float))
+        for node, length_list in edge_length_distributions.items():
+            for length in length_list:
+                # only work with keys not yet processed
+                if length not in length_percentile_mapping[node].keys():
+                    length_percentile_mapping[node][length] = percentileofscore(length_list, length)
+        # freemem
+        del edge_length_distributions
+
+        def local_importance(e: Edge, l: Length):
+            n1, n2 = e
+            return mean(length_percentile_mapping[n1][l], length_percentile_mapping[n2][l])
+
+        # Keep some edges, selected by importance
+        edges_to_keep = defaultdict(lambda: SortedSet(key=lambda edge_importance_pair: edge_importance_pair[1]))
 
         graph = cls()
-        for edge, length in iter_edges_from_edgelist(file_path):
-            stat = stat_from_length(edge, length)
-            if ignoring_outlier_edges and stat > ignore_edges_with_stat_greater_than:
-                # Add nodes but not edge
-                for node in edge:
-                    graph.add_node(node)
-
-                # Keep some edges around to avoid orphans
-                if keep_at_least_n_edges:
-                    for node in edge:
-                        edges_to_keep[node].add((edge, length))
-                        # We only want to force-keep the n smallest edges per node, so discard the largest ones once we
-                        # have too many
-                        if len(edges_to_keep[node]) > keep_at_least_n_edges:
-                            edges_to_keep[node].pop(-1)
-
-            else:
+        for edge, length in iter_edges_from_edgelist(file_path=file_path):
+            if not ignoring_outlier_edges:
                 graph.add_edge(edge, length)
+            else:
+                i = local_importance(edge, length)
+                if i <= ignore_edges_with_importance_greater_than:
+                    graph.add_edge(edge, length)
+                else:
+                    for node in edge:
+                        graph.add_node(node)
+                    if keep_at_least_n_edges:
+                        for node in edge:
+                            edges_to_keep[node].add((edge, length))
+                            if len(edges_to_keep[node]) > keep_at_least_n_edges:
+                                edges_to_keep[node].pop(-1)
 
-        # Add in the edges we decided to keep anyway
+        # add edges we decided to keep
         if keep_at_least_n_edges:
             graph.__add_kept_edges(edges_to_keep, keep_at_least_n_edges)
 
@@ -206,13 +210,37 @@ class Graph:
             Make sure each node keeps at least this number of edges.
         :return:
         """
-        return cls.load_from_edgelist_with_arbitrary_stat(
-            file_path=file_path,
-            # The stat is just the length
-            stat_from_length=lambda edge, length: length,
-            ignore_edges_with_stat_greater_than=ignore_edges_longer_than,
-            keep_at_least_n_edges=keep_at_least_n_edges
-        )
+        ignoring_long_edges = (ignore_edges_longer_than is not None)
+        if not ignoring_long_edges and keep_at_least_n_edges:
+            logger.warning(
+                f"Requested to keep {keep_at_least_n_edges} but not pruning. This parameter is therefore being ignored.")
+
+        edges_to_keep = defaultdict(lambda: SortedSet(key=lambda x: x[1]))
+
+        graph = cls()
+        for edge, length in iter_edges_from_edgelist(file_path):
+            if ignoring_long_edges and length > ignore_edges_longer_than:
+                # Add nodes but not edge
+                for node in edge:
+                    graph.add_node(node)
+
+                # Keep some edges around to avoid orphans
+                if keep_at_least_n_edges:
+                    for node in edge:
+                        edges_to_keep[node].add((edge, length))
+                        # We only want to force-keep the n smallest edges per node, so discard the largest ones once we
+                        # have too many
+                        if len(edges_to_keep[node]) > keep_at_least_n_edges:
+                            edges_to_keep[node].pop(-1)
+
+                continue
+            graph.add_edge(edge, length)
+
+        # Add in the edges we decided to keep anyway
+        if keep_at_least_n_edges:
+            graph.__add_kept_edges(edges_to_keep, keep_at_least_n_edges)
+
+        return graph
 
     def __add_kept_edges(self, edges_to_keep_buffer: DefaultDict[Node, SortedSet], keep_at_least_n_edges: int):
         """
@@ -528,27 +556,3 @@ def iter_edges_from_edgelist(file_path: str) -> Iterator[Tuple[Edge, Length]]:
         for line in edgelist_file:
             n1, n2, length = line.split()
             yield Edge((Node(n1), Node(n2))), Length(length)
-
-
-def importance(edge_lengths_from_node: Dict[Node, List[Length]]) -> Callable[[Edge, Length], Real]:
-    """
-    The importance of an edge is the average of the percentile ranks of its length in the distributions of lengths
-    of edges incident to its endpoints.
-
-    An importance of 0 indicates the edge is the shortest incident to each of its endpoints.
-    An importance of 100 indicates the edge is longest incident to each of its endpoints.
-    An importance of 50 could reflect middling importance to both nodes or a highly imbalanced importance.
-
-    When using for pruning, prune LARGE importance, NOT SMALL!
-
-    This function produces an importance function based on the provided dictionary of edge lengths per node.
-    """
-    def _importance(e: Edge, l: Length) -> float:
-
-        n1, n2 = e
-        per1: float = percentileofscore(edge_lengths_from_node[n1], l)
-        per2: float = percentileofscore(edge_lengths_from_node[n2], l)
-        return mean(per1, per2)
-
-    return _importance
-
