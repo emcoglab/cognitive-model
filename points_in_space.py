@@ -27,12 +27,27 @@ class DimensionalityError(Exception):
 
 
 class Point:
-    def __init__(self, vector: ndarray, label: Label):
-        self.vector: ndarray = vector
+    """Immutable, hashable labelled vector."""
+
+    __slots__ = 'vector', 'label'
+
+    def __init__(self, label: Label, vector: ndarray):
         self.label: Label = label
+        self.vector: ndarray = vector
+        # self.vector is immutable
+        self.vector.flags.writeable = False
+
+    def __hash__(self):
+        return hash((self.vector, self.label))
+
+    def __eq__(self, other):
+        return self.__hash__() == other.__hash__()
 
     def __repr__(self):
-        return f"Point( {self.vector}, \"{self.label}\" )"
+        return f"Point(label=\"{self.label}\", vector={self.vector})"
+
+    def __str__(self):
+        return repr(self)
 
 
 class PointsInSpace:
@@ -74,7 +89,7 @@ class PointsInSpace:
         for idx in range(self.n_points):
             vector = self.data_matrix[idx, :]
             label = self.idx2label[idx]
-            yield Point(vector, label)
+            yield Point(label, vector)
 
     def point_with_label(self, label: Label) -> Point:
         try:
@@ -82,4 +97,4 @@ class PointsInSpace:
         except KeyError:
             raise KeyError(f"No point with label {label}")
 
-        return Point(self.data_matrix[idx, :], label)
+        return Point(label, self.data_matrix[idx, :])
