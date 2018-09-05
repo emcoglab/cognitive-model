@@ -19,8 +19,6 @@ import logging
 from collections import namedtuple, defaultdict
 from typing import Set, Dict, DefaultDict, NamedTuple, Tuple
 
-from numpy import exp, float_power
-
 from model.graph import Graph, Node
 
 logger = logging.getLogger()
@@ -320,52 +318,3 @@ class TemporalSpreadingActivation(object):
 
     def log_graph(self):
         [logger.info(f"{line}") for line in str(self).strip().split('\n')]
-
-
-def decay_function_exponential_with_decay_factor(decay_factor) -> callable:
-    # Decay formula for activation a, original activation a_0, decay factor d, time t:
-    #   a = a_0 d^t
-    #
-    # In traditional formulation of exponential decay, this is equivalent to:
-    #   a = a_0 e^(-λt)
-    # where λ is the decay constant.
-    #
-    # I.e.
-    #   d = e^(-λ)
-    #   λ = - ln d
-    assert 0 < decay_factor <= 1
-
-    def decay_function(age, original_activation):
-        return original_activation * (decay_factor ** age)
-
-    return decay_function
-
-
-def decay_function_exponential_with_half_life(half_life) -> callable:
-    assert half_life > 0
-    # Using notation from above, with half-life hl
-    #   λ = ln 2 / ln hl
-    #   d = 2 ^ (- 1 / hl)
-    decay_factor = float_power(2, - 1 / half_life)
-    return decay_function_exponential_with_decay_factor(decay_factor)
-
-
-def decay_function_gaussian_with_sd(sd, height_coef=1, centre=0) -> callable:
-    """Gaussian decay with sd specifying the number of ticks."""
-    assert height_coef > 0
-    assert sd > 0
-
-    def decay_function(age, original_activation):
-        height = original_activation * height_coef
-        return height * exp((-1) * (((age - centre) ** 2) / (2 * sd * sd)))
-
-    return decay_function
-
-
-def decay_function_gaussian_with_sd_fraction(sd_frac: float, granularity: int, height_coef=1, centre=0) -> callable:
-    """Gaussian decay with sd as a fraction of the granularity."""
-    sd = sd_frac * granularity
-    return decay_function_gaussian_with_sd(
-        sd=sd,
-        height_coef=height_coef,
-        centre=centre)
