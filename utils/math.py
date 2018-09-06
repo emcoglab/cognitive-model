@@ -1,4 +1,5 @@
-from numpy.core.umath import float_power, exp, sqrt, pi, log
+from numpy.core.umath import float_power, exp, pi
+from scipy.stats import lognorm
 
 TAU = 2 * pi
 
@@ -43,44 +44,21 @@ def decay_function_gaussian_with_sd(sd, height_coef=1, centre=0) -> callable:
     return decay_function
 
 
-# TODO: ensure that realigned zero should be the default
-def decay_function_lognormal_with_sd(sd: float, realign_zero: bool = True) -> callable:
+def decay_function_lognormal_median(median: float, shape: float) -> callable:
     """
-    Lognormal decay with sd specifying the number of ticks.
-    :param sd:
-    :param realign_zero:
-        If True, decay proceeds from zero point.
-        If False, decay proceeds according to an actual lognormal PDF curve.
+    Lognormal decay.
+    :param median:
+    :param shape:
+        The spread or shape
     :return:
+        Decay function
     """
-
-    height = _lognormal_modal_height(0, sd)
-    if realign_zero:
-        mode = _lognormal_mode(0, sd)
-
-        def decay_function(age, original_activation):
-            return original_activation * _lognormal_pdf(age + mode, 0, sd) / height
-    else:
-
-        def decay_function(age, original_activation):
-            return original_activation * _lognormal_pdf(age, 0, sd) / height
+    def decay_function(age, original_activation):
+        return original_activation * lognorm.sf(age, s=shape, scale=median)
 
     return decay_function
 
 
-def _lognormal_pdf(x, mu, sigma):
-    """Lognormal PDF."""
-    coef = 1 / (x * sigma * sqrt(TAU))
-    expo = exp((-1) * ((log(x) - mu) ** 2) / (2 * sigma * sigma))
-    return coef * expo
-
-
-def _lognormal_mode(mu, sigma):
-    """The mode of the lognormal function."""
-    return exp(mu - (sigma * sigma))
-
-
-def _lognormal_modal_height(mu, sigma):
-    """The height of the lognormal function at its mode. This is its maximum height."""
-    return _lognormal_pdf(_lognormal_mode(mu, sigma), mu, sigma)
-
+def decay_function_lognormal_mean(mu: float, shape: float) -> callable:
+    """Use of median is preferred."""
+    return decay_function_lognormal_median(exp(mu), shape)
