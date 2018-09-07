@@ -14,31 +14,15 @@ caiwingfield.net
 2018
 ---------------------------
 """
-from collections import namedtuple
-from typing import List, Dict
+from typing import List, Dict, Set
 
 from numpy.core.multiarray import ndarray
 from scipy.spatial.distance import cdist
 
 from ldm.core.utils.maths import DistanceType
+from model.common import ItemActivatedEvent, ActivationValue, ActivationRecord
 from model.points_in_space import Point, PointsInSpace
 from model.utils.math import decay_function_lognormal_median
-
-Activation = float
-
-# class ActivatedPoint(Point):
-#     __slots__ = 'activation'
-#     def __init__(self, label: Label, vector: ndarray, activation: Activation):
-#         super().__init__(label, vector)
-#         self.activation: Activation = activation
-#
-#
-# class Sphere:
-#     def __init__(self, point: ActivatedPoint, radius: float):
-#         self.point = point
-#         self.radius = radius
-
-ActivationRecord = namedtuple("ActivationRecord", ["activation", "time_activated"])
 
 
 class TemporalSpatialExpansion:

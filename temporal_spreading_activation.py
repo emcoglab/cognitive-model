@@ -16,9 +16,10 @@ caiwingfield.net
 """
 
 import logging
-from collections import namedtuple, defaultdict
-from typing import Set, Dict, DefaultDict, NamedTuple, Tuple
+from collections import defaultdict
+from typing import Set, Dict, DefaultDict, Tuple
 
+from model.common import ActivationRecord, ItemActivatedEvent, blank_node_activation_record, ActivationValue, Label
 from model.graph import Graph, Node
 
 logger = logging.getLogger()
@@ -26,46 +27,13 @@ logger_format = '%(asctime)s | %(levelname)s | %(module)s | %(message)s'
 logger_dateformat = "%Y-%m-%d %H:%M:%S"
 
 
-class NodeActivationRecord(namedtuple('NodeActivationRecord', ['activation',
-                                                               'time_activated'])):
-    """
-    NodeActivationRecord stores a historical node activation event.
-    It is immutable, so must be used in conjunction with TSA.node_decay_function in order to determine the
-    current activation of a node.
-
-    `activation` stores the total accumulated level of activation at this node when it was activated.
-    `time_activated` stores the clock value when the node was last activated, or -1 if it has never been activated.
-    """
-    # Tell Python no more fields can be added to this class, so it stays small in memory.
-    __slots__ = ()
-
-
-class ActivatedNodeEvent(NamedTuple):
-    """
-    A node activation event.
-    Used to pass out of TSA.tick().
-    Should be used for display and logging only, nothing high-performance!
-    """
-    node: str
-    activation: float
-    tick_activated: int
-
-    def __repr__(self) -> str:
-        return f"<'{self.node}' ({self.activation}) @ {self.tick_activated}>"
-
-
-def blank_node_activation_record() -> NodeActivationRecord:
-    """A record for an unactivated node."""
-    return NodeActivationRecord(activation=0, time_activated=-1)
-
-
 class TemporalSpreadingActivation(object):
 
     def __init__(self,
                  graph: Graph,
                  node_relabelling_dictionary: Dict,
-                 firing_threshold: float,
-                 conscious_access_threshold: float,
+                 firing_threshold: ActivationValue,
+                 conscious_access_threshold: ActivationValue,
                  impulse_pruning_threshold: float,
                  node_decay_function: callable,
                  edge_decay_function: callable):
@@ -99,8 +67,8 @@ class TemporalSpreadingActivation(object):
 
         # Thresholds
         # Use >= and < to test for above/below
-        self.firing_threshold: float = firing_threshold
-        self.conscious_access_threshold: float = conscious_access_threshold
+        self.firing_threshold: ActivationValue = firing_threshold
+        self.conscious_access_threshold: ActivationValue = conscious_access_threshold
         self.impulse_pruning_threshold: float = impulse_pruning_threshold
 
         # These decay functions should be stateless, and convert an original activation and an age into a current
@@ -150,7 +118,7 @@ class TemporalSpreadingActivation(object):
             if self.activation_of_node(n) >= self.firing_threshold
         ])
 
-    def impulses_headed_for(self, n) -> Dict[int, float]:
+    def impulses_headed_for(self, n: Node) -> Dict[int, float]:
         """A time-keyed dict of cumulative activation due to arrive at a node."""
         return {
             t: activation_arriving_at_time_t[n]
@@ -158,33 +126,23 @@ class TemporalSpreadingActivation(object):
             if n in activation_arriving_at_time_t.keys()
         }
 
-    def activation_of_node(self, n) -> float:
+    def activation_of_node(self, n: Node) -> float:
         """Returns the current activation of a node."""
         assert n in self.graph.nodes
 
-        activation_record: NodeActivationRecord = self._node_activation_records[n]
+        activation_record: ActivationRecord = self._node_activation_records[n]
         return self.node_decay_function(
             self.clock - activation_record.time_activated,  # node age
             activation_record.activation)
 
-    def activation_of_node_with_label(self, n) -> float:
+    def activation_of_node_with_label(self, n: Label) -> float:
         """Returns the current activation of a node."""
         return self.activation_of_node(self.label2node[n])
 
-    def activate_node_with_label(self, n, activation: float) -> Tuple[bool, bool]:
-        """
-        Activate a node.
-        :param n:
-        :param activation:
-        :return:
-            A 2-tuple of bools: (
-                Node did fire,
-                Node's activation did cross conscious-access threshold
-            )
-        """
-        return self.activate_node(self.label2node[n], activation)
+    def activate_node_with_label(self, label: Label, activation: float) -> Tuple[bool, bool]:
+        return self.activate_node(self.label2node[label], activation)
 
-    def activate_node(self, n, activation: float) -> Tuple[bool, bool]:
+    def activate_node(self, n: Node, activation: float) -> Tuple[bool, bool]:
         """
         Activate a node.
         :param n:
@@ -215,7 +173,7 @@ class TemporalSpreadingActivation(object):
 
         # Accumulate activation
         new_activation = current_activation + activation
-        self._node_activation_records[n] = NodeActivationRecord(new_activation, self.clock)
+        self._node_activation_records[n] = ActivationRecord(new_activation, self.clock)
 
         # Check if we reached the conscious-access threshold
         did_cross_conscious_access_threshold = currently_below_conscious_access_threshold and (new_activation > self.conscious_access_threshold)
@@ -270,7 +228,7 @@ class TemporalSpreadingActivation(object):
         """
         Propagates impulses along connections.
         :return:
-            Set of nodes which became active.
+            Set of nodes which became consciously active.
         """
 
         # "Propagation" happens by just incrementing the global clock.
@@ -295,16 +253,17 @@ class TemporalSpreadingActivation(object):
 
         return nodes_which_crossed_conscious_access_threshold
 
-    def tick(self) -> Set[ActivatedNodeEvent]:
+    def tick(self) -> Set[ItemActivatedEvent]:
         """
         Performs the spreading activation algorithm for one tick of the clock.
         :return:
             Set of nodes which became active.
         """
         self.clock += 1
-        nodes_which_became_active = self._propagate_impulses()
 
-        return set(ActivatedNodeEvent(self.node2label[node], self.activation_of_node(node), self.clock) for node in nodes_which_became_active)
+        nodes_which_became_consciously_active = self._propagate_impulses()
+
+        return set(ItemActivatedEvent(self.node2label[node], self.activation_of_node(node), self.clock) for node in nodes_which_became_consciously_active)
 
     def __str__(self):
 

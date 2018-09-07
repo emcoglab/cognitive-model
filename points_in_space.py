@@ -19,7 +19,7 @@ from typing import Dict, Optional, Set, Iterator
 
 from numpy.core.multiarray import ndarray
 
-Label = str
+from model.common import Label
 
 
 class DimensionalityError(Exception):
@@ -90,6 +90,13 @@ class PointsInSpace:
             vector = self.data_matrix[idx, :]
             label = self.idx2label[idx]
             yield Point(label, vector)
+
+    def point_with_idx(self, idx: int) -> Point:
+        try:
+            label = self.idx2label[idx]
+        except KeyError:
+            raise KeyError(f"No point with index {idx}")
+        return Point(label, self.data_matrix[idx, :])
 
     def point_with_label(self, label: Label) -> Point:
         try:
