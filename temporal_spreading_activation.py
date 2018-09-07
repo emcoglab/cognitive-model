@@ -106,6 +106,9 @@ class TemporalSpreadingActivation(object):
                 float
             ))
 
+    def schedule_activation(self, at_node: Node, activation: ActivationValue, arrival_time: int):
+        self._impulses[arrival_time][at_node] += activation
+
     def n_suprathreshold_nodes(self) -> int:
         """
         The number of nodes which are above the firing threshold.
@@ -216,7 +219,7 @@ class TemporalSpreadingActivation(object):
                 arrival_time = int(self.clock + length)
 
                 # Accumulate activation at target node at time when it's due to arrive
-                self._impulses[arrival_time][target_node] += arrival_activation
+                self.schedule_activation(target_node, arrival_activation, arrival_time)
 
             return (
                 # Node did fire
