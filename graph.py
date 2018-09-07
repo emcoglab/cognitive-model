@@ -25,9 +25,11 @@ from numpy.core.multiarray import ndarray
 from numpy.core.umath import ceil
 from sortedcontainers import SortedSet
 
+from model.component import ItemIdx
+
 logger = logging.getLogger()
 
-Node = int
+Node = ItemIdx
 Length = int
 
 

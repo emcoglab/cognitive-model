@@ -17,15 +17,15 @@ caiwingfield.net
 from typing import Dict, Set, Tuple
 
 from ldm.core.utils.maths import DistanceType
-from model.component import ModelComponent, ActivationValue, Label, ActivationRecord, ItemActivatedEvent
-from model.points_in_space import PointsInSpace, Idx
+from model.component import ModelComponent, ActivationValue, ItemLabel, ActivationRecord, ItemActivatedEvent
+from model.points_in_space import PointsInSpace, PointIdx
 from model.utils.math import decay_function_lognormal_median
 
 
 class TemporalSpatialExpansion(ModelComponent):
     def __init__(self,
                  points_in_space: PointsInSpace,
-                 item_labelling_dictionary: Dict[Idx, Label],
+                 item_labelling_dictionary: Dict[PointIdx, ItemLabel],
                  expansion_rate: float,
                  max_radius: float,
                  distance_type: DistanceType,
@@ -47,11 +47,13 @@ class TemporalSpatialExpansion(ModelComponent):
 
         self._decay_function = decay_function_lognormal_median(decay_median, decay_shape)
 
-        # Dictionary point_idx -> activation
-        self.activations: Dict[int, ActivationRecord] = dict()
-
         # Dictionary point_idx -> radius
         self.spheres = dict()
+
+    def activation_of_item_with_idx(self, idx) -> ActivationValue:
+        initial_activation, time_activated = self._activation_records[idx]
+        age = self.clock - time_activated
+        return self._decay_function(age, initial_activation)
 
     def tick(self) -> Set[ItemActivatedEvent]:
 
@@ -59,23 +61,22 @@ class TemporalSpatialExpansion(ModelComponent):
 
         self._decay_activations()
 
-        points_which_became_consciously_active = self._grow_spheres()
+        self._grow_spheres()
 
-        return set(ItemActivatedEvent(self.idx2label[point_idx], self.activations[point_idx], self.clock)
+        points_which_became_consciously_active = self._apply_activations()
+
+        return set(ItemActivatedEvent(self.idx2label[point_idx], self._activation_records[point_idx], self.clock)
                    for point_idx in points_which_became_consciously_active)
 
-    def _grow_spheres(self) -> Set[int]:
+    def _grow_spheres(self):
         """
-        Radiates spheres
-        :return:
-            Set of point indices which became consciously active.
+        Radiates spheres.
+
+        MUST be called before _apply_activations in a tick.
         """
 
         # TODO: This could be made more clever and efficient by working out which points will be reached when at the
         # TODO: time the sphere is created, and just looking that up here.
-
-        points_which_activated: Set[int] = set()
-        points_which_crossed_c_a_t: Set[int] = set()
 
         for centre_idx, old_radius in self.spheres.items():
             new_radius = old_radius + self.expansion_rate
@@ -85,31 +86,28 @@ class TemporalSpatialExpansion(ModelComponent):
             else:
                 self.spheres[centre_idx] = new_radius
 
-            # activate points within sphere
+            # get ready to activate points within sphere
             for reached_point_idx in self.points.points_between_spheres(centre_idx,
                                                                         outer_radius=new_radius,
                                                                         inner_radius=old_radius,
                                                                         distance_type=self.distance_type):
-                # Pass on full activation when reached
-                did_activate, did_cross_c_a_t = self.activate_item_with_idx(reached_point_idx, self.activations[centre_idx].activation)
-                if did_activate:
-                    points_which_activated.add(reached_point_idx)
-                if did_cross_c_a_t:
-                    points_which_crossed_c_a_t.add(reached_point_idx)
-
-        return points_which_crossed_c_a_t
+                # Pass on full activation when reached by scheduling it NOW
+                self.schedule_activation_of_item_with_idx(
+                    idx=reached_point_idx,
+                    activation=self._activation_records[centre_idx].activation,
+                    arrival_time=self.clock)
 
     def _decay_activations(self):
 
-        # Since activations will be computed according to need using the decay function, decaying them just involves
+        # Since _activation_records will be computed according to need using the decay function, decaying them just involves
         # incrementing the clock.
 
         # However we need to remove concepts from the buffer if they have decayed too much
-        for activated_point_idx, activation_record in self.activations.items():
+        for activated_point_idx, activation_record in self._activation_records.items():
             age = self.clock - activation_record.time_activated
             decayed_activation = self._decay_function(age, activation_record.activation)
             if decayed_activation < self.decay_threshold:
-                self.activations.pop(activated_point_idx)
+                self._activation_records.pop(activated_point_idx)
 
     def activate_item_with_idx(self, point_idx: int, incoming_activation: ActivationValue) -> Tuple[bool, bool]:
         """
@@ -125,7 +123,7 @@ class TemporalSpatialExpansion(ModelComponent):
         """
 
         # Create sphere if not already activated
-        if point_idx not in self.activations.keys():
+        if point_idx not in self._activation_records.keys():
             new_activation = incoming_activation
             self.spheres[point_idx] = 0
             did_activate = True
@@ -134,12 +132,12 @@ class TemporalSpatialExpansion(ModelComponent):
 
         # Otherwise accumulate incoming_activation, but reset clock
         else:
-            current_activation = self.activations[point_idx].activation
+            current_activation = self._activation_records[point_idx].activation
             currently_below_c_a_t = current_activation > self.conscious_access_threshold
             new_activation = current_activation + incoming_activation
             did_activate = False
             did_cross_conscious_access_threshold = currently_below_c_a_t and (new_activation > self.conscious_access_threshold)
 
-        self.activations[point_idx] = ActivationRecord(new_activation, self.clock)
+        self._activation_records[point_idx] = ActivationRecord(new_activation, self.clock)
 
         return did_activate, did_cross_conscious_access_threshold

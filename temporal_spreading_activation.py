@@ -16,12 +16,11 @@ caiwingfield.net
 """
 
 import logging
-from collections import defaultdict
-from typing import Set, Dict, DefaultDict, Tuple
+from typing import Set, Dict, Tuple
 
+from model.component import ModelComponent, ActivationValue, ActivationRecord, \
+    ItemActivatedEvent
 from model.graph import Graph, Node
-from model.component import ModelComponent, ActivationValue, Label, ActivationRecord, \
-    blank_node_activation_record, ItemActivatedEvent
 
 logger = logging.getLogger()
 logger_format = '%(asctime)s | %(levelname)s | %(module)s | %(message)s'
@@ -80,29 +79,6 @@ class TemporalSpreadingActivation(ModelComponent):
         self.node_decay_function: callable = node_decay_function
         self.edge_decay_function: callable = edge_decay_function
 
-        # Graph data:
-
-        # A node-keyed dictionaries of node activations.
-        # Stores the most recent activation of each node, if any.
-        self._node_activation_records: DefaultDict = defaultdict(blank_node_activation_record)
-
-        # Impulses are stored in an arrival-time-keyed dict of destination-node-keyed dicts of cumulative activation
-        # scheduled for arrival.
-        # This way, when an arrival time is reached, we can .pop() a destination-node-keyed dict of impulses to process.
-        # Nice!
-        # ACTUALLY we'll use a defaultdict here, so we can quickly and easily add an impulse in the right place without
-        # verbose checks.
-        self._impulses: DefaultDict[int, DefaultDict[Node, float]] = defaultdict(
-            # In case the aren't any impulses due to arrive at a particular time, we'll just find an empty dict
-            lambda: defaultdict(
-                # In case there aren't any impulses due to arrive at a particular node, we'll just find 0 activation,
-                # which allows for handy use of +=
-                float
-            ))
-
-    def schedule_activation(self, at_node: Node, activation: ActivationValue, arrival_time: int):
-        self._impulses[arrival_time][at_node] += activation
-
     def n_suprathreshold_nodes(self) -> int:
         """
         The number of nodes which are above the firing threshold.
@@ -112,29 +88,25 @@ class TemporalSpreadingActivation(ModelComponent):
         return len([
             n
             for n in self.graph.nodes
-            if self.activation_of_node(n) >= self.firing_threshold
+            if self.activation_of_item_with_idx(n) >= self.firing_threshold
         ])
 
     def impulses_headed_for(self, n: Node) -> Dict[int, float]:
         """A time-keyed dict of cumulative activation due to arrive at a node."""
         return {
             t: activation_arriving_at_time_t[n]
-            for t, activation_arriving_at_time_t in self._impulses.items()
+            for t, activation_arriving_at_time_t in self._scheduled_activations.items()
             if n in activation_arriving_at_time_t.keys()
         }
 
-    def activation_of_node(self, n: Node) -> float:
+    def activation_of_item_with_idx(self, n: Node) -> ActivationValue:
         """Returns the current activation of a node."""
         assert n in self.graph.nodes
 
-        activation_record: ActivationRecord = self._node_activation_records[n]
+        activation_record: ActivationRecord = self._activation_records[n]
         return self.node_decay_function(
             self.clock - activation_record.time_activated,  # node age
             activation_record.activation)
-
-    def activation_of_node_with_label(self, label: Label) -> float:
-        """Returns the current activation of a node."""
-        return self.activation_of_node(self.label2idx[label])
 
     def activate_item_with_idx(self, n: Node, activation: ActivationValue) -> Tuple[bool, bool]:
         """
@@ -149,7 +121,7 @@ class TemporalSpreadingActivation(ModelComponent):
         """
         assert n in self.graph.nodes
 
-        current_activation = self.activation_of_node(n)
+        current_activation = self.activation_of_item_with_idx(n)
 
         currently_below_conscious_access_threshold = current_activation < self.conscious_access_threshold
 
@@ -167,7 +139,7 @@ class TemporalSpreadingActivation(ModelComponent):
 
         # Accumulate activation
         new_activation = current_activation + activation
-        self._node_activation_records[n] = ActivationRecord(new_activation, self.clock)
+        self._activation_records[n] = ActivationRecord(new_activation, self.clock)
 
         # Check if we reached the conscious-access threshold
         did_cross_conscious_access_threshold = currently_below_conscious_access_threshold and (new_activation > self.conscious_access_threshold)
@@ -210,42 +182,13 @@ class TemporalSpreadingActivation(ModelComponent):
                 arrival_time = int(self.clock + length)
 
                 # Accumulate activation at target node at time when it's due to arrive
-                self.schedule_activation(target_node, arrival_activation, arrival_time)
+                self.schedule_activation_of_item_with_idx(target_node, arrival_activation, arrival_time)
 
             return (
                 # Node did fire
                 True,
                 did_cross_conscious_access_threshold and (new_activation > self.conscious_access_threshold)
             )
-
-    def _propagate_impulses(self) -> Set:
-        """
-        Propagates impulses along connections.
-        :return:
-            Set of nodes which became consciously active.
-        """
-
-        # "Propagation" happens by just incrementing the global clock.
-        # But we have to check if any impulses have reached their destination.
-
-        nodes_which_fired = set()
-        nodes_which_crossed_conscious_access_threshold = set()
-
-        if self.clock in self._impulses:
-
-            # This should be a destination-node-keyed dict of activation ready to arrive
-            activation_at_destination: DefaultDict = self._impulses.pop(self.clock)
-
-            if len(activation_at_destination) > 0:
-                # Each such impulse activates its target node
-                for destination_node, activation in activation_at_destination.items():
-                    node_did_fire, node_did_cross_conscious_access_threshold = self.activate_item_with_idx(destination_node, activation)
-                    if node_did_fire:
-                        nodes_which_fired.add(destination_node)
-                    if node_did_cross_conscious_access_threshold:
-                        nodes_which_crossed_conscious_access_threshold.add(destination_node)
-
-        return nodes_which_crossed_conscious_access_threshold
 
     def tick(self) -> Set[ItemActivatedEvent]:
         """
@@ -255,18 +198,18 @@ class TemporalSpreadingActivation(ModelComponent):
         """
         self.clock += 1
 
-        nodes_which_became_consciously_active = self._propagate_impulses()
+        nodes_which_became_consciously_active = self._apply_activations()
 
-        return set(ItemActivatedEvent(self.idx2label[node], self.activation_of_node(node), self.clock) for node in nodes_which_became_consciously_active)
+        return set(ItemActivatedEvent(self.idx2label[node], self.activation_of_item_with_idx(node), self.clock) for node in nodes_which_became_consciously_active)
 
     def __str__(self):
 
         string_builder = f"CLOCK = {self.clock}\n"
         for node in self.graph.nodes:
             # Skip unactivated nodes
-            if self._node_activation_records[node].time_activated == -1:
+            if self._activation_records[node].time_activated == -1:
                 continue
-            string_builder += f"\t{self.idx2label[node]}: {self.activation_of_node(node)}\n"
+            string_builder += f"\t{self.idx2label[node]}: {self.activation_of_item_with_idx(node)}\n"
         return string_builder
 
     def log_graph(self):

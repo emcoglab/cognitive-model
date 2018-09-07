@@ -21,13 +21,14 @@ from numpy.core.multiarray import ndarray
 from scipy.spatial.distance import cdist
 
 from ldm.core.utils.maths import DistanceType
+from model.component import ItemIdx
 
 
 class DimensionalityError(Exception):
     pass
 
 
-Idx = int
+PointIdx = ItemIdx
 
 
 class Point:
@@ -35,8 +36,8 @@ class Point:
 
     __slots__ = 'vector', 'idx'
 
-    def __init__(self, idx: Idx, vector: ndarray):
-        self.idx: Idx = idx
+    def __init__(self, idx: PointIdx, vector: ndarray):
+        self.idx: PointIdx = idx
         self.vector: ndarray = vector
         # self.vector is immutable
         self.vector.flags.writeable = False
@@ -77,7 +78,7 @@ class PointsInSpace:
     def point_with_idx(self, idx: int) -> Point:
         return Point(idx, self.data_matrix[idx, :])
 
-    def _distances_to_point_with_idx(self, point_idx: int, distance_type: DistanceType) -> ndarray:
+    def _distances_to_point_with_idx(self, point_idx: PointIdx, distance_type: DistanceType) -> ndarray:
         if distance_type is DistanceType.cosine:
             distances = cdist(self.data_matrix,
                               self.point_with_idx(point_idx).vector,
@@ -86,9 +87,9 @@ class PointsInSpace:
             raise NotImplementedError()
         return distances
 
-    def points_between_spheres(self, centre_idx: int,
+    def points_between_spheres(self, centre_idx: PointIdx,
                                outer_radius: float, inner_radius: float,
-                               distance_type: DistanceType) -> List[int]:
+                               distance_type: DistanceType) -> List[PointIdx]:
         """
         Points newly captured within a growing sphere.
         :param centre_idx:

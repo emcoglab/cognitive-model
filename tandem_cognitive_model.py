@@ -17,7 +17,7 @@ caiwingfield.net
 from collections import defaultdict
 from typing import Set, DefaultDict, List
 
-from model.component import ActivationValue, Label, ItemActivatedEvent
+from model.component import ActivationValue, ItemLabel, ItemActivatedEvent
 from model.temporal_spatial_expansion import TemporalSpatialExpansion
 from model.temporal_spreading_activation import TemporalSpreadingActivation
 
@@ -33,8 +33,8 @@ class CognitiveModel:
         self.lc_to_smc_delay: int = lc_to_smc_delay
         self.smc_to_lc_delay: int = smc_to_lc_delay
 
-        # A clock-keyed dictionary of label-keyed dictionaries of activations
-        self.future_smc_activations: DefaultDict[int, DefaultDict[Label, ActivationValue]] = defaultdict(lambda: defaultdict(ActivationValue))
+        # A clock-keyed dictionary of label-keyed dictionaries of _activation_records
+        self.future_smc_activations: DefaultDict[int, DefaultDict[ItemLabel, ActivationValue]] = defaultdict(lambda: defaultdict(ActivationValue))
 
         self.clock: int = int(0)
 
@@ -55,19 +55,19 @@ class CognitiveModel:
         lc_activated_words: Set[ItemActivatedEvent] = self.linguistic_component.tick()
         smc_activated_concepts: Set[ItemActivatedEvent] = self.sensorimotor_component.tick()
 
-        # Set up future activations from smc to lc
+        # Set up future _activation_records from smc to lc
         for concept in smc_activated_concepts:
-            self.linguistic_component.schedule_activation(
+            self.linguistic_component.schedule_activation_of_item_with_idx(
                 self.linguistic_component.label2idx(concept.label),
                 concept.activation,
                 concept.time_activated + self.smc_to_lc_delay)
 
         # TODO: This should be refactored into model_component.schedule_activation(l, a, t) methods
-        # Set up future activations from lc to smc
+        # Set up future _activation_records from lc to smc
         for word in lc_activated_words:
             self.future_smc_activations[word.time_activated + self.smc_to_lc_delay][word.label] += word.activation
 
-        # Apply predestined activations
+        # Apply predestined _activation_records
         if self.clock in self.future_smc_activations.keys():
             smc_activations = self.future_smc_activations.pop(self.clock)
             for concept_label, activation in smc_activations.items():
