@@ -1,6 +1,6 @@
 """
 ===========================
-Common classes for the cognitive model.
+Model component shared code.
 ===========================
 
 Dr. Cai Wingfield
@@ -14,8 +14,10 @@ caiwingfield.net
 2018
 ---------------------------
 """
+from abc import ABCMeta, abstractmethod
+from collections.__init__ import namedtuple
+from typing import Set, Tuple, Dict
 
-from collections import namedtuple
 
 # Activations will very likely stay floats, but we alias that here in case we need to change it at any point
 ActivationValue = float
@@ -56,3 +58,24 @@ class ItemActivatedEvent(namedtuple('ItemActivatedEvent', ['activation',
 
     def __repr__(self) -> str:
         return f"<'{self.label}' ({self.activation}) @ {self.time_activated}>"
+
+
+class ModelComponent(metaclass=ABCMeta):
+
+    def __init__(self, item_labelling_dictionary: Dict):
+        self.idx2label = item_labelling_dictionary
+        self.label2idx = {v: k for k, v in item_labelling_dictionary.items()}
+
+        # Zero-indexed tick counter.
+        self.clock: int = int(0)
+
+    @abstractmethod
+    def tick(self) -> Set[ItemActivatedEvent]:
+        pass
+
+    @abstractmethod
+    def activate_item_with_idx(self, idx, activation: ActivationValue) -> Tuple[bool, bool]:
+        pass
+
+    def activate_item_with_label(self, label: Label, activation: ActivationValue) -> Tuple[bool, bool]:
+        return self.activate_item_with_idx(self.label2idx[label], activation)

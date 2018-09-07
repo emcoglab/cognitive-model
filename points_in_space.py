@@ -15,52 +15,44 @@ caiwingfield.net
 ---------------------------
 """
 
-from typing import Dict, Optional, Set, Iterator
+from typing import Optional, Iterator, List
 
 from numpy.core.multiarray import ndarray
+from scipy.spatial.distance import cdist
 
-from model.common import Label
+from ldm.core.utils.maths import DistanceType
 
 
 class DimensionalityError(Exception):
     pass
 
 
+Idx = int
+
+
 class Point:
     """Immutable, hashable labelled vector."""
 
-    __slots__ = 'vector', 'label'
+    __slots__ = 'vector', 'idx'
 
-    def __init__(self, label: Label, vector: ndarray):
-        self.label: Label = label
+    def __init__(self, idx: Idx, vector: ndarray):
+        self.idx: Idx = idx
         self.vector: ndarray = vector
         # self.vector is immutable
         self.vector.flags.writeable = False
 
     def __hash__(self):
-        return hash((self.vector, self.label))
+        return hash((self.vector, self.idx))
 
     def __eq__(self, other):
         return self.__hash__() == other.__hash__()
 
-    def __repr__(self):
-        return f"Point(label=\"{self.label}\", vector={self.vector})"
-
-    def __str__(self):
-        return repr(self)
-
 
 class PointsInSpace:
     """
-    Collection of labelled points in a high-dimensional real vector space.
+    Collection of points in a high-dimensional real vector space.
     """
-    def __init__(self, data_matrix: ndarray, labelling_dictionary: Dict[int, Label]):
-        n_points_from_dict = len(labelling_dictionary)
-        assert data_matrix.shape[0] == n_points_from_dict
-        assert set(labelling_dictionary.keys()) == set(range(n_points_from_dict))
-
-        self.idx2label: Dict[int, Label] = labelling_dictionary
-        self.label2idx: Dict[Label, int] = {v: k for k, v in labelling_dictionary.items()}
+    def __init__(self, data_matrix: ndarray):
 
         # An n_points x n_dims data matrix.
         self.data_matrix: ndarray = data_matrix
@@ -77,31 +69,36 @@ class PointsInSpace:
         """
         return None if self.data_matrix is None else self.data_matrix.shape[1]
 
-    @property
-    def labels(self) -> Set[Label]:
-        return set(self.label2idx.keys())
-
-    def iter_labels(self) -> Iterator[Label]:
-        for p in self.iter_points():
-            yield p.label
-
     def iter_points(self) -> Iterator[Point]:
         for idx in range(self.n_points):
             vector = self.data_matrix[idx, :]
-            label = self.idx2label[idx]
-            yield Point(label, vector)
+            yield Point(idx, vector)
 
     def point_with_idx(self, idx: int) -> Point:
-        try:
-            label = self.idx2label[idx]
-        except KeyError:
-            raise KeyError(f"No point with index {idx}")
-        return Point(label, self.data_matrix[idx, :])
+        return Point(idx, self.data_matrix[idx, :])
 
-    def point_with_label(self, label: Label) -> Point:
-        try:
-            idx = self.label2idx[label]
-        except KeyError:
-            raise KeyError(f"No point with label {label}")
+    def _distances_to_point_with_idx(self, point_idx: int, distance_type: DistanceType) -> ndarray:
+        if distance_type is DistanceType.cosine:
+            distances = cdist(self.data_matrix,
+                              self.point_with_idx(point_idx).vector,
+                              metric=distance_type.name)
+        else:
+            raise NotImplementedError()
+        return distances
 
-        return Point(label, self.data_matrix[idx, :])
+    def points_between_spheres(self, centre_idx: int,
+                               outer_radius: float, inner_radius: float,
+                               distance_type: DistanceType) -> List[int]:
+        """
+        Points newly captured within a growing sphere.
+        :param centre_idx:
+        :param outer_radius:
+            Includes outer boundary: Points will have from-centre distance <= this radius.
+        :param inner_radius:
+            Does not include inner boundary: Points will have from-centre distance > this radius.
+        :param distance_type:
+        :return:
+        """
+        distances = self._distances_to_point_with_idx(centre_idx, distance_type)
+        contained_indices = [i for i, d in enumerate(distances) if inner_radius < d <= outer_radius]
+        return contained_indices

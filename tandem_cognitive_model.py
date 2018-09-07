@@ -17,7 +17,7 @@ caiwingfield.net
 from collections import defaultdict
 from typing import Set, DefaultDict, List
 
-from model.common import ItemActivatedEvent, ActivationValue, Label
+from model.component import ActivationValue, Label, ItemActivatedEvent
 from model.temporal_spatial_expansion import TemporalSpatialExpansion
 from model.temporal_spreading_activation import TemporalSpreadingActivation
 
@@ -42,10 +42,10 @@ class CognitiveModel:
         self.event_log: List = []
 
     def activate_lc_word(self, word: str, activation: float):
-        self.linguistic_component.activate_node_with_label(word, activation)
+        self.linguistic_component.activate_item_with_label(word, activation)
 
     def activate_smc_concept(self, word: str, activation: float):
-        self.sensorimotor_component.activate_point_with_label(word, activation)
+        self.sensorimotor_component.activate_item_with_label(word, activation)
 
     def tick(self):
         assert self.clock == self.linguistic_component.clock
@@ -58,7 +58,7 @@ class CognitiveModel:
         # Set up future activations from smc to lc
         for concept in smc_activated_concepts:
             self.linguistic_component.schedule_activation(
-                self.linguistic_component.label2node[concept.id],
+                self.linguistic_component.label2idx(concept.label),
                 concept.activation,
                 concept.time_activated + self.smc_to_lc_delay)
 
@@ -71,5 +71,5 @@ class CognitiveModel:
         if self.clock in self.future_smc_activations.keys():
             smc_activations = self.future_smc_activations.pop(self.clock)
             for concept_label, activation in smc_activations.items():
-                self.sensorimotor_component.activate_point_with_label(concept_label, activation)
+                self.sensorimotor_component.activate_item_with_label(concept_label, activation)
 
