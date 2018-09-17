@@ -1,3 +1,20 @@
+"""
+===========================
+Math utils.
+===========================
+
+Dr. Cai Wingfield
+---------------------------
+Embodied Cognition Lab
+Department of Psychology
+University of Lancaster
+c.wingfield@lancaster.ac.uk
+caiwingfield.net
+---------------------------
+2018
+---------------------------
+"""
+
 from numpy.core.umath import float_power, exp, pi
 from scipy.stats import lognorm
 
@@ -69,3 +86,7 @@ def decay_function_lognormal_mean(mu: float, shape: float) -> callable:
     :return:
     """
     return decay_function_lognormal_median(exp(mu), shape)
+
+
+def mean(*items):
+    return sum(items) / len(items)

@@ -18,14 +18,17 @@ caiwingfield.net
 import logging
 import os
 from collections import defaultdict, Sequence
+from numbers import Real
 from typing import Dict, Set, Tuple, Iterator, DefaultDict
 
 from numpy import percentile
 from numpy.core.multiarray import ndarray
 from numpy.core.umath import ceil
+from scipy.stats import percentileofscore
 from sortedcontainers import SortedSet
 
 from model.component import ItemIdx
+from model.utils.math import mean
 
 logger = logging.getLogger()
 
@@ -135,6 +138,64 @@ class Graph:
                 edgelist_file.write(f"{Node(n1)} {Node(n2)} {length}\n")
 
     @classmethod
+    def load_from_edgelist_with_importance_pruning(cls,
+                                                   file_path: str,
+                                                   ignore_edges_with_importance_greater_than: Real = None,
+                                                   keep_at_least_n_edges: int = 0):
+        ignoring_outlier_edges = (ignore_edges_with_importance_greater_than is not None)
+        if not ignore_edges_with_importance_greater_than and keep_at_least_n_edges:
+            logger.warning(
+                f"Requested to keep {keep_at_least_n_edges} edges but not pruning. "
+                f"This parameter is therefore being ignored.")
+
+        # Run through edgelist first, and build distributions of lengths
+        edge_length_distributions = defaultdict(list)
+        for edge, length in iter_edges_from_edgelist(file_path):
+            for node in edge:
+                edge_length_distributions[node].append(length)
+
+        # Run through distributions, compute length -> per-node percentile mapping
+        # node -> length -> percentile
+        length_percentile_mapping = defaultdict(lambda: defaultdict(float))
+        for node, length_list in edge_length_distributions.items():
+            for length in length_list:
+                # only work with keys not yet processed
+                if length not in length_percentile_mapping[node].keys():
+                    length_percentile_mapping[node][length] = percentileofscore(length_list, length)
+        # freemem
+        del edge_length_distributions
+
+        def local_importance(e: Edge, l: Length):
+            n1, n2 = e
+            return mean(length_percentile_mapping[n1][l], length_percentile_mapping[n2][l])
+
+        # Keep some edges, selected by importance
+        edges_to_keep = defaultdict(lambda: SortedSet(key=lambda edge_importance_pair: edge_importance_pair[1]))
+
+        graph = cls()
+        for edge, length in iter_edges_from_edgelist(file_path=file_path):
+            if not ignoring_outlier_edges:
+                graph.add_edge(edge, length)
+            else:
+                i = local_importance(edge, length)
+                if i <= ignore_edges_with_importance_greater_than:
+                    graph.add_edge(edge, length)
+                else:
+                    for node in edge:
+                        graph.add_node(node)
+                    if keep_at_least_n_edges:
+                        for node in edge:
+                            edges_to_keep[node].add((edge, length))
+                            if len(edges_to_keep[node]) > keep_at_least_n_edges:
+                                edges_to_keep[node].pop(-1)
+
+        # add edges we decided to keep
+        if keep_at_least_n_edges:
+            graph.__add_kept_edges(edges_to_keep, keep_at_least_n_edges)
+
+        return graph
+
+    @classmethod
     def load_from_edgelist(cls,
                            file_path: str,
                            ignore_edges_longer_than: Length = None,
@@ -186,7 +247,7 @@ class Graph:
         When not keeping all edges, we will want to add some back in, but not all of them.
         This reusable code keeps the logic of which edges we actually want to keep.
         :param edges_to_keep_buffer:
-            Node-keyed defaultdict of sortedsets of (edge, length) tuples
+            Node-keyed defaultdict of sortedsets of (edge, stat) tuples
         :param keep_at_least_n_edges:
         :return:
         """
