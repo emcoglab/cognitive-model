@@ -15,8 +15,8 @@ caiwingfield.net
 ---------------------------
 """
 
-from numpy.core.umath import float_power, exp, pi
-from scipy.stats import lognorm
+from numpy.core.umath import float_power, exp, pi, sqrt
+from scipy.stats import lognorm, norm
 
 TAU = 2 * pi
 
@@ -50,13 +50,22 @@ def decay_function_exponential_with_half_life(half_life) -> callable:
 
 
 def decay_function_gaussian_with_sd(sd, height_coef=1, centre=0) -> callable:
-    """Gaussian decay with sd specifying the number of ticks."""
+    """
+    Gaussian decay function with sd specifying the number of ticks.
+    :param sd:
+    :param height_coef:
+    :param centre:
+    :return:
+    """
     assert height_coef > 0
     assert sd > 0
 
+    # The actual normal pdf has height 1/sqrt(2 pi sd^2). We want its natural height to be 1 (which is then scaled
+    # by the original activation), so we force that here.
+    reset_height = sqrt(TAU * sd * sd)
+
     def decay_function(age, original_activation):
-        height = original_activation * height_coef
-        return height * exp((-1) * (((age - centre) ** 2) / (2 * sd * sd)))
+        return original_activation * height_coef * reset_height * norm.pdf(age, loc=centre, scale=sd)
 
     return decay_function
 
