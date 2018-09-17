@@ -20,6 +20,7 @@ from collections import namedtuple, defaultdict
 from typing import Set, Dict, DefaultDict, NamedTuple, Tuple
 
 from numpy import exp, float_power
+from scipy.stats import norm
 
 from model.graph import Graph, Node
 
@@ -323,6 +324,11 @@ class TemporalSpreadingActivation(object):
 
 
 def decay_function_exponential_with_decay_factor(decay_factor) -> callable:
+    """
+    Exponential decay function specified by decay factor.
+    :param decay_factor:
+    :return:
+    """
     # Decay formula for activation a, original activation a_0, decay factor d, time t:
     #   a = a_0 d^t
     #
@@ -342,6 +348,11 @@ def decay_function_exponential_with_decay_factor(decay_factor) -> callable:
 
 
 def decay_function_exponential_with_half_life(half_life) -> callable:
+    """
+    Exponential decay function specified by half-life.
+    :param half_life:
+    :return:
+    """
     assert half_life > 0
     # Using notation from above, with half-life hl
     #   λ = ln 2 / ln hl
@@ -351,19 +362,31 @@ def decay_function_exponential_with_half_life(half_life) -> callable:
 
 
 def decay_function_gaussian_with_sd(sd, height_coef=1, centre=0) -> callable:
-    """Gaussian decay with sd specifying the number of ticks."""
+    """
+    Gaussian survival decay function with sd specifying the number of ticks.
+    :param sd:
+    :param height_coef:
+    :param centre:
+    :return:
+    """
     assert height_coef > 0
     assert sd > 0
 
     def decay_function(age, original_activation):
-        height = original_activation * height_coef
-        return height * exp((-1) * (((age - centre) ** 2) / (2 * sd * sd)))
+        return original_activation * height_coef * norm.sf(age, loc=centre, scale=sd)
 
     return decay_function
 
 
 def decay_function_gaussian_with_sd_fraction(sd_frac: float, granularity: int, height_coef=1, centre=0) -> callable:
-    """Gaussian decay with sd as a fraction of the granularity."""
+    """
+    Gaussian survival decay function with sd as a fraction of the granularity.
+    :param sd_frac:
+    :param granularity:
+    :param height_coef:
+    :param centre:
+    :return:
+    """
     sd = sd_frac * granularity
     return decay_function_gaussian_with_sd(
         sd=sd,
