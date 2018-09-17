@@ -363,7 +363,7 @@ def decay_function_exponential_with_half_life(half_life) -> callable:
 
 def decay_function_gaussian_with_sd(sd, height_coef=1, centre=0) -> callable:
     """
-    Gaussian survival decay function with sd specifying the number of ticks.
+    Gaussian decay function with sd specifying the number of ticks.
     :param sd:
     :param height_coef:
     :param centre:
@@ -373,14 +373,14 @@ def decay_function_gaussian_with_sd(sd, height_coef=1, centre=0) -> callable:
     assert sd > 0
 
     def decay_function(age, original_activation):
-        return original_activation * height_coef * norm.sf(age, loc=centre, scale=sd)
+        return original_activation * height_coef * norm.pdf(age, loc=centre, scale=sd)
 
     return decay_function
 
 
 def decay_function_gaussian_with_sd_fraction(sd_frac: float, granularity: int, height_coef=1, centre=0) -> callable:
     """
-    Gaussian survival decay function with sd as a fraction of the granularity.
+    Gaussian decay function with sd as a fraction of the granularity.
     :param sd_frac:
     :param granularity:
     :param height_coef:
