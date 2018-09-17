@@ -46,7 +46,7 @@ def decay_function_gaussian_with_sd(sd, height_coef=1, centre=0) -> callable:
 
 def decay_function_lognormal_median(median: float, shape: float) -> callable:
     """
-    Lognormal decay.
+    Lognormal survival decay function, parameterised by the median and the shape.
     :param median:
     :param shape:
         The spread or shape
@@ -60,5 +60,12 @@ def decay_function_lognormal_median(median: float, shape: float) -> callable:
 
 
 def decay_function_lognormal_mean(mu: float, shape: float) -> callable:
-    """Use of median is preferred."""
+    """
+    Lognormal survival decay function, parameterised by the mean and the shape.
+
+    (Use of median is preferred.)
+    :param mu:
+    :param shape:
+    :return:
+    """
     return decay_function_lognormal_median(exp(mu), shape)
