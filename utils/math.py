@@ -14,6 +14,9 @@ caiwingfield.net
 2018
 ---------------------------
 """
+import math
+
+TAU = math.tau
 
 
 def mean(*items):

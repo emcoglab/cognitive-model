@@ -19,10 +19,11 @@ import logging
 from collections import namedtuple, defaultdict
 from typing import Set, Dict, DefaultDict, NamedTuple, Tuple
 
-from numpy import exp, float_power
+from numpy import exp, float_power, sqrt
 from scipy.stats import norm
 
 from model.graph import Graph, Node
+from model.utils.math import TAU
 
 logger = logging.getLogger()
 logger_format = '%(asctime)s | %(levelname)s | %(module)s | %(message)s'
@@ -372,8 +373,12 @@ def decay_function_gaussian_with_sd(sd, height_coef=1, centre=0) -> callable:
     assert height_coef > 0
     assert sd > 0
 
+    # The actual normal pdf has height 1/sqrt(2 pi sd^2). We want its natural height to be 1 (which is then scaled
+    # by the original activation), so we force that here.
+    reset_height = sqrt(TAU * sd * sd)
+
     def decay_function(age, original_activation):
-        return original_activation * height_coef * norm.pdf(age, loc=centre, scale=sd)
+        return original_activation * height_coef * reset_height * norm.pdf(age, loc=centre, scale=sd)
 
     return decay_function
 
