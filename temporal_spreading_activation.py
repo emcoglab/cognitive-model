@@ -19,7 +19,7 @@ import logging
 from collections import namedtuple, defaultdict
 from typing import Set, Dict, DefaultDict, NamedTuple, Tuple
 
-from numpy import exp, float_power, sqrt
+from numpy import float_power, sqrt
 from scipy.stats import norm
 
 from model.graph import Graph, Node
