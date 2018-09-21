@@ -143,7 +143,7 @@ class Graph:
                                                    ignore_edges_with_importance_greater_than: Real = None,
                                                    keep_at_least_n_edges: int = 0):
         ignoring_outlier_edges = (ignore_edges_with_importance_greater_than is not None)
-        if not ignore_edges_with_importance_greater_than and keep_at_least_n_edges:
+        if not ignoring_outlier_edges and keep_at_least_n_edges:
             logger.warning(
                 f"Requested to keep {keep_at_least_n_edges} edges but not pruning. "
                 f"This parameter is therefore being ignored.")
