@@ -22,10 +22,10 @@ from pandas import read_csv, DataFrame, Series
 from pandas.errors import EmptyDataError
 
 
-def touch(fname, times=None):
+def touch(file_path):
     """Touches a file on disk."""
-    with open(fname, 'a'):
-        os.utime(fname, times)
+    with open(file_path, 'a'):
+        os.utime(file_path, times=None)
 
 
 def add_column_to_csv(column, column_name: str, csv_path: str, index_col=None):
