@@ -142,6 +142,10 @@ class Graph:
                                                    file_path: str,
                                                    ignore_edges_with_importance_greater_than: Real = None,
                                                    keep_at_least_n_edges: int = 0):
+        """
+        The importance of an edge is the average percentile score of its length in the distribution of edge lengths
+        incident to each of its endpoint nodes.
+        """
         ignoring_outlier_edges = (ignore_edges_with_importance_greater_than is not None)
         if not ignoring_outlier_edges and keep_at_least_n_edges:
             logger.warning(
