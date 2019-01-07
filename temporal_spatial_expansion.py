@@ -65,7 +65,7 @@ class TemporalSpatialExpansion(ModelComponent):
 
         points_which_became_consciously_active = self._apply_activations()
 
-        return set(ItemActivatedEvent(self.idx2label[point_idx], self._activation_records[point_idx], self.clock)
+        return set(ItemActivatedEvent(label=self.idx2label[point_idx], activation=self._activation_records[point_idx], time_activated=self.clock)
                    for point_idx in points_which_became_consciously_active)
 
     def _grow_spheres(self):

@@ -200,7 +200,7 @@ class TemporalSpreadingActivation(ModelComponent):
 
         nodes_which_became_consciously_active = self._apply_activations()
 
-        return set(ItemActivatedEvent(self.idx2label[node], self.activation_of_item_with_idx(node), self.clock) for node in nodes_which_became_consciously_active)
+        return set(ItemActivatedEvent(label=self.idx2label[node], activation=self.activation_of_item_with_idx(node), time_activated=self.clock) for node in nodes_which_became_consciously_active)
 
     def __str__(self):
 
