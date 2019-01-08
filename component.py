@@ -53,6 +53,7 @@ class ItemActivatedEvent(namedtuple('ItemActivatedEvent', ['activation',
     A node activation event.
     Used to pass out of TSA.tick().
     """
+    # TODO: this is basically the same as ActivationRecord, and could probably be removed in favour of it.
     label: ItemLabel
     activation: ActivationValue
     time_activated: int

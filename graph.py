@@ -381,7 +381,7 @@ class Graph:
     def is_connected(self) -> bool:
         """Returns True if the graph is connected, and False otherwise."""
         # We pick a node at random, and see how many other nodes we can visit from it, then see if we've got everywhere.
-        # Use a breadth-first search
+        # Use a breadth-first search.
         visited_nodes = set()
         search_queue = set()
         starting_node = list(self.nodes)[0]
@@ -568,6 +568,9 @@ def save_edgelist_from_similarity_matrix(file_path: str,
 
         # Iterate over non-zero entries, which are the ones which should correspond to edges in the matrix
         for i, j, v in zip(similarity_matrix.row, similarity_matrix.col, similarity_matrix.data):
+            # only want half of the symmetric matrix, and no diagonal
+            if j <= i:
+                continue
             length = Length(ceil((
                 # Convert similarities to lengths by subtracting from the max value
                 max_value - v
@@ -578,7 +581,8 @@ def save_edgelist_from_similarity_matrix(file_path: str,
 
             # Log occasionally
             n_values_considered += 1
-            percent_done = int(ceil(100 * n_values_considered / n_values))
+            # Double the % done as we only look at one half of the symmetric matrix (making this value approx, as we ignore diagonal entries)
+            percent_done = 2 * int(ceil(100 * n_values_considered / n_values))
             if (percent_done % 10 == 0) and (percent_done > logged_percent_milestone):
                 logger.info(f"\t{percent_done}% done")
                 logged_percent_milestone = percent_done
