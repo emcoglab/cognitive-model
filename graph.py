@@ -24,6 +24,7 @@ from typing import Dict, Set, Tuple, Iterator, DefaultDict
 from numpy import percentile
 from numpy.core.multiarray import ndarray
 from numpy.core.umath import ceil
+from scipy.sparse import coo_matrix
 from scipy.stats import percentileofscore
 from sortedcontainers import SortedSet
 
@@ -525,6 +526,64 @@ def save_edgelist_from_distance_matrix(file_path: str,
                 length = Length(ceil(distance * length_granularity))
                 # Write edge to file
                 temp_file.write(f"{i} {j} {length}\n")
+
+    # When done writing to the temp file, rename it to the finished file
+    os.rename(temp_file_path, file_path)
+
+
+def save_edgelist_from_similarity_matrix(file_path: str,
+                                         similarity_matrix,
+                                         length_granularity: int):
+    """
+    Saves a graph of the correct form to underlie a TemporalSpreadingActivation.
+    Saved as a networkx-compatible edgelist format.
+
+    This can be loaded using `load_graph`.
+
+    It is often faster (and more memory efficient) to save this way than building the graph and then saving it.
+
+    :param file_path:
+    :param similarity_matrix:
+    :param length_granularity:
+    :return:
+    """
+
+    temp_file_path = file_path + ".incomplete"
+
+    # Log progress every time we reach a percentage milestone
+    # Record here the most recently logged milestone
+    logged_percent_milestone = 0
+    n_values_considered = 0
+
+    # Convert to coo for fast iteration
+    similarity_matrix = coo_matrix(similarity_matrix)
+    # Drop zeros to make sure the min is non-zero
+    similarity_matrix.eliminate_zeros()
+    max_value = similarity_matrix.data.max()
+    min_value = similarity_matrix.data.min()
+
+    n_values = similarity_matrix.nnz
+
+    with open(temp_file_path, mode="w", encoding="utf8") as temp_file:
+
+        # Iterate over non-zero entries, which are the ones which should correspond to edges in the matrix
+        for i, j, v in zip(similarity_matrix.row, similarity_matrix.col, similarity_matrix.data):
+            length = Length(ceil((
+                # Convert similarities to lengths by subtracting from the max value
+                max_value - v
+                # Add the minimum value to make sure we don't get zero-length edges
+                + min_value) * length_granularity))
+            # Write edge to file
+            temp_file.write(f"{i} {j} {length}\n")
+
+            # Log occasionally
+            n_values_considered += 1
+            percent_done = int(ceil(100 * n_values_considered / n_values))
+            if (percent_done % 10 == 0) and (percent_done > logged_percent_milestone):
+                logger.info(f"\t{percent_done}% done")
+                logged_percent_milestone = percent_done
+
+    # When done writing to the temp file, rename it to the finished file
     os.rename(temp_file_path, file_path)
 
 
