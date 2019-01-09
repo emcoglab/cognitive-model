@@ -18,6 +18,8 @@ caiwingfield.net
 import logging
 from typing import Set, Dict, Tuple
 
+from numpy.core.umath import ceil
+
 from model.component import ModelComponent, ActivationValue, ActivationRecord, \
     ItemActivatedEvent
 from model.graph import Graph, Node
@@ -35,6 +37,7 @@ class TemporalSpreadingActivation(ModelComponent):
                  firing_threshold: ActivationValue,
                  conscious_access_threshold: ActivationValue,
                  impulse_pruning_threshold: float,
+                 impulse_propagation_speed: float,
                  node_decay_function: callable,
                  edge_decay_function: callable):
         """
@@ -54,6 +57,8 @@ class TemporalSpreadingActivation(ModelComponent):
             A node will be listed as activated if its activation reaches this threshold.
         :param impulse_pruning_threshold
             Any impulse which decays to less than this threshold before reaching its destination will be deleted.
+        :param impulse_propagation_speed
+            The speed at which impulses propagate (length/tick).
         :param node_decay_function:
             A function governing the decay of activations on nodes.
             Use the decay_function_*_with_params methods to create these.
@@ -64,6 +69,14 @@ class TemporalSpreadingActivation(ModelComponent):
 
         super().__init__(item_labelling_dictionary=item_labelling_dictionary)
 
+        # Validate arguments
+
+        # Don't want to end up dividing by zero later on
+        if impulse_propagation_speed <= 0:
+            raise ValueError()
+
+        # Store as state
+
         # Underlying graph: weighted, undirected
         self.graph: Graph = graph
 
@@ -72,6 +85,9 @@ class TemporalSpreadingActivation(ModelComponent):
         self.firing_threshold: ActivationValue = firing_threshold
         self.conscious_access_threshold: ActivationValue = conscious_access_threshold
         self.impulse_pruning_threshold: float = impulse_pruning_threshold
+
+        # The speed at which impulses propagate (length/tick)
+        self.impulse_propagation_speed: float = impulse_propagation_speed
 
         # These decay functions should be stateless, and convert an original activation and an age into a current
         # activation.
@@ -171,15 +187,17 @@ class TemporalSpreadingActivation(ModelComponent):
                 else:
                     raise ValueError()
 
-                length = self.graph.edge_lengths[edge]
+                # time = distance ÷ speed
+                # ceil to make the time an int, and so we don't get time = 0
+                time_to_arrival = ceil(self.graph.edge_lengths[edge] / self.impulse_propagation_speed)
 
-                arrival_activation = self.edge_decay_function(length, new_activation)
+                arrival_activation = self.edge_decay_function(time_to_arrival, new_activation)
 
                 # Skip any impulses which will be too small on arrival
                 if arrival_activation < self.impulse_pruning_threshold:
                     continue
 
-                arrival_time = int(self.clock + length)
+                arrival_time = int(self.clock + time_to_arrival)
 
                 # Accumulate activation at target node at time when it's due to arrive
                 self.schedule_activation_of_item_with_idx(target_node, arrival_activation, arrival_time)
