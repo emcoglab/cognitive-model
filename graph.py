@@ -14,7 +14,6 @@ caiwingfield.net
 2018
 ---------------------------
 """
-
 import logging
 import os
 from collections import defaultdict, Sequence
@@ -34,7 +33,7 @@ from model.utils.math import mean
 logger = logging.getLogger()
 
 Node = ItemIdx
-Length = int
+Length = float
 
 
 class Edge(tuple):
@@ -290,7 +289,6 @@ class Graph:
     @classmethod
     def from_distance_matrix(cls,
                              distance_matrix: ndarray,
-                             length_granularity: int,
                              ignore_edges_longer_than: Length = None,
                              keep_at_least_n_edges: int = 0) -> 'Graph':
         """
@@ -305,12 +303,6 @@ class Graph:
 
         :param distance_matrix:
             A symmetric distance matrix in numpy format.
-        :param length_granularity:
-            Distances will be scaled into integer connection lengths using this granularity scaling factor.
-            Whether to use weights on the edges.
-            If True, distances will be converted to weights using x ↦ 1-x.
-                (This means it's only suitable for things like cosine and correlation distances, not Euclidean.)
-            If False, all edges get the same weight.
         :param ignore_edges_longer_than:
             (Optional.) If provided and not None: Any connections with lengths (strictly) longer than this will be
             severed.
@@ -335,8 +327,7 @@ class Graph:
             for n2 in range(n1 + 1, n_nodes):
                 graph.add_node(n2)
                 edge = Edge((n1, n2))
-                distance = distance_matrix[n1, n2]
-                length = Length(ceil(distance * length_granularity))
+                length = Length(distance_matrix[n1, n2])
                 # Skip the edge if we're pruning and it's too long
                 if not ignoring_long_edges or length <= ignore_edges_longer_than:
                     graph.add_edge(edge, length)
@@ -491,8 +482,7 @@ class Graph:
 
 
 def save_edgelist_from_distance_matrix(file_path: str,
-                                       distance_matrix: ndarray,
-                                       length_granularity: int):
+                                       distance_matrix: ndarray):
     """
     Saves a graph of the correct form to underlie a TemporalSpreadingActivation.
     Saved as a networkx-compatible edgelist format.
@@ -503,7 +493,6 @@ def save_edgelist_from_distance_matrix(file_path: str,
 
     :param file_path:
     :param distance_matrix:
-    :param length_granularity:
     :return:
     """
 
@@ -522,8 +511,7 @@ def save_edgelist_from_distance_matrix(file_path: str,
                 logged_percent_milestone = percent_done
             # Write
             for j in range(i + 1, distance_matrix.shape[1]):
-                distance = distance_matrix[i, j]
-                length = Length(ceil(distance * length_granularity))
+                length = Length(distance_matrix[i, j])
                 # Write edge to file
                 temp_file.write(f"{i} {j} {length}\n")
 
@@ -532,8 +520,7 @@ def save_edgelist_from_distance_matrix(file_path: str,
 
 
 def save_edgelist_from_similarity_matrix(file_path: str,
-                                         similarity_matrix,
-                                         length_granularity: int):
+                                         similarity_matrix):
     """
     Saves a graph of the correct form to underlie a TemporalSpreadingActivation.
     Saved as a networkx-compatible edgelist format.
@@ -544,7 +531,6 @@ def save_edgelist_from_similarity_matrix(file_path: str,
 
     :param file_path:
     :param similarity_matrix:
-    :param length_granularity:
     :return:
     """
 
@@ -571,11 +557,11 @@ def save_edgelist_from_similarity_matrix(file_path: str,
             # only want half of the symmetric matrix, and no diagonal
             if j <= i:
                 continue
-            length = Length(ceil((
+            length = Length(
                 # Convert similarities to lengths by subtracting from the max value
                 max_value - v
                 # Add the minimum value to make sure we don't get zero-length edges
-                + min_value) * length_granularity))
+                + min_value)
             # Write edge to file
             temp_file.write(f"{i} {j} {length}\n")
 
