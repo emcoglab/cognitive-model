@@ -15,9 +15,8 @@ caiwingfield.net
 ---------------------------
 """
 from abc import ABCMeta, abstractmethod
-from collections import defaultdict
-from collections.__init__ import namedtuple
-from typing import Set, Tuple, Dict, DefaultDict
+from collections import defaultdict, namedtuple
+from typing import Set, Dict, DefaultDict
 
 # Activations will very likely stay floats, but we alias that here in case we need to change it at any point
 ActivationValue = float
@@ -98,11 +97,10 @@ class ModelComponent(metaclass=ABCMeta):
         """
         Applies scheduled all scheduled activations.
         :return:
-            Set of nodes which became consciously active.
+            Set of nodes which became activated.
         """
 
         items_which_became_activated = set()
-        items_which_crossed_conscious_access_threshold = set()
 
         if self.clock in self._scheduled_activations:
 
@@ -111,13 +109,11 @@ class ModelComponent(metaclass=ABCMeta):
 
             if len(scheduled_activation) > 0:
                 for destination_item, activation in scheduled_activation.items():
-                    item_did_become_activated, item_did_cross_conscious_access_threshold = self.activate_item_with_idx(destination_item, activation)
+                    item_did_become_activated = self.activate_item_with_idx(destination_item, activation)
                     if item_did_become_activated:
                         items_which_became_activated.add(destination_item)
-                    if item_did_cross_conscious_access_threshold:
-                        items_which_crossed_conscious_access_threshold.add(destination_item)
 
-        return items_which_crossed_conscious_access_threshold
+        return items_which_became_activated
 
     def schedule_activation_of_item_with_idx(self, idx: ItemIdx, activation: ActivationValue, arrival_time: int):
         self._scheduled_activations[arrival_time][idx] += activation
@@ -130,8 +126,8 @@ class ModelComponent(metaclass=ABCMeta):
         return self.activation_of_item_with_idx(self.label2idx[label])
 
     @abstractmethod
-    def activate_item_with_idx(self, idx, activation: ActivationValue) -> Tuple[bool, bool]:
+    def activate_item_with_idx(self, idx, activation: ActivationValue) -> bool:
         pass
 
-    def activate_item_with_label(self, label: ItemLabel, activation: ActivationValue) -> Tuple[bool, bool]:
+    def activate_item_with_label(self, label: ItemLabel, activation: ActivationValue) -> bool:
         return self.activate_item_with_idx(self.label2idx[label], activation)

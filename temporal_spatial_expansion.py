@@ -14,7 +14,7 @@ caiwingfield.net
 2018
 ---------------------------
 """
-from typing import Dict, Set, Tuple
+from typing import Dict, Set
 
 from ldm.core.utils.maths import DistanceType
 from model.component import ModelComponent, ActivationValue, ItemLabel, ActivationRecord, ItemActivatedEvent
@@ -31,8 +31,7 @@ class TemporalSpatialExpansion(ModelComponent):
                  distance_type: DistanceType,
                  decay_median: float,
                  decay_shape: float,
-                 decay_threshold: ActivationValue,
-                 conscious_access_threshold: ActivationValue):
+                 decay_threshold: ActivationValue):
 
         super().__init__(item_labelling_dictionary=item_labelling_dictionary)
 
@@ -43,7 +42,6 @@ class TemporalSpatialExpansion(ModelComponent):
 
         # Use >= and < to test for above/below
         self.decay_threshold: ActivationValue = decay_threshold
-        self.conscious_access_threshold: ActivationValue = conscious_access_threshold
 
         self._decay_function = decay_function_lognormal_median(decay_median, decay_shape)
 
@@ -63,10 +61,10 @@ class TemporalSpatialExpansion(ModelComponent):
 
         self._grow_spheres()
 
-        points_which_became_consciously_active = self._apply_activations()
+        points_which_became_active = self._apply_activations()
 
         return set(ItemActivatedEvent(label=self.idx2label[point_idx], activation=self._activation_records[point_idx], time_activated=self.clock)
-                   for point_idx in points_which_became_consciously_active)
+                   for point_idx in points_which_became_active)
 
     def _grow_spheres(self):
         """
@@ -109,17 +107,13 @@ class TemporalSpatialExpansion(ModelComponent):
             if decayed_activation < self.decay_threshold:
                 self._activation_records.pop(activated_point_idx)
 
-    def activate_item_with_idx(self, point_idx: int, incoming_activation: ActivationValue) -> Tuple[bool, bool]:
+    def activate_item_with_idx(self, point_idx: int, incoming_activation: ActivationValue) -> bool:
         """
         Activate a point.
         :param point_idx:
         :param incoming_activation:
         :return:
-            Tuple of bools:
-            (
-                Point became newly activated (True) or just absorbed and accumulated (False),
-                Point crossed conscious access threshold (True) or not (False)
-            )
+            True if the item fired, else false
         """
 
         # Create sphere if not already activated
@@ -127,17 +121,13 @@ class TemporalSpatialExpansion(ModelComponent):
             new_activation = incoming_activation
             self.spheres[point_idx] = 0
             did_activate = True
-            # Since the point started at zero activation, we crossed the c_a_t iff the new activation is greater than it
-            did_cross_conscious_access_threshold = incoming_activation > self.conscious_access_threshold
 
         # Otherwise accumulate incoming_activation, but reset clock
         else:
             current_activation = self._activation_records[point_idx].activation
-            currently_below_c_a_t = current_activation > self.conscious_access_threshold
             new_activation = current_activation + incoming_activation
             did_activate = False
-            did_cross_conscious_access_threshold = currently_below_c_a_t and (new_activation > self.conscious_access_threshold)
 
         self._activation_records[point_idx] = ActivationRecord(new_activation, self.clock)
 
-        return did_activate, did_cross_conscious_access_threshold
+        return did_activate

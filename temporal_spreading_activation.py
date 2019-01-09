@@ -16,10 +16,9 @@ caiwingfield.net
 """
 
 import logging
-from typing import Set, Dict, Tuple
+from typing import Set, Dict
 
-from model.component import ModelComponent, ActivationValue, ActivationRecord, \
-    ItemActivatedEvent
+from model.component import ModelComponent, ActivationValue, ActivationRecord, ItemActivatedEvent
 from model.graph import Graph, Node
 
 logger = logging.getLogger()
@@ -33,7 +32,6 @@ class TemporalSpreadingActivation(ModelComponent):
                  graph: Graph,
                  item_labelling_dictionary: Dict,
                  firing_threshold: ActivationValue,
-                 conscious_access_threshold: ActivationValue,
                  impulse_pruning_threshold: float,
                  node_decay_function: callable,
                  edge_decay_function: callable):
@@ -49,9 +47,6 @@ class TemporalSpreadingActivation(ModelComponent):
         :param firing_threshold:
             Firing threshold.
             A node will fire on receiving activation if its activation crosses this threshold.
-        :param conscious_access_threshold:
-            Conscious access threshold.
-            A node will be listed as activated if its activation reaches this threshold.
         :param impulse_pruning_threshold
             Any impulse which decays to less than this threshold before reaching its destination will be deleted.
         :param node_decay_function:
@@ -70,7 +65,6 @@ class TemporalSpreadingActivation(ModelComponent):
         # Thresholds
         # Use >= and < to test for above/below
         self.firing_threshold: ActivationValue = firing_threshold
-        self.conscious_access_threshold: ActivationValue = conscious_access_threshold
         self.impulse_pruning_threshold: float = impulse_pruning_threshold
 
         # These decay functions should be stateless, and convert an original activation and an age into a current
@@ -108,32 +102,23 @@ class TemporalSpreadingActivation(ModelComponent):
             self.clock - activation_record.time_activated,  # node age
             activation_record.activation)
 
-    def activate_item_with_idx(self, n: Node, activation: ActivationValue) -> Tuple[bool, bool]:
+    def activate_item_with_idx(self, n: Node, activation: ActivationValue) -> bool:
         """
         Activate a node.
         :param n:
         :param activation:
         :return:
-            A 2-tuple of bools: (
-                Node did fire,
-                Node's activation did cross conscious-access threshold
-            )
+            True if the node fired, else false.
         """
         assert n in self.graph.nodes
 
         current_activation = self.activation_of_item_with_idx(n)
 
-        currently_below_conscious_access_threshold = current_activation < self.conscious_access_threshold
-
         # If this node is currently suprathreshold, it acts as a sink.
         # It doesn't accumulate new activation and cannot fire.
         if current_activation >= self.firing_threshold:
-            return (
-                # Node didn't fire
-                False,
-                # Node's activation didn't change so it definitely didn't cross the conscious-access threshold
-                False
-            )
+            # Node didn't fire
+            return False
 
         # Otherwise, we proceed with the activation:
 
@@ -141,18 +126,12 @@ class TemporalSpreadingActivation(ModelComponent):
         new_activation = current_activation + activation
         self._activation_records[n] = ActivationRecord(new_activation, self.clock)
 
-        # Check if we reached the conscious-access threshold
-        did_cross_conscious_access_threshold = currently_below_conscious_access_threshold and (new_activation > self.conscious_access_threshold)
-
         # Check if we reached the firing threshold.
 
         if new_activation < self.firing_threshold:
             # If not, we're done
-            return (
-                # Node didn't fire
-                False,
-                did_cross_conscious_access_threshold
-            )
+            # Node didn't fire
+            return False
 
         else:
             # If so, Fire!
@@ -184,23 +163,20 @@ class TemporalSpreadingActivation(ModelComponent):
                 # Accumulate activation at target node at time when it's due to arrive
                 self.schedule_activation_of_item_with_idx(target_node, arrival_activation, arrival_time)
 
-            return (
-                # Node did fire
-                True,
-                did_cross_conscious_access_threshold and (new_activation > self.conscious_access_threshold)
-            )
+            # Node did fire
+            return True
 
     def tick(self) -> Set[ItemActivatedEvent]:
         """
         Performs the spreading activation algorithm for one tick of the clock.
         :return:
-            Set of nodes which became active.
+            Set of nodes which became activated.
         """
         self.clock += 1
 
-        nodes_which_became_consciously_active = self._apply_activations()
+        nodes_which_became_active = self._apply_activations()
 
-        return set(ItemActivatedEvent(label=self.idx2label[node], activation=self.activation_of_item_with_idx(node), time_activated=self.clock) for node in nodes_which_became_consciously_active)
+        return set(ItemActivatedEvent(label=self.idx2label[node], activation=self.activation_of_item_with_idx(node), time_activated=self.clock) for node in nodes_which_became_active)
 
     def __str__(self):
 
