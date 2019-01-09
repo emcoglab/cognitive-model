@@ -14,7 +14,6 @@ caiwingfield.net
 2018
 ---------------------------
 """
-
 import logging
 import os
 from collections import defaultdict, Sequence

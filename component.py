@@ -14,12 +14,16 @@ caiwingfield.net
 2018
 ---------------------------
 """
+import json
 from abc import ABCMeta, abstractmethod
 from collections import defaultdict
 from collections.__init__ import namedtuple
+from os import path
 from typing import Set, Tuple, Dict, DefaultDict
 
 # Activations will very likely stay floats, but we alias that here in case we need to change it at any point
+from preferences import Preferences
+
 ActivationValue = float
 ItemIdx = int
 ItemLabel = str
@@ -135,3 +139,17 @@ class ModelComponent(metaclass=ABCMeta):
 
     def activate_item_with_label(self, label: ItemLabel, activation: ActivationValue) -> Tuple[bool, bool]:
         return self.activate_item_with_idx(self.label2idx[label], activation)
+
+
+def load_labels(corpus, n_words):
+    """
+    Loads a node's labels.
+    """
+    with open(path.join(Preferences.graphs_dir, f"{corpus.name} {n_words} words.nodelabels"), mode="r",
+              encoding="utf-8") as nrd_file:
+        node_relabelling_dictionary_json = json.load(nrd_file)
+    # TODO: this isn't a great way to do this
+    node_labelling_dictionary = dict()
+    for k, v in node_relabelling_dictionary_json.items():
+        node_labelling_dictionary[int(k)] = v
+    return node_labelling_dictionary
