@@ -142,6 +142,7 @@ class TemporalSpreadingActivation(ModelComponent):
             # For each incident edge
             for edge in self.graph.incident_edges(source_node):
 
+                # Find which node in the edge is the source node and which is the target
                 n1, n2 = edge
                 if source_node == n1:
                     target_node = n2
