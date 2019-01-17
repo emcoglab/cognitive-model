@@ -19,12 +19,12 @@ import logging
 import os
 from collections import defaultdict, Sequence
 from numbers import Real
-from typing import Dict, Set, Tuple, Iterator, DefaultDict
+from typing import Dict, Set, Tuple, Iterator, DefaultDict, List
 
 from numpy import percentile
 from numpy.core.multiarray import ndarray
 from numpy.core.umath import ceil
-from scipy.sparse import coo_matrix
+from scipy.sparse import coo_matrix, csr_matrix
 from scipy.stats import percentileofscore
 from sortedcontainers import SortedSet
 
@@ -532,8 +532,9 @@ def save_edgelist_from_distance_matrix(file_path: str,
 
 
 def save_edgelist_from_similarity_matrix(file_path: str,
-                                         similarity_matrix,
-                                         length_granularity: int):
+                                         similarity_matrix: csr_matrix,
+                                         filtered_node_ids: List[int],
+                                         length_factor: int):
     """
     Saves a graph of the correct form to underlie a TemporalSpreadingActivation.
     Saved as a networkx-compatible edgelist format.
@@ -544,7 +545,8 @@ def save_edgelist_from_similarity_matrix(file_path: str,
 
     :param file_path:
     :param similarity_matrix:
-    :param length_granularity:
+    :param filtered_node_ids:
+    :param length_factor:
     :return:
     """
 
@@ -555,14 +557,21 @@ def save_edgelist_from_similarity_matrix(file_path: str,
     logged_percent_milestone = 0
     n_values_considered = 0
 
-    # Convert to coo for fast iteration
-    similarity_matrix = coo_matrix(similarity_matrix)
+    # Determine max and min similarities over WHOLE similarity matrix, before filtering
+
     # Drop zeros to make sure the min is non-zero
     similarity_matrix.eliminate_zeros()
     max_value = similarity_matrix.data.max()
     min_value = similarity_matrix.data.min()
 
-    n_values = similarity_matrix.nnz
+    # Filter similarity matrix rows and columns by supplied ids
+    similarity_matrix = similarity_matrix.tocsr()[filtered_node_ids, :].tocsc()[:, filtered_node_ids]
+
+    # number of non-zero values, used for logging progress
+    n_values_for_logging_progress = similarity_matrix.nnz
+
+    # Convert to coo for fast iteration
+    similarity_matrix = coo_matrix(similarity_matrix)
 
     with open(temp_file_path, mode="w", encoding="utf8") as temp_file:
 
@@ -575,14 +584,14 @@ def save_edgelist_from_similarity_matrix(file_path: str,
                 # Convert similarities to lengths by subtracting from the max value
                 max_value - v
                 # Add the minimum value to make sure we don't get zero-length edges
-                + min_value) * length_granularity))
+                + min_value) * length_factor))
             # Write edge to file
             temp_file.write(f"{i} {j} {length}\n")
 
             # Log occasionally
             n_values_considered += 1
             # Double the % done as we only look at one half of the symmetric matrix (making this value approx, as we ignore diagonal entries)
-            percent_done = 2 * int(ceil(100 * n_values_considered / n_values))
+            percent_done = 2 * int(ceil(100 * n_values_considered / n_values_for_logging_progress))
             if (percent_done % 10 == 0) and (percent_done > logged_percent_milestone):
                 logger.info(f"\t{percent_done}% done")
                 logged_percent_milestone = percent_done
