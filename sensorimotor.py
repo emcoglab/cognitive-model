@@ -18,7 +18,7 @@ from typing import Iterable
 
 from pandas import DataFrame, read_csv
 
-from ldm.core.utils.exceptions import WordNotFoundError
+from ldm.utils.exceptions import WordNotFoundError
 from model.points_in_space import PointsInSpace
 from preferences import Preferences
 

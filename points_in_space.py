@@ -20,7 +20,7 @@ from typing import Optional, Iterator, List
 from numpy.core.multiarray import ndarray
 from scipy.spatial.distance import cdist
 
-from ldm.core.utils.maths import DistanceType
+from ldm.utils.maths import DistanceType
 from model.component import ItemIdx
 
 
