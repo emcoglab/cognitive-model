@@ -16,7 +16,9 @@ caiwingfield.net
 """
 
 from numpy.core.umath import float_power, exp, pi, sqrt
-from scipy.stats import lognorm, norm
+from scipy.stats import lognorm
+
+from model.utils.math_core import gaussian_decay
 
 TAU = 2 * pi
 
@@ -65,7 +67,12 @@ def decay_function_gaussian_with_sd(sd, height_coef=1, centre=0) -> callable:
     reset_height = sqrt(TAU * sd * sd)
 
     def decay_function(age, original_activation):
-        return original_activation * height_coef * reset_height * norm.pdf(age, loc=centre, scale=sd)
+        return gaussian_decay(age=age,
+                              original_activation=original_activation,
+                              height_coef=height_coef,
+                              reset_height=reset_height,
+                              centre=centre,
+                              sd=sd)
 
     return decay_function
 
