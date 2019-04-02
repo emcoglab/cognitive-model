@@ -18,9 +18,9 @@ caiwingfield.net
 from numpy.core.umath import float_power, exp, pi, sqrt
 from scipy.stats import lognorm
 
-from model.utils.math_core import gaussian_decay
+from model.utils.math_core import gaussian_decay, exponential_decay
 
-TAU = 2 * pi
+TAU: float = 2 * pi
 
 
 def decay_function_exponential_with_decay_factor(decay_factor) -> callable:
@@ -37,7 +37,7 @@ def decay_function_exponential_with_decay_factor(decay_factor) -> callable:
     assert 0 < decay_factor <= 1
 
     def decay_function(age, original_activation):
-        return original_activation * (decay_factor ** age)
+        return exponential_decay(age=age, original_activation=original_activation, decay_factor=decay_factor)
 
     return decay_function
 

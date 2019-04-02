@@ -20,7 +20,20 @@ from libc.math cimport exp, sqrt, pi
 
 TAU: cython.float = 2 * pi
 
-def gaussian_decay(age: cython.int,
+
+def exponential_decay(age: cython.uint,
+                      original_activation: cython.float,
+                      decay_factor: cython.float) -> cython.float:
+    """
+    :param age:
+    :param original_activation:
+    :param decay_factor:
+    :return:
+    """
+    return original_activation * (decay_factor ** age)
+
+
+def gaussian_decay(age: cython.uint,
                    original_activation: cython.float,
                    height_coef: cython.float,
                    reset_height: cython.float,
@@ -28,7 +41,6 @@ def gaussian_decay(age: cython.int,
                    sd: cython.float,
                    ) -> cython.float:
     """
-
     :param age:
     :param original_activation:
     :param height_coef:
@@ -39,6 +51,7 @@ def gaussian_decay(age: cython.int,
     :return:
     """
     return original_activation * height_coef * reset_height * gaussian_pdf(x=age, mu=centre, sd=sd)
+
 
 def gaussian_pdf(x: cython.float, mu: cython.float, sd: cython.float) -> cython.float:
     """
