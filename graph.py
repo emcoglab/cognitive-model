@@ -524,6 +524,7 @@ def save_edgelist_from_distance_matrix(file_path: str,
             for j in range(i + 1, distance_matrix.shape[1]):
                 distance = distance_matrix[i, j]
                 length = Length(ceil(distance * length_granularity))
+                assert length > 0
                 # Write edge to file
                 temp_file.write(f"{i} {j} {length}\n")
 
@@ -585,6 +586,7 @@ def save_edgelist_from_similarity_matrix(file_path: str,
                 max_value - v
                 # Add the minimum value to make sure we don't get zero-length edges
                 + min_value) * length_factor))
+            assert length > 0
             # Write edge to file
             temp_file.write(f"{i} {j} {length}\n")
 
@@ -631,4 +633,5 @@ def iter_edges_from_edgelist(file_path: str) -> Iterator[Tuple[Edge, Length]]:
     with open(file_path, mode="r", encoding="utf-8") as edgelist_file:
         for line in edgelist_file:
             n1, n2, length = line.split()
+            assert Length(length) > 0
             yield Edge((Node(n1), Node(n2))), Length(length)
