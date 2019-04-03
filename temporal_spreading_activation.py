@@ -159,10 +159,10 @@ class TemporalSpreadingActivation(ModelComponent):
                 if arrival_activation < self.impulse_pruning_threshold:
                     continue
 
-                arrival_time = int(self.clock + length)
-
                 # Accumulate activation at target node at time when it's due to arrive
-                self.schedule_activation_of_item_with_idx(target_node, arrival_activation, arrival_time)
+                self.schedule_activation_of_item_with_idx(target_node,
+                                                          arrival_activation,
+                                                          arrival_time=self.clock + length)
 
             # Node did fire
             return True
