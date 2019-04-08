@@ -30,6 +30,7 @@ from sortedcontainers import SortedSet
 
 from model.component import ItemIdx
 from model.utils.math import mean
+from ldm.utils.logging import print_progress
 
 logger = logging.getLogger()
 
@@ -553,11 +554,6 @@ def save_edgelist_from_similarity_matrix(file_path: str,
 
     temp_file_path = file_path + ".incomplete"
 
-    # Log progress every time we reach a percentage milestone
-    # Record here the most recently logged milestone
-    logged_percent_milestone = 0
-    n_values_considered = 0
-
     # Determine max and min similarities over WHOLE similarity matrix, before filtering
 
     # Drop zeros to make sure the min is non-zero
@@ -576,6 +572,8 @@ def save_edgelist_from_similarity_matrix(file_path: str,
 
     with open(temp_file_path, mode="w", encoding="utf8") as temp_file:
 
+        n_values_considered = 0
+
         # Iterate over non-zero entries, which are the ones which should correspond to edges in the matrix
         for i, j, v in zip(similarity_matrix.row, similarity_matrix.col, similarity_matrix.data):
             # only want half of the symmetric matrix, and no diagonal
@@ -593,11 +591,14 @@ def save_edgelist_from_similarity_matrix(file_path: str,
 
             # Log occasionally
             n_values_considered += 1
-            # Double the % done as we only look at one half of the symmetric matrix (making this value approx, as we ignore diagonal entries)
-            percent_done = 2 * int(ceil(100 * n_values_considered / n_values_for_logging_progress))
-            if (percent_done % 10 == 0) and (percent_done > logged_percent_milestone):
-                logger.info(f"\t{percent_done}% done")
-                logged_percent_milestone = percent_done
+            if (n_values_considered == 0
+                    or n_values_considered == n_values_for_logging_progress
+                    or n_values_considered % 100 == 0):
+                # Double the % done as we only look at one half of the symmetric matrix (making this value approx, as we
+                # ignore diagonal entries).
+                print_progress(n_values_considered * 2, n_values_for_logging_progress)
+    # make sure we get the 100%
+    print_progress(n_values_for_logging_progress, n_values_for_logging_progress)
 
     # When done writing to the temp file, rename it to the finished file
     os.rename(temp_file_path, file_path)
