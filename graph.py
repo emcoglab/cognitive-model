@@ -585,7 +585,8 @@ def save_edgelist_from_similarity_matrix(file_path: str,
                 # Convert similarities to lengths by subtracting from the max value
                 max_value - v
                 # Add the minimum value to make sure we don't get zero-length edges
-                + min_value) * length_factor))
+                # Use the absolute value in case the minimum is negative (e.g. with PMI).
+                + abs(min_value)) * length_factor))
             assert length > 0
             # Write edge to file
             temp_file.write(f"{i} {j} {length}\n")
