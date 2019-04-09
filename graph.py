@@ -493,7 +493,7 @@ class Graph:
 
 def save_edgelist_from_distance_matrix(file_path: str,
                                        distance_matrix: ndarray,
-                                       length_granularity: int):
+                                       length_factor: int):
     """
     Saves a graph of the correct form to underlie a TemporalSpreadingActivation.
     Saved as a networkx-compatible edgelist format.
@@ -504,7 +504,7 @@ def save_edgelist_from_distance_matrix(file_path: str,
 
     :param file_path:
     :param distance_matrix:
-    :param length_granularity:
+    :param length_factor:
     :return:
     """
 
@@ -524,7 +524,7 @@ def save_edgelist_from_distance_matrix(file_path: str,
             # Write
             for j in range(i + 1, distance_matrix.shape[1]):
                 distance = distance_matrix[i, j]
-                length = Length(ceil(distance * length_granularity))
+                length = Length(ceil(distance * length_factor))
                 assert length > 0
                 # Write edge to file
                 temp_file.write(f"{i} {j} {length}\n")
