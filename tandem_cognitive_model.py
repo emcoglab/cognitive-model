@@ -22,11 +22,12 @@ from model.temporal_spatial_expansion import TemporalSpatialExpansion
 from model.temporal_spreading_activation import TemporalSpreadingActivation
 
 
-class CognitiveModel:
+class TandemCognitiveModel:
     def __init__(self,
                  linguistic_component: TemporalSpreadingActivation,
                  sensorimotor_component: TemporalSpatialExpansion,
-                 lc_to_smc_delay: int, smc_to_lc_delay: int):
+                 lc_to_smc_delay: int,
+                 smc_to_lc_delay: int):
 
         self.linguistic_component: TemporalSpreadingActivation = linguistic_component
         self.sensorimotor_component: TemporalSpatialExpansion = sensorimotor_component

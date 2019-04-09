@@ -14,12 +14,14 @@ caiwingfield.net
 2018
 ---------------------------
 """
-
+import json
 import logging
+from os import path
 from typing import Set, Dict
 
 from model.component import ModelComponent, ActivationValue, ActivationRecord, ItemActivatedEvent
 from model.graph import Graph, Node
+from preferences import Preferences
 
 logger = logging.getLogger()
 logger_format = '%(asctime)s | %(levelname)s | %(module)s | %(message)s'
@@ -191,3 +193,17 @@ class TemporalSpreadingActivation(ModelComponent):
 
     def log_graph(self):
         [logger.info(f"{line}") for line in str(self).strip().split('\n')]
+
+
+def load_labels(corpus, n_words):
+    """
+    Loads a node's labels.
+    """
+    with open(path.join(Preferences.graphs_dir, f"{corpus.name} {n_words} words.nodelabels"), mode="r",
+              encoding="utf-8") as nrd_file:
+        node_relabelling_dictionary_json = json.load(nrd_file)
+    # TODO: this isn't a great way to do this
+    node_labelling_dictionary = dict()
+    for k, v in node_relabelling_dictionary_json.items():
+        node_labelling_dictionary[int(k)] = v
+    return node_labelling_dictionary
