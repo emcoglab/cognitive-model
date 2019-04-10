@@ -195,7 +195,7 @@ class TemporalSpreadingActivation(ModelComponent):
         [logger.info(f"{line}") for line in str(self).strip().split('\n')]
 
 
-def load_labels(corpus, n_words):
+def load_labels_from_corpus(corpus, n_words):
     """
     Loads a node's labels.
     """
@@ -203,6 +203,20 @@ def load_labels(corpus, n_words):
               encoding="utf-8") as nrd_file:
         node_relabelling_dictionary_json = json.load(nrd_file)
     # TODO: this isn't a great way to do this
+    node_labelling_dictionary = dict()
+    for k, v in node_relabelling_dictionary_json.items():
+        node_labelling_dictionary[int(k)] = v
+    return node_labelling_dictionary
+
+
+# TODO: these functions are essentially the same: refactor them
+def load_labels_from_sensorimotor():
+    """
+    Loads a node's labels.
+    """
+    with open(path.join(Preferences.graphs_dir, "sensorimotor words.nodelabels"), mode="r",
+              encoding="utf-8") as nrd_file:
+        node_relabelling_dictionary_json = json.load(nrd_file)
     node_labelling_dictionary = dict()
     for k, v in node_relabelling_dictionary_json.items():
         node_labelling_dictionary[int(k)] = v

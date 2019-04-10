@@ -638,3 +638,15 @@ def iter_edges_from_edgelist(file_path: str) -> Iterator[Tuple[Edge, Length]]:
             n1, n2, length = line.split()
             assert Length(length) > 0
             yield Edge((Node(n1), Node(n2))), Length(length)
+
+
+def log_graph_topology(graph):
+    logger.info(f"Graph has {len(graph.edges):,} edges")
+    if graph.has_orphaned_nodes():
+        logger.info("Graph has orphaned nodes.")
+    else:
+        logger.info("Graph does not have orphaned nodes")
+    if graph.is_connected():
+        logger.info("Graph is connected")
+    else:
+        logger.info("Graph is not connected")
