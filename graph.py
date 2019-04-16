@@ -517,6 +517,7 @@ def save_edgelist_from_distance_matrix(file_path: str,
     with open(temp_file_path, mode="w", encoding="utf8") as temp_file:
         for i in range(0, distance_matrix.shape[0]):
             # Log progress
+            # TODO: make this a progress bar!
             percent_done = int(ceil(100 * i / distance_matrix.shape[0]))
             if (percent_done % 10 == 0) and (percent_done > logged_percent_milestone):
                 logger.info(f"\t{percent_done}% done")
