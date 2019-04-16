@@ -19,7 +19,7 @@ from typing import Dict, Set
 from ldm.utils.maths import DistanceType
 from model.component import ModelComponent, ActivationValue, ItemLabel, ActivationRecord, ItemActivatedEvent
 from model.points_in_space import PointsInSpace, PointIdx
-from model.utils.math import decay_function_lognormal_median
+from model.utils.maths import decay_function_lognormal_median
 
 
 class TemporalSpatialExpansion(ModelComponent):

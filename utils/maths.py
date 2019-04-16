@@ -18,7 +18,7 @@ caiwingfield.net
 from numpy.core.umath import float_power, exp, pi, sqrt
 from scipy.stats import lognorm
 
-from model.utils.math_core import gaussian_decay, exponential_decay
+from model.utils.maths_core import gaussian_decay, exponential_decay
 
 TAU: float = 2 * pi
 
