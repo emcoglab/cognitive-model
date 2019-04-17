@@ -28,13 +28,12 @@ from scipy.sparse import coo_matrix, csr_matrix
 from scipy.stats import percentileofscore
 from sortedcontainers import SortedSet
 
-from model.component import ItemIdx
 from model.utils.maths import mean
 from ldm.utils.logging import print_progress
 
 logger = logging.getLogger()
 
-Node = ItemIdx
+Node = int
 Length = int
 
 

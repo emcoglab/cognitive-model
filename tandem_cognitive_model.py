@@ -17,20 +17,19 @@ caiwingfield.net
 from collections import defaultdict
 from typing import Set, DefaultDict, List
 
-from model.component import ActivationValue, ItemLabel, ItemActivatedEvent
-from model.temporal_spatial_expansion import TemporalSpatialExpansion
-from model.temporal_spreading_activation import TemporalSpreadingActivation
+from model.temporal_spreading_activation import TemporalSpreadingActivation, ActivationValue, ItemLabel, \
+    ItemActivatedEvent
 
 
 class TandemCognitiveModel:
     def __init__(self,
                  linguistic_component: TemporalSpreadingActivation,
-                 sensorimotor_component: TemporalSpatialExpansion,
+                 sensorimotor_component: TemporalSpreadingActivation,
                  lc_to_smc_delay: int,
                  smc_to_lc_delay: int):
 
         self.linguistic_component: TemporalSpreadingActivation = linguistic_component
-        self.sensorimotor_component: TemporalSpatialExpansion = sensorimotor_component
+        self.sensorimotor_component: TemporalSpreadingActivation = sensorimotor_component
         self.lc_to_smc_delay: int = lc_to_smc_delay
         self.smc_to_lc_delay: int = smc_to_lc_delay
 
@@ -73,4 +72,3 @@ class TandemCognitiveModel:
             smc_activations = self.future_smc_activations.pop(self.clock)
             for concept_label, activation in smc_activations.items():
                 self.sensorimotor_component.activate_item_with_label(concept_label, activation)
-

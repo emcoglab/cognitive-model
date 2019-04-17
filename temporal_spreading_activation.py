@@ -16,10 +16,10 @@ caiwingfield.net
 """
 import json
 import logging
+from collections import namedtuple, defaultdict
 from os import path
-from typing import Set, Dict
+from typing import Set, Dict, DefaultDict
 
-from model.component import ModelComponent, ActivationValue, ActivationRecord, ItemActivatedEvent
 from model.graph import Graph, Node
 from preferences import Preferences
 
@@ -28,7 +28,50 @@ logger_format = '%(asctime)s | %(levelname)s | %(module)s | %(message)s'
 logger_dateformat = "%Y-%m-%d %H:%M:%S"
 
 
-class TemporalSpreadingActivation(ModelComponent):
+# Activations will very likely stay floats, but we alias that here in case we need to change it at any point
+ActivationValue = float
+ItemIdx = Node
+ItemLabel = str
+
+
+class ActivationRecord(namedtuple('ActivationRecord', ['activation',
+                                                       'time_activated'])):
+    """
+    ActivationRecord stores a historical node activation.
+
+    It is immutable, so must be used in conjunction with TSA.node_decay_function in order to determine the
+    current activation of a node.
+
+    `activation` stores the total accumulated level of activation at this node when it was activated.
+    `time_activated` stores the clock value when the node was last activated, or -1 if it has never been activated.
+
+    Don't thoughtlessly change this class as it probably needs to remain a small namedtuple for performance reasons.
+    """
+    __slots__ = ()
+
+
+def blank_node_activation_record() -> ActivationRecord:
+    """A record for an unactivated node."""
+    return ActivationRecord(activation=0, time_activated=-1)
+
+
+class ItemActivatedEvent(namedtuple('ItemActivatedEvent', ['activation',
+                                                           'time_activated',
+                                                           'label'])):
+    """
+    A node activation event.
+    Used to pass out of TSA.tick().
+    """
+    # TODO: this is basically the same as ActivationRecord, and could probably be removed in favour of it.
+    label: ItemLabel
+    activation: ActivationValue
+    time_activated: int
+
+    def __repr__(self) -> str:
+        return f"<'{self.label}' ({self.activation}) @ {self.time_activated}>"
+
+
+class TemporalSpreadingActivation:
 
     def __init__(self,
                  graph: Graph,
@@ -59,7 +102,30 @@ class TemporalSpreadingActivation(ModelComponent):
             Use the decay_function_*_with_* methods to create these.
         """
 
-        super().__init__(item_labelling_dictionary=item_labelling_dictionary)
+        self.idx2label = item_labelling_dictionary
+        self.label2idx = {v: k for k, v in item_labelling_dictionary.items()}
+
+        # A node-keyed dictionaries of node ActivationRecords.
+        # Stores the most recent activation of each node, if any.
+        self._activation_records: DefaultDict[ItemIdx, ActivationRecord] = defaultdict(blank_node_activation_record)
+
+        # Impulses are stored in an arrival-time-keyed dict of destination-idx-keyed dicts of cumulative activation
+        # scheduled for arrival.
+        # This way, when an arrival time is reached, we can .pop() a destination-idx-keyed dict of activations to
+        # process.  Nice!
+        # ACTUALLY we'll use a defaultdict here, so we can quickly and easily add a scheduled activation in the right
+        # place without verbose checks.
+        self._scheduled_activations: DefaultDict[int, DefaultDict[ItemIdx, ActivationValue]] = defaultdict(
+            # In case the aren't any scheduled activations due to arrive at a particular time, we'll just find an empty
+            # defaultdict
+            lambda: defaultdict(
+                # In case there aren't any scheduled activations due to arrive at a particular node, we'll just find
+                # 0 activation, which allows for handy use of +=
+                ActivationValue
+            ))
+
+        # Zero-indexed tick counter.
+        self.clock: int = int(0)
 
         # Underlying graph: weighted, undirected
         self.graph: Graph = graph
@@ -74,6 +140,37 @@ class TemporalSpreadingActivation(ModelComponent):
         # Each should be of the form (age, initial_activation) ↦ current_activation
         self.node_decay_function: callable = node_decay_function
         self.edge_decay_function: callable = edge_decay_function
+
+    def _apply_activations(self) -> Set:
+        """
+        Applies scheduled all scheduled activations.
+        :return:
+            Set of nodes which became activated.
+        """
+
+        items_which_became_activated = set()
+
+        if self.clock in self._scheduled_activations:
+
+            # This should be a item-keyed dict of activation ready to arrive
+            scheduled_activation: DefaultDict = self._scheduled_activations.pop(self.clock)
+
+            if len(scheduled_activation) > 0:
+                for destination_item, activation in scheduled_activation.items():
+                    item_did_become_activated = self.activate_item_with_idx(destination_item, activation)
+                    if item_did_become_activated:
+                        items_which_became_activated.add(destination_item)
+
+        return items_which_became_activated
+
+    def schedule_activation_of_item_with_idx(self, idx: ItemIdx, activation: ActivationValue, arrival_time: int):
+        self._scheduled_activations[arrival_time][idx] += activation
+
+    def activation_of_item_with_label(self, label: ItemLabel) -> ActivationValue:
+        return self.activation_of_item_with_idx(self.label2idx[label])
+
+    def activate_item_with_label(self, label: ItemLabel, activation: ActivationValue) -> bool:
+        return self.activate_item_with_idx(self.label2idx[label], activation)
 
     def n_suprathreshold_nodes(self) -> int:
         """
