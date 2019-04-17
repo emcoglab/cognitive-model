@@ -23,6 +23,17 @@ from model.utils.maths_core import gaussian_decay, exponential_decay
 TAU: float = 2 * pi
 
 
+def decay_function_constant() -> callable:
+    """
+    Constant decay function (i.e. does not decay).
+    :return:
+    """
+    def decay_function(_age, original_activation):
+        return original_activation
+
+    return decay_function
+
+
 def decay_function_exponential_with_decay_factor(decay_factor) -> callable:
     # Decay formula for activation a, original activation a_0, decay factor d, time t:
     #   a = a_0 d^t
