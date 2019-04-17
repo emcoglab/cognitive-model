@@ -17,18 +17,17 @@ caiwingfield.net
 
 import logging
 import os
-from collections import defaultdict, Sequence
+from collections import defaultdict
 from numbers import Real
 from typing import Dict, Set, Tuple, Iterator, DefaultDict, List
 
-from numpy import percentile
 from numpy.core.multiarray import ndarray
 from numpy.core.umath import ceil
 from scipy.sparse import coo_matrix, csr_matrix
 from scipy.stats import percentileofscore
 from sortedcontainers import SortedSet
 
-from model.utils.maths import mean
+from model.utils.maths import mean, nearest_value_at_quantile
 from ldm.utils.logging import print_progress
 
 logger = logging.getLogger()
@@ -484,7 +483,7 @@ class Graph:
         """
         # We invert the quantile, so that if `quantile` is 0.1, we prune the TOP 10% (i.e. prune at the 90th centile)
         pruning_quantile = 1 - quantile
-        pruning_length = edge_length_quantile([length for edge, length in self.edge_lengths], pruning_quantile)
+        pruning_length = nearest_value_at_quantile([length for edge, length in self.edge_lengths], pruning_quantile)
         self.prune_longest_edges_by_length(pruning_length, keep_at_least_n_edges)
 
     # endregion
@@ -602,32 +601,6 @@ def save_edgelist_from_similarity_matrix(file_path: str,
 
     # When done writing to the temp file, rename it to the finished file
     os.rename(temp_file_path, file_path)
-
-
-def edge_length_quantile(lengths, quantile):
-    """
-    Return the quantile(s) at a specified length.
-    :param lengths
-        Sequence of lengths from which to form a distribution.
-    :param quantile:
-        float in range of [0,1] (or sequence of floats)
-    :return:
-        length (or sequence of lengths) marking specified quantile.
-        Returned lengths will not be interpolated - nearest lengths to the quantile will be given.
-    """
-    # If one quantile provided
-    if isinstance(quantile, float):
-        centile = 100 * quantile
-    # If sequence of quantiles provided
-    elif isinstance(quantile, Sequence):
-        centile = [100 * q for q in quantile]
-    else:
-        raise TypeError()
-    # noinspection PyTypeChecker
-    length = percentile(lengths,
-                        # I don't know why Pycharm thinks its expecting an int here; it shouldn't be
-                        centile, interpolation="nearest")
-    return length
 
 
 def iter_edges_from_edgelist(file_path: str) -> Iterator[Tuple[Edge, Length]]:

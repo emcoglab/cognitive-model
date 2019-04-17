@@ -14,7 +14,9 @@ caiwingfield.net
 2018
 ---------------------------
 """
+from typing import Sequence
 
+from numpy import percentile
 from numpy.core.umath import float_power, exp, pi, sqrt
 from scipy.stats import lognorm
 
@@ -117,3 +119,29 @@ def decay_function_lognormal_mean(mu: float, shape: float) -> callable:
 
 def mean(*items):
     return sum(items) / len(items)
+
+
+def nearest_value_at_quantile(values, quantile):
+    """
+    Return items(s) at specified quantile.
+    :param values
+        Sequence of values from which to form a distribution.
+    :param quantile:
+        float in range of [0,1] (or sequence of floats)
+    :return:
+        value (or sequence of values) marking specified quantile.
+        Returned values will not be interpolated - nearest values to the quantile will be given.
+    """
+    # If one quantile provided
+    if isinstance(quantile, float):
+        centile = 100 * quantile
+    # If sequence of quantiles provided
+    elif isinstance(quantile, Sequence):
+        centile = [100 * q for q in quantile]
+    else:
+        raise TypeError()
+    # noinspection PyTypeChecker
+    value = percentile(values,
+                       # I don't know why Pycharm thinks its expecting an int here; it shouldn't be
+                       centile, interpolation="nearest")
+    return value
