@@ -508,25 +508,17 @@ def save_edgelist_from_distance_matrix(file_path: str,
 
     temp_file_path = file_path + ".incomplete"
 
-    # Log progress every time we reach a percentage milestone
-    # Record here the most recently logged milestone
-    logged_percent_milestone = 0
-
     with open(temp_file_path, mode="w", encoding="utf8") as temp_file:
-        for i in range(0, distance_matrix.shape[0]):
-            # Log progress
-            # TODO: make this a progress bar!
-            percent_done = int(ceil(100 * i / distance_matrix.shape[0]))
-            if (percent_done % 10 == 0) and (percent_done > logged_percent_milestone):
-                logger.info(f"\t{percent_done}% done")
-                logged_percent_milestone = percent_done
-            # Write
-            for j in range(i + 1, distance_matrix.shape[1]):
+        i_max = distance_matrix.shape[0]
+        j_max = distance_matrix.shape[1]
+        for i in range(0, i_max):
+            for j in range(i + 1, j_max):
                 distance = distance_matrix[i, j]
                 length = Length(ceil(distance * length_factor))
                 assert length > 0
                 # Write edge to file
                 temp_file.write(f"{i} {j} {length}\n")
+            print_progress(i, i_max-1)
 
     # When done writing to the temp file, rename it to the finished file
     os.rename(temp_file_path, file_path)
