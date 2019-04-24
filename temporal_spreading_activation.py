@@ -167,22 +167,30 @@ class TemporalSpreadingActivation:
         self._scheduled_activations[arrival_time][idx] += activation
 
     def activation_of_item_with_label(self, label: ItemLabel) -> ActivationValue:
+        """Returns the current activation of a node."""
         return self.activation_of_item_with_idx(self.label2idx[label])
 
     def activate_item_with_label(self, label: ItemLabel, activation: ActivationValue) -> bool:
+        """
+        Activate a node.
+        :param label:
+        :param activation:
+        :return:
+            True if the node fired, else false.
+        """
         return self.activate_item_with_idx(self.label2idx[label], activation)
 
-    def n_suprathreshold_nodes(self) -> int:
+    def suprathreshold_nodes(self) -> Set[Node]:
         """
-        The number of nodes which are above the firing threshold.
+        Nodes which are above the firing threshold.
         May take a long time to compute.
         :return:
         """
-        return len([
+        return set(
             n
             for n in self.graph.nodes
             if self.activation_of_item_with_idx(n) >= self.firing_threshold
-        ])
+        )
 
     def impulses_headed_for(self, n: Node) -> Dict[int, float]:
         """A time-keyed dict of cumulative activation due to arrive at a node."""
