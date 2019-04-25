@@ -16,7 +16,7 @@ caiwingfield.net
 """
 
 import cython
-from libc.math cimport exp, sqrt, pi
+from libc.math cimport exp, sqrt, pi, log, erf
 
 TAU: cython.float = 2 * pi
 
@@ -67,6 +67,44 @@ def gaussian_pdf(x: cython.float, mu: cython.float, sd: cython.float) -> cython.
 
     e_term:   cython.float = exp(exponent) / denom
 
-    ret_val:  cython.float = e_term / sd
+    return e_term / sd
 
-    return ret_val
+def lognormal_sf(x: cython.float, sigma: cython.float) -> cython.float:
+    """
+    Cythonised approximation of the lognormal sf.
+    Assumes mu is 0.
+    :param x:
+    :param sigma:
+    :return:
+    """
+    return 1 - lognormal_cdf(x, sigma)
+
+
+def lognormal_cdf(x: cython.float, sigma: cython.float) -> cython.float:
+    """
+    Cythonised approximation of the lognormal cdf.
+    Assumes mu is 0.
+    :param x:
+    :param sigma:
+    :return:
+    """
+    numerator:   cython.float = log(x)
+    denomenator: cython.float = sqrt(2) * sigma
+    fraction:    cython.float = numerator / denomenator
+    return 0.5 + 0.5 * erf(fraction)
+
+
+def lognormal_pdf(x: cython.float, sigma: cython.float) -> cython.float:
+    """
+    Cythonised approximation of the lognormal pdf.
+    Assumes mu is 0.
+    :param x:
+    :param sigma:
+    :return:
+    """
+    coefficient: cython.float = 1 / (sigma * x * sqrt(TAU))
+    log_term:    cython.float = log(x)
+    numerator:   cython.float = log_term * log_term
+    denomenator: cython.float = 2 * sigma * sigma
+    exponent:    cython.float = (-1) * numerator / denomenator
+    return coefficient * exp(exponent)

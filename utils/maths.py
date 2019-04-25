@@ -16,11 +16,9 @@ caiwingfield.net
 """
 from typing import Sequence
 
-from numpy import percentile
-from numpy.core.umath import float_power, exp, pi, sqrt
-from scipy.stats import lognorm
+from numpy import percentile, float_power, pi, sqrt
 
-from model.utils.maths_core import gaussian_decay, exponential_decay
+from model.utils.maths_core import gaussian_decay, exponential_decay, lognormal_sf
 
 TAU: float = 2 * pi
 
@@ -90,31 +88,18 @@ def decay_function_gaussian_with_sd(sd, height_coef=1, centre=0) -> callable:
     return decay_function
 
 
-def decay_function_lognormal_median(median: float, shape: float) -> callable:
+def decay_function_lognormal(sigma: float) -> callable:
     """
-    Lognormal survival decay function, parameterised by the median and the shape.
-    :param median:
-    :param shape:
+    Lognormal survival decay function.
+    :param sigma:
         The spread or shape
     :return:
-        Decay function
     """
+
     def decay_function(age, original_activation):
-        return original_activation * lognorm.sf(age, s=shape, scale=median)
+        return original_activation * lognormal_sf(x=age, sigma=sigma)
 
     return decay_function
-
-
-def decay_function_lognormal_mean(mu: float, shape: float) -> callable:
-    """
-    Lognormal survival decay function, parameterised by the mean and the shape.
-
-    (Use of median is preferred.)
-    :param mu:
-    :param shape:
-    :return:
-    """
-    return decay_function_lognormal_median(exp(mu), shape)
 
 
 def mean(*items):
