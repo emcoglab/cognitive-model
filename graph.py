@@ -204,7 +204,8 @@ class Graph:
     def load_from_edgelist(cls,
                            file_path: str,
                            ignore_edges_longer_than: Length = None,
-                           keep_at_least_n_edges: int = 0) -> 'Graph':
+                           keep_at_least_n_edges: int = 0,
+                           with_feedback: bool = False) -> 'Graph':
         """
         Loads a Graph from an edgelist file.
         :param file_path:
@@ -214,6 +215,8 @@ class Graph:
         :param keep_at_least_n_edges:
             Default 0.
             Make sure each node keeps at least this number of edges.
+        :param with_feedback:
+            If true, logs feedback
         :return:
         """
         ignoring_long_edges = (ignore_edges_longer_than is not None)
@@ -224,7 +227,9 @@ class Graph:
         edges_to_keep = defaultdict(lambda: SortedSet(key=lambda x: x[1]))
 
         graph = cls()
-        for edge, length in iter_edges_from_edgelist(file_path):
+        for i, (edge, length) in enumerate(iter_edges_from_edgelist(file_path)):
+            if with_feedback and i > 0 and i % 1_000_000 == 0:
+                logger.info(f"Read {i:,} edges")
             if ignoring_long_edges and length > ignore_edges_longer_than:
                 # Add nodes but not edge
                 for node in edge:
