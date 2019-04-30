@@ -73,6 +73,7 @@ class Graph:
         self.edge_lengths: Dict[Edge, Length] = dict()
         # Node-keyed dict of sets of incident edges
         # Redundant cache for fast lookup.
+        # Gets updated by calls to self.add_edge
         self._incident_edges: DefaultDict[Node, Set[Edge]] = defaultdict(set)
 
         if nodes is not None:
@@ -120,7 +121,7 @@ class Graph:
 
     def neighbourhood(self, node: Node) -> Iterator[Node]:
         """The nodes which are connected to `node` by exactly one edge."""
-        assert node in self._incident_edges.keys()
+        assert node in self.nodes
         for edge in self._incident_edges[node]:
             for n in edge:
                 # Skip the source node
