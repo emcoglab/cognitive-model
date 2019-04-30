@@ -77,7 +77,7 @@ class TemporalSpreadingActivation:
                  graph: Graph,
                  item_labelling_dictionary: Dict,
                  firing_threshold: ActivationValue,
-                 impulse_pruning_threshold: float,
+                 impulse_pruning_threshold: ActivationValue,
                  node_decay_function: callable,
                  edge_decay_function: callable):
         """
@@ -133,7 +133,7 @@ class TemporalSpreadingActivation:
         # Thresholds
         # Use >= and < to test for above/below
         self.firing_threshold: ActivationValue = firing_threshold
-        self.impulse_pruning_threshold: float = impulse_pruning_threshold
+        self.impulse_pruning_threshold: ActivationValue = impulse_pruning_threshold
 
         # These decay functions should be stateless, and convert an original activation and an age into a current
         # activation.
@@ -180,9 +180,9 @@ class TemporalSpreadingActivation:
         """
         return self.activate_item_with_idx(self.label2idx[label], activation)
 
-    def suprathreshold_nodes(self) -> Set[Node]:
+    def suprathreshold_items(self) -> Set[ItemIdx]:
         """
-        Nodes which are above the firing threshold.
+        Items which are above the firing threshold.
         May take a long time to compute.
         :return:
         """
@@ -301,27 +301,17 @@ class TemporalSpreadingActivation:
 
 
 def load_labels_from_corpus(corpus, n_words):
-    """
-    Loads a node's labels.
-    """
-    with open(path.join(Preferences.graphs_dir, f"{corpus.name} {n_words} words.nodelabels"), mode="r",
-              encoding="utf-8") as nrd_file:
+    _load_labels(path.join(Preferences.graphs_dir, f"{corpus.name} {n_words} words.nodelabels"))
+
+
+def load_labels_from_sensorimotor():
+    _load_labels(path.join(Preferences.graphs_dir, "sensorimotor words.nodelabels"))
+
+
+def _load_labels(nodelabel_path: str):
+    with open(nodelabel_path, mode="r", encoding="utf-8") as nrd_file:
         node_relabelling_dictionary_json = json.load(nrd_file)
     # TODO: this isn't a great way to do this
-    node_labelling_dictionary = dict()
-    for k, v in node_relabelling_dictionary_json.items():
-        node_labelling_dictionary[int(k)] = v
-    return node_labelling_dictionary
-
-
-# TODO: these functions are essentially the same: refactor them
-def load_labels_from_sensorimotor():
-    """
-    Loads a node's labels.
-    """
-    with open(path.join(Preferences.graphs_dir, "sensorimotor words.nodelabels"), mode="r",
-              encoding="utf-8") as nrd_file:
-        node_relabelling_dictionary_json = json.load(nrd_file)
     node_labelling_dictionary = dict()
     for k, v in node_relabelling_dictionary_json.items():
         node_labelling_dictionary[int(k)] = v
