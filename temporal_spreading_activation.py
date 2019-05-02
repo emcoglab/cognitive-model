@@ -192,7 +192,7 @@ class TemporalSpreadingActivation:
             if self.activation_of_item_with_idx(n) >= self.firing_threshold
         )
 
-    def impulses_headed_for(self, n: Node) -> Dict[int, float]:
+    def impulses_headed_for(self, n: ItemIdx) -> Dict[int, float]:
         """A time-keyed dict of cumulative activation due to arrive at a node."""
         return {
             t: activation_arriving_at_time_t[n]
@@ -200,7 +200,7 @@ class TemporalSpreadingActivation:
             if n in activation_arriving_at_time_t.keys()
         }
 
-    def activation_of_item_with_idx(self, n: Node) -> ActivationValue:
+    def activation_of_item_with_idx(self, n: ItemIdx) -> ActivationValue:
         """Returns the current activation of a node."""
         assert n in self.graph.nodes
 
@@ -209,7 +209,7 @@ class TemporalSpreadingActivation:
             self.clock - activation_record.time_activated,  # node age
             activation_record.activation)
 
-    def activate_item_with_idx(self, n: Node, activation: ActivationValue) -> bool:
+    def activate_item_with_idx(self, n: ItemIdx, activation: ActivationValue) -> bool:
         """
         Activate a node.
         :param n:
@@ -301,18 +301,18 @@ class TemporalSpreadingActivation:
 
 
 def load_labels_from_corpus(corpus, n_words):
-    _load_labels(path.join(Preferences.graphs_dir, f"{corpus.name} {n_words} words.nodelabels"))
+    return _load_labels(path.join(Preferences.graphs_dir, f"{corpus.name} {n_words} words.nodelabels"))
 
 
 def load_labels_from_sensorimotor():
-    _load_labels(path.join(Preferences.graphs_dir, "sensorimotor words.nodelabels"))
+    return _load_labels(path.join(Preferences.graphs_dir, "sensorimotor words.nodelabels"))
 
 
-def _load_labels(nodelabel_path: str):
+def _load_labels(nodelabel_path: str) -> Dict[ItemIdx, ItemLabel]:
     with open(nodelabel_path, mode="r", encoding="utf-8") as nrd_file:
         node_relabelling_dictionary_json = json.load(nrd_file)
     # TODO: this isn't a great way to do this
     node_labelling_dictionary = dict()
     for k, v in node_relabelling_dictionary_json.items():
-        node_labelling_dictionary[int(k)] = v
+        node_labelling_dictionary[ItemIdx(k)] = v
     return node_labelling_dictionary
