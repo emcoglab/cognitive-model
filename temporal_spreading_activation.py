@@ -234,16 +234,13 @@ class TemporalSpreadingActivation:
         self._activation_records[n] = ActivationRecord(new_activation, self.clock)
 
         # Check if we reached the firing threshold.
-
         if new_activation < self.firing_threshold:
             # If not, we're done
             # Node didn't fire
             return False
 
         else:
-            # If so, Fire!
-
-            # Fire and rebroadcast
+            # If so, fire and rebroadcast!
             source_node = n
 
             # For each incident edge
@@ -284,7 +281,11 @@ class TemporalSpreadingActivation:
 
         nodes_which_became_active = self._apply_activations()
 
-        return set(ItemActivatedEvent(label=self.idx2label[node], activation=self.activation_of_item_with_idx(node), time_activated=self.clock) for node in nodes_which_became_active)
+        return set(
+            ItemActivatedEvent(label=self.idx2label[node],
+                               activation=self.activation_of_item_with_idx(node),
+                               time_activated=self.clock)
+            for node in nodes_which_became_active)
 
     def __str__(self):
 
