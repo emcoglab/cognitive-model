@@ -20,7 +20,6 @@ from typing import Dict, Set
 from model.graph import Graph
 from model.temporal_spreading_activation import TemporalSpreadingActivation, ActivationValue, ItemLabel, \
     ItemActivatedEvent, ItemIdx
-from model.utils.maths import decay_function_constant
 
 
 class TemporalSpatialPropagation:
@@ -38,16 +37,17 @@ class TemporalSpatialPropagation:
         :param point_labelling_dictionary:
         :param buffer_pruning_threshold:
         :param node_decay_function:
+            If None is supplied, a constant function is used by default (i.e. no decay).
         """
 
         self._tsa: TemporalSpreadingActivation = TemporalSpreadingActivation(
             graph=underlying_graph,
             item_labelling_dictionary=point_labelling_dictionary,
             node_decay_function=node_decay_function,
-            # Once pruning has been done, we don't need to decay, as target items should receive the full activations of
-            # their source items at the time they were last activated.
+            # Once pruning has been done, we don't need to decay activation in edges, as target items should receive the
+            # full activations of their source items at the time they were last activated.
             # The maximal sphere radius is achieved by the initial graph pruning.
-            edge_decay_function=decay_function_constant(),
+            edge_decay_function=None,
             # Points can't reactivate as long as they are still in the buffer.
             # For now this just means that they have a non-zero activation.
             # ...in fact we use the impulse-pruning threshold instead of 0, as no node will ever receive activation less

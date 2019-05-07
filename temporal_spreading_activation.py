@@ -21,6 +21,7 @@ from os import path
 from typing import Set, Dict, DefaultDict
 
 from model.graph import Graph, Node
+from model.utils.maths import make_decay_function_constant
 from preferences import Preferences
 
 logger = logging.getLogger()
@@ -78,8 +79,8 @@ class TemporalSpreadingActivation:
                  item_labelling_dictionary: Dict,
                  firing_threshold: ActivationValue,
                  impulse_pruning_threshold: ActivationValue,
-                 node_decay_function: callable,
-                 edge_decay_function: callable):
+                 node_decay_function: callable = None,
+                 edge_decay_function: callable = None):
         """
         :param graph:
             `graph` should be an undirected, weighted graph with the following data:
@@ -97,9 +98,11 @@ class TemporalSpreadingActivation:
         :param node_decay_function:
             A function governing the decay of activations on nodes.
             Use the decay_function_*_with_params methods to create these.
+            If None is supplied, a constant function will be used by default (i.e. no decay).
         :param edge_decay_function:
             A function governing the decay of activations in connections.
             Use the decay_function_*_with_* methods to create these.
+            If None is supplied, a constant function will be used by default (i.e. no decay).
         """
 
         self.idx2label = item_labelling_dictionary
@@ -138,8 +141,9 @@ class TemporalSpreadingActivation:
         # These decay functions should be stateless, and convert an original activation and an age into a current
         # activation.
         # Each should be of the form (age, initial_activation) ↦ current_activation
-        self.node_decay_function: callable = node_decay_function
-        self.edge_decay_function: callable = edge_decay_function
+        # Use a constant function by default
+        self.node_decay_function: callable = node_decay_function if node_decay_function is not None else make_decay_function_constant()
+        self.edge_decay_function: callable = edge_decay_function if edge_decay_function is not None else make_decay_function_constant()
 
     def _apply_activations(self) -> Set:
         """

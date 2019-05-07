@@ -23,7 +23,9 @@ from model.utils.maths_core import gaussian_decay, exponential_decay, lognormal_
 TAU: float = 2 * pi
 
 
-def decay_function_constant() -> callable:
+# region Decay functions
+
+def make_decay_function_constant() -> callable:
     """
     Constant decay function (i.e. does not decay).
     :return:
@@ -34,7 +36,7 @@ def decay_function_constant() -> callable:
     return decay_function
 
 
-def decay_function_exponential_with_decay_factor(decay_factor) -> callable:
+def make_decay_function_exponential_with_decay_factor(decay_factor) -> callable:
     # Decay formula for activation a, original activation a_0, decay factor d, time t:
     #   a = a_0 d^t
     #
@@ -53,16 +55,16 @@ def decay_function_exponential_with_decay_factor(decay_factor) -> callable:
     return decay_function
 
 
-def decay_function_exponential_with_half_life(half_life) -> callable:
+def make_decay_function_exponential_with_half_life(half_life) -> callable:
     assert half_life > 0
     # Using notation from above, with half-life hl
     #   λ = ln 2 / ln hl
     #   d = 2 ^ (- 1 / hl)
     decay_factor = float_power(2, - 1 / half_life)
-    return decay_function_exponential_with_decay_factor(decay_factor)
+    return make_decay_function_exponential_with_decay_factor(decay_factor)
 
 
-def decay_function_gaussian_with_sd(sd, height_coef=1, centre=0) -> callable:
+def make_decay_function_gaussian_with_sd(sd, height_coef=1, centre=0) -> callable:
     """
     Gaussian decay function with sd specifying the number of ticks.
     :param sd:
@@ -88,7 +90,7 @@ def decay_function_gaussian_with_sd(sd, height_coef=1, centre=0) -> callable:
     return decay_function
 
 
-def decay_function_lognormal(sigma: float) -> callable:
+def make_decay_function_lognormal(sigma: float) -> callable:
     """
     Lognormal survival decay function.
     :param sigma:
@@ -100,6 +102,8 @@ def decay_function_lognormal(sigma: float) -> callable:
         return original_activation * lognormal_sf(x=age, sigma=sigma)
 
     return decay_function
+
+# endregion
 
 
 def mean(*items):
