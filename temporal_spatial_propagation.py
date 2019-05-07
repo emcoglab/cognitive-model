@@ -28,6 +28,7 @@ class TemporalSpatialPropagation:
                  underlying_graph: Graph,
                  point_labelling_dictionary: Dict,
                  buffer_pruning_threshold: ActivationValue,
+                 activation_cap: ActivationValue,
                  node_decay_function: callable):
         """
         Right now, this is just a shim for a underlying TemporalSpreadingActivation
@@ -36,6 +37,8 @@ class TemporalSpatialPropagation:
             The underlying graph of neighbours within a fixed radius.
         :param point_labelling_dictionary:
         :param buffer_pruning_threshold:
+        :param activation_cap:
+            If None is supplied, no cap is used.
         :param node_decay_function:
             If None is supplied, a constant function is used by default (i.e. no decay).
         """
@@ -53,6 +56,7 @@ class TemporalSpatialPropagation:
             # ...in fact we use the impulse-pruning threshold instead of 0, as no node will ever receive activation less
             # than this, by definition, and using 0 causes problems with counting supra-threshold nodes.
             firing_threshold=buffer_pruning_threshold, impulse_pruning_threshold=buffer_pruning_threshold,
+            activation_cap=activation_cap,
         )
 
     def activate_item_with_label(self, label: ItemLabel, activation: ActivationValue) -> bool:

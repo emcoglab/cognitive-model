@@ -20,6 +20,8 @@ from collections import namedtuple, defaultdict
 from os import path
 from typing import Set, Dict, DefaultDict
 
+from numpy import Infinity
+
 from model.graph import Graph, Node
 from model.utils.maths import make_decay_function_constant
 from preferences import Preferences
@@ -79,6 +81,7 @@ class TemporalSpreadingActivation:
                  item_labelling_dictionary: Dict,
                  firing_threshold: ActivationValue,
                  impulse_pruning_threshold: ActivationValue,
+                 activation_cap: ActivationValue = Infinity,
                  node_decay_function: callable = None,
                  edge_decay_function: callable = None):
         """
@@ -95,6 +98,9 @@ class TemporalSpreadingActivation:
             A node will fire on receiving activation if its activation crosses this threshold.
         :param impulse_pruning_threshold
             Any impulse which decays to less than this threshold before reaching its destination will be deleted.
+        :param activation_cap:
+            Any node which would be activated above this gets its activation clamped at this level.
+            Default: Infinity.
         :param node_decay_function:
             A function governing the decay of activations on nodes.
             Use the decay_function_*_with_params methods to create these.
@@ -138,12 +144,19 @@ class TemporalSpreadingActivation:
         self.firing_threshold: ActivationValue = firing_threshold
         self.impulse_pruning_threshold: ActivationValue = impulse_pruning_threshold
 
+        # Optional activation cap.  Any time a node would become activated more than this, it gets this activation.
+        self.activation_cap: ActivationValue = activation_cap
+
         # These decay functions should be stateless, and convert an original activation and an age into a current
         # activation.
         # Each should be of the form (age, initial_activation) ↦ current_activation
         # Use a constant function by default
         self.node_decay_function: callable = node_decay_function if node_decay_function is not None else make_decay_function_constant()
         self.edge_decay_function: callable = edge_decay_function if edge_decay_function is not None else make_decay_function_constant()
+
+        # Validations
+        if self.activation_cap < self.firing_threshold:
+            raise ValueError(f"activation cap {self.activation_cap} cannot be less than the firing threshold {self.firing_threshold}")
 
     def _apply_activations(self) -> Set:
         """
@@ -235,6 +248,13 @@ class TemporalSpreadingActivation:
 
         # Accumulate activation
         new_activation = current_activation + activation
+
+        # If using an activation cap, apply this here.
+        # The activation cap, if used, MUST be greater than the firing threshold, so applying the cap does not effect
+        # whether the node will fire or not.
+        if new_activation > self.activation_cap:
+            new_activation = self.activation_cap
+
         self._activation_records[n] = ActivationRecord(new_activation, self.clock)
 
         # Check if we reached the firing threshold.
