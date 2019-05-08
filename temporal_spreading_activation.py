@@ -70,8 +70,34 @@ class TemporalSpreadingActivation:
             If None is supplied, a constant function will be used by default (i.e. no decay).
         """
 
+        # region Load once
+        # These fields are loaded on first init and then don't need to change even if .reset() is used.
+
         self.idx2label = item_labelling_dictionary
         self.label2idx = {v: k for k, v in item_labelling_dictionary.items()}
+
+        # Underlying graph: weighted, undirected
+        self.graph: Graph = graph
+
+        # Thresholds
+        # Use >= and < to test for above/below
+        self.firing_threshold: ActivationValue = firing_threshold
+        self.impulse_pruning_threshold: ActivationValue = impulse_pruning_threshold
+
+        # Optional activation cap.  Any time a node would become activated more than this, it gets this activation.
+        self.activation_cap: ActivationValue = activation_cap
+
+        # These decay functions should be stateless, and convert an original activation and an age into a current
+        # activation.
+        # Each should be of the form (age, initial_activation) ↦ current_activation
+        # Use a constant function by default
+        self.node_decay_function: callable = node_decay_function if node_decay_function is not None else make_decay_function_constant()
+        self.edge_decay_function: callable = edge_decay_function if edge_decay_function is not None else make_decay_function_constant()
+
+        # endregion
+
+        # region Resettable
+        # These fields are reinitialised in .reset()
 
         # A node-keyed dictionaries of node ActivationRecords.
         # Stores the most recent activation of each node, if any.
@@ -95,27 +121,19 @@ class TemporalSpreadingActivation:
         # Zero-indexed tick counter.
         self.clock: int = int(0)
 
-        # Underlying graph: weighted, undirected
-        self.graph: Graph = graph
-
-        # Thresholds
-        # Use >= and < to test for above/below
-        self.firing_threshold: ActivationValue = firing_threshold
-        self.impulse_pruning_threshold: ActivationValue = impulse_pruning_threshold
-
-        # Optional activation cap.  Any time a node would become activated more than this, it gets this activation.
-        self.activation_cap: ActivationValue = activation_cap
-
-        # These decay functions should be stateless, and convert an original activation and an age into a current
-        # activation.
-        # Each should be of the form (age, initial_activation) ↦ current_activation
-        # Use a constant function by default
-        self.node_decay_function: callable = node_decay_function if node_decay_function is not None else make_decay_function_constant()
-        self.edge_decay_function: callable = edge_decay_function if edge_decay_function is not None else make_decay_function_constant()
+        # endregion
 
         # Validations
         if self.activation_cap < self.firing_threshold:
             raise ValueError(f"activation cap {self.activation_cap} cannot be less than the firing threshold {self.firing_threshold}")
+
+    def reset(self):
+        """
+        Resets the TSA to its initial state without having to reload any data.
+        """
+        self._activation_records: DefaultDict[ItemIdx, ActivationRecord] = defaultdict(blank_node_activation_record)
+        self._scheduled_activations: DefaultDict[int, DefaultDict[ItemIdx, ActivationValue]] = defaultdict(lambda: defaultdict(ActivationValue))
+        self.clock: int = int(0)
 
     def _apply_activations(self) -> Set:
         """
@@ -286,9 +304,5 @@ class TemporalSpreadingActivation:
 
 def load_labels_from_corpus(corpus, n_words):
     return _load_labels(path.join(Preferences.graphs_dir, f"{corpus.name} {n_words} words.nodelabels"))
-
-
-def load_labels_from_sensorimotor():
-    return _load_labels(path.join(Preferences.graphs_dir, "sensorimotor words.nodelabels"))
 
 

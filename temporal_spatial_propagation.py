@@ -62,6 +62,18 @@ class TemporalSpatialPropagation:
     def activation_of_item_with_label(self, label: ItemLabel):
         return self._tsa.activation_of_item_with_label(label)
 
+    @property
+    def is_connected(self) -> bool:
+        return self._tsa.graph.is_connected()
+
+    @property
+    def has_orphans(self) -> bool:
+        return self._tsa.graph.has_orphaned_nodes()
+
+    @property
+    def n_edges(self) -> int:
+        return len(self._tsa.graph.edges)
+
     def activate_item_with_label(self, label: ItemLabel, activation: ActivationValue) -> bool:
         return self._tsa.activate_item_with_label(label, activation)
 
@@ -82,3 +94,6 @@ class TemporalSpatialPropagation:
     @property
     def clock(self) -> int:
         return self._tsa.clock
+
+    def reset(self):
+        self._tsa.reset()

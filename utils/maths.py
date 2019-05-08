@@ -130,10 +130,7 @@ def nearest_value_at_quantile(values, quantile):
         centile = [100 * q for q in quantile]
     else:
         raise TypeError()
-    # noinspection PyTypeChecker
-    value = percentile(values,
-                       # I don't know why Pycharm thinks its expecting an int here; it shouldn't be
-                       centile, interpolation="nearest")
+    value = percentile(values, centile, interpolation="nearest")
     return value
 
 
