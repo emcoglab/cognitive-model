@@ -17,25 +17,20 @@ caiwingfield.net
 
 from typing import Dict, Set
 
+from model.common import ActivationValue, GraphPropagationComponent, ItemIdx
 from model.graph import Graph
-from model.temporal_spreading_activation import TemporalSpreadingActivation
-from model.component import ActivationValue, ItemIdx, ItemLabel, ItemActivatedEvent
 
 
-class TemporalSpatialPropagation:
+class TemporalSpatialPropagation(GraphPropagationComponent):
 
     def __init__(self,
                  underlying_graph: Graph,
-                 point_labelling_dictionary: Dict,
+                 idx2label: Dict,
                  buffer_pruning_threshold: ActivationValue,
+                 impulse_pruning_threshold: ActivationValue,
                  activation_cap: ActivationValue,
                  node_decay_function: callable):
         """
-        Right now, this is just a shim for a underlying TemporalSpreadingActivation
-
-        :param underlying_graph:
-            The underlying graph of neighbours within a fixed radius.
-        :param point_labelling_dictionary:
         :param buffer_pruning_threshold:
         :param activation_cap:
             If None is supplied, no cap is used.
@@ -43,57 +38,46 @@ class TemporalSpatialPropagation:
             If None is supplied, a constant function is used by default (i.e. no decay).
         """
 
-        self._tsa: TemporalSpreadingActivation = TemporalSpreadingActivation(
+        super(TemporalSpatialPropagation, self).__init__(
             graph=underlying_graph,
-            item_labelling_dictionary=point_labelling_dictionary,
+            idx2label=idx2label,
             node_decay_function=node_decay_function,
             # Once pruning has been done, we don't need to decay activation in edges, as target items should receive the
             # full activations of their source items at the time they were last activated.
             # The maximal sphere radius is achieved by the initial graph pruning.
             edge_decay_function=None,
-            # Points can't reactivate as long as they are still in the buffer.
-            # For now this just means that they have a non-zero activation.
-            # ...in fact we use the impulse-pruning threshold instead of 0, as no node will ever receive activation less
-            # than this, by definition, and using 0 causes problems with counting supra-threshold nodes.
-            firing_threshold=buffer_pruning_threshold, impulse_pruning_threshold=buffer_pruning_threshold,
-            activation_cap=activation_cap,
+            impulse_pruning_threshold=impulse_pruning_threshold,
         )
 
-    def activation_of_item_with_label(self, label: ItemLabel):
-        return self._tsa.activation_of_item_with_label(label)
+        # region Set once
+        # These fields are set on first init and then don't need to change even if .reset() is used.
 
-    @property
-    def is_connected(self) -> bool:
-        return self._tsa.graph.is_connected()
+        # Thresholds
+        # Use >= and < to test for above/below
+        self.buffer_pruning_threshold = buffer_pruning_threshold
 
-    @property
-    def has_orphans(self) -> bool:
-        return self._tsa.graph.has_orphaned_nodes()
-
-    @property
-    def n_edges(self) -> int:
-        return len(self._tsa.graph.edges)
-
-    def activate_item_with_label(self, label: ItemLabel, activation: ActivationValue) -> bool:
-        return self._tsa.activate_item_with_label(label, activation)
-
-    def tick(self) -> Set[ItemActivatedEvent]:
-        return self._tsa.tick()
+        # Cap on a node's total activation after receiving incoming.
+        self.activation_cap = activation_cap
 
     def items_in_buffer(self) -> Set[ItemIdx]:
-        return self._tsa.suprathreshold_items()
+        """
+        Items which are above the firing threshold.
+        May take a long time to compute.
+        :return:
+        """
+        return set(
+            n
+            for n in self.graph.nodes
+            if self.activation_of_item_with_idx(n) >= self.buffer_pruning_threshold
+        )
 
-    @property
-    def label2idx(self) -> Dict:
-        return self._tsa.label2idx
+        # endregion
+    def _postsynaptic_modification(self, item: ItemIdx, activation: ActivationValue) -> ActivationValue:
 
-    @property
-    def idx2label(self) -> Dict:
-        return self._tsa.idx2label
+        # The activation cap, if used, MUST be greater than the firing threshold (this is checked in __init__,
+        # so applying the cap does not effect whether the node will fire or not.
+        return activation if activation <= self.activation_cap else self.activation_cap
 
-    @property
-    def clock(self) -> int:
-        return self._tsa.clock
-
-    def reset(self):
-        self._tsa.reset()
+    def _presynaptic_firing_guard(self, activation: ActivationValue) -> bool:
+        # Node can only fire if not in the buffer (i.e. activation below pruning threshold)
+        return activation < self.buffer_pruning_threshold

@@ -17,7 +17,9 @@ caiwingfield.net
 from collections import defaultdict
 from typing import Set, DefaultDict, List
 
-from model.component import ActivationValue, ItemLabel, ItemActivatedEvent, LinguisticComponent, SensorimotorComponent
+from model.sensorimotor_component import SensorimotorComponent
+from model.linguistic_component import LinguisticComponent
+from model.common import ActivationValue, ItemLabel, ItemActivatedEvent
 
 
 class TandemCognitiveModel:
