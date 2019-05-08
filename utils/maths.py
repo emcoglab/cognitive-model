@@ -17,6 +17,7 @@ caiwingfield.net
 from typing import Sequence
 
 from numpy import percentile, float_power, pi, sqrt
+from scipy.special import ndtri
 
 from model.utils.maths_core import gaussian_decay, exponential_decay, lognormal_sf
 
@@ -134,3 +135,11 @@ def nearest_value_at_quantile(values, quantile):
                        # I don't know why Pycharm thinks its expecting an int here; it shouldn't be
                        centile, interpolation="nearest")
     return value
+
+
+def prevalence_from_fraction_known(fraction_known: float) -> float:
+    """
+    Brysbaert et al.'s (2019) formula for converting fraction-known values into prevalences.
+    "The specific formula we used in Microsoft Excel was =NORM.INV(0.005+ Pknown*0.99;0;1)."
+    """
+    return ndtri(0.005 + fraction_known * 0.99)
