@@ -22,7 +22,8 @@ from typing import Set, Dict, DefaultDict
 
 from numpy import Infinity
 
-from model.component import ActivationValue, ItemIdx, ItemLabel, ActivationRecord, ItemActivatedEvent, _load_labels, \
+from ldm.corpus.corpus import CorpusMetadata
+from model.component import ActivationValue, ItemIdx, ItemLabel, ItemActivatedEvent, _load_labels, ActivationRecord, \
     blank_node_activation_record
 from model.graph import Graph
 from model.utils.maths import make_decay_function_constant
@@ -302,7 +303,5 @@ class TemporalSpreadingActivation:
         [logger.info(f"{line}") for line in str(self).strip().split('\n')]
 
 
-def load_labels_from_corpus(corpus, n_words):
+def load_labels_from_corpus(corpus: CorpusMetadata, n_words: int):
     return _load_labels(path.join(Preferences.graphs_dir, f"{corpus.name} {n_words} words.nodelabels"))
-
-

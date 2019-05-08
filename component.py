@@ -18,21 +18,26 @@ caiwingfield.net
 import json
 import logging
 from collections import namedtuple
+from enum import Enum, auto
 from os import path
 from typing import Dict, Set
 
 import yaml
+from pandas import DataFrame
 
+from ldm.corpus.indexing import FreqDist
+from ldm.model.base import DistributionalSemanticModel
 from ldm.utils.maths import DistanceType
 from model.graph import Node, Graph
 from model.temporal_spatial_propagation import TemporalSpatialPropagation
-from model.utils.maths import make_decay_function_lognormal
+from model.temporal_spreading_activation import TemporalSpreadingActivation, load_labels_from_corpus
+from model.utils.maths import make_decay_function_lognormal, make_decay_function_exponential_with_decay_factor, \
+    make_decay_function_gaussian_with_sd
 from preferences import Preferences
 
 logger = logging.getLogger(__name__)
 logger_format = '%(asctime)s | %(levelname)s | %(module)s | %(message)s'
 logger_dateformat = "%Y-%m-%d %H:%M:%S"
-
 
 ActivationValue = float
 ItemIdx = Node
@@ -55,17 +60,29 @@ class ActivationRecord(namedtuple('ActivationRecord', ['activation',
     __slots__ = ()
 
 
-class ItemActivatedEvent(namedtuple('ItemActivatedEvent', ['activation',
-                                                           'time_activated',
-                                                           'label'])):
+def blank_node_activation_record() -> ActivationRecord:
+    """A record for an unactivated node."""
+    return ActivationRecord(activation=0, time_activated=-1)
+
+
+class ItemActivatedEvent:
     """
     A node activation event.
     Used to pass out of TSA.tick().
     """
-    # TODO: this is basically the same as ActivationRecord, and could probably be removed in favour of it.
-    label: ItemLabel
-    activation: ActivationValue
-    time_activated: int
+
+    def __init__(self, label: str, activation: ActivationValue, time_activated: int):
+        self.label = label
+        # Use an ActivationRecord to store this so we don't have repeated code
+        self._record = ActivationRecord(activation=activation, time_activated=time_activated)
+
+    @property
+    def activation(self) -> ActivationValue:
+        return self._record.activation
+
+    @property
+    def time_activated(self) -> int:
+        return self._record.time_activated
 
     def __repr__(self) -> str:
         return f"<'{self.label}' ({self.activation}) @ {self.time_activated}>"
@@ -81,9 +98,104 @@ def _load_labels(nodelabel_path: str) -> Dict[ItemIdx, ItemLabel]:
     return node_labelling_dictionary
 
 
-def blank_node_activation_record() -> ActivationRecord:
-    """A record for an unactivated node."""
-    return ActivationRecord(activation=0, time_activated=-1)
+class EdgePruningType(Enum):
+    Length     = auto()
+    Percent    = auto()
+    Importance = auto()
+
+
+class LinguisticComponent(TemporalSpreadingActivation):
+    """
+    The linguistic component of the model.
+    """
+
+    def __init__(self,
+                 n_words: int,
+                 distributional_model: DistributionalSemanticModel,
+                 freq_dist: FreqDist,
+                 length_factor: int,
+                 node_decay_factor: float,
+                 edge_decay_sd_factor: float,
+                 impulse_pruning_threshold: ActivationValue,
+                 firing_threshold: ActivationValue,
+                 distance_type: DistanceType = None,
+                 edge_pruning=None,
+                 edge_pruning_type: EdgePruningType = None,
+                 ):
+
+        graph = LinguisticComponent._load_graph(n_words, length_factor, distributional_model,
+                                                distance_type, edge_pruning_type, edge_pruning)
+
+        node_labelling_dictionary = load_labels_from_corpus(distributional_model.corpus_meta, n_words)
+
+        super(LinguisticComponent, self).__init__(
+            graph=graph,
+            item_labelling_dictionary=node_labelling_dictionary,
+            impulse_pruning_threshold=impulse_pruning_threshold,
+            firing_threshold=firing_threshold,
+            node_decay_function=make_decay_function_exponential_with_decay_factor(
+                decay_factor=node_decay_factor),
+            edge_decay_function=make_decay_function_gaussian_with_sd(
+                sd=edge_decay_sd_factor * length_factor)
+        )
+
+        self.available_words: Set[ItemLabel] = set(freq_dist.most_common_tokens(n_words))
+
+    @classmethod
+    def _load_graph(cls, n_words, length_factor, distributional_model, distance_type, edge_pruning_type, edge_pruning) -> Graph:
+
+        # Check if distance_type is needed and get filename
+        if distributional_model.model_type.metatype is DistributionalSemanticModel.MetaType.ngram:
+            assert distance_type is None
+            graph_file_name = f"{distributional_model.name} {n_words} words length {length_factor}.edgelist"
+        else:
+            assert distance_type is not None
+            graph_file_name = f"{distributional_model.name} {distance_type.name} {n_words} words length {length_factor}.edgelist"
+
+        # Load graph
+        if edge_pruning is None:
+            logger.info(f"Loading graph from {graph_file_name}")
+            graph = Graph.load_from_edgelist(file_path=path.join(Preferences.graphs_dir, graph_file_name))
+
+        elif edge_pruning_type is EdgePruningType.Length:
+            logger.info(f"Loading graph from {graph_file_name}, pruning any edge longer than {edge_pruning}")
+            graph = Graph.load_from_edgelist(file_path=path.join(Preferences.graphs_dir, graph_file_name),
+                                             ignore_edges_longer_than=edge_pruning,
+                                             keep_at_least_n_edges=Preferences.min_edges_per_node)
+
+        elif edge_pruning_type is EdgePruningType.Percent:
+            quantile_file_name = f"{distributional_model.name} {distance_type.name} {n_words} words length {length_factor} edge length quantiles.csv"
+            quantile_data = DataFrame.from_csv(path.join(Preferences.graphs_dir, quantile_file_name), header=0,
+                                               index_col=None)
+            pruning_length = quantile_data[
+                # Use 1 - so that smallest top quantiles get converted to longest edges
+                quantile_data["Top quantile"] == 1 - (edge_pruning / 100)
+                ]["Pruning length"].iloc[0]
+            logger.info(f"Loading graph from {graph_file_name}, pruning longest {edge_pruning}% of edges (anything over {pruning_length})")
+            graph = Graph.load_from_edgelist(file_path=path.join(Preferences.graphs_dir, graph_file_name),
+                                             ignore_edges_longer_than=edge_pruning,
+                                             keep_at_least_n_edges=Preferences.min_edges_per_node)
+
+        elif edge_pruning_type is EdgePruningType.Importance:
+            logger.info(
+                f"Loading graph from {graph_file_name}, pruning longest {edge_pruning}% of edges")
+            graph = Graph.load_from_edgelist_with_importance_pruning(
+                file_path=path.join(Preferences.graphs_dir, graph_file_name),
+                ignore_edges_with_importance_greater_than=edge_pruning,
+                keep_at_least_n_edges=Preferences.min_edges_per_node)
+
+        else:
+            raise NotImplementedError()
+
+        return graph
+
+    @property
+    def is_connected(self) -> bool:
+        return self.graph.is_connected()
+
+    @property
+    def has_orphans(self) -> bool:
+        return self.graph.has_orphaned_nodes()
 
 
 class SensorimotorComponent(TemporalSpatialPropagation):
@@ -147,13 +259,14 @@ def load_labels_from_sensorimotor():
     return _load_labels(path.join(Preferences.graphs_dir, "sensorimotor words.nodelabels"))
 
 
-def save_model_spec_linguistic(edge_decay_sd_factor, firing_threshold, length_factor, model_name, n_words, response_dir):
+def save_model_spec_linguistic(edge_decay_sd_factor, firing_threshold, length_factor, model_name, n_words,
+                               response_dir):
     spec = {
-        "Model name":       model_name,
-        "Length factor":    length_factor,
-        "SD factor":        edge_decay_sd_factor,
+        "Model name": model_name,
+        "Length factor": length_factor,
+        "SD factor": edge_decay_sd_factor,
         "Firing threshold": firing_threshold,
-        "Words":            n_words,
+        "Words": n_words,
     }
     with open(path.join(response_dir, " model_spec.yaml"), mode="w", encoding="utf-8") as spec_file:
         yaml.dump(spec, spec_file, yaml.SafeDumper)
@@ -161,9 +274,9 @@ def save_model_spec_linguistic(edge_decay_sd_factor, firing_threshold, length_fa
 
 def save_model_spec_sensorimotor(length_factor, max_sphere_radius, sigma, response_dir):
     spec = {
-        "Length factor":     length_factor,
+        "Length factor": length_factor,
         "Max sphere radius": max_sphere_radius,
-        "Log-normal sigma":   sigma,
+        "Log-normal sigma": sigma,
     }
     with open(path.join(response_dir, " model_spec.yaml"), mode="w", encoding="utf-8") as spec_file:
         yaml.dump(spec, spec_file, yaml.SafeDumper)
