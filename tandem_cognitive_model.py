@@ -18,8 +18,8 @@ from collections import defaultdict
 from typing import Set, DefaultDict, List
 
 from model.temporal_spatial_propagation import TemporalSpatialPropagation
-from model.temporal_spreading_activation import TemporalSpreadingActivation, ActivationValue, ItemLabel, \
-    ItemActivatedEvent
+from model.temporal_spreading_activation import TemporalSpreadingActivation
+from model.component import ActivationValue, ItemLabel, ItemActivatedEvent
 
 
 class TandemCognitiveModel:

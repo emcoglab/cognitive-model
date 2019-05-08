@@ -14,64 +14,23 @@ caiwingfield.net
 2018
 ---------------------------
 """
-import json
+
 import logging
-from collections import namedtuple, defaultdict
+from collections import defaultdict
 from os import path
 from typing import Set, Dict, DefaultDict
 
 from numpy import Infinity
 
-from model.graph import Graph, Node
+from model.component import ActivationValue, ItemIdx, ItemLabel, ActivationRecord, ItemActivatedEvent, _load_labels, \
+    blank_node_activation_record
+from model.graph import Graph
 from model.utils.maths import make_decay_function_constant
 from preferences import Preferences
 
 logger = logging.getLogger()
 logger_format = '%(asctime)s | %(levelname)s | %(module)s | %(message)s'
 logger_dateformat = "%Y-%m-%d %H:%M:%S"
-
-
-# Activations will very likely stay floats, but we alias that here in case we need to change it at any point
-ActivationValue = float
-ItemIdx = Node
-ItemLabel = str
-
-
-class ActivationRecord(namedtuple('ActivationRecord', ['activation',
-                                                       'time_activated'])):
-    """
-    ActivationRecord stores a historical node activation.
-
-    It is immutable, so must be used in conjunction with TSA.node_decay_function in order to determine the
-    current activation of a node.
-
-    `activation` stores the total accumulated level of activation at this node when it was activated.
-    `time_activated` stores the clock value when the node was last activated, or -1 if it has never been activated.
-
-    Don't thoughtlessly change this class as it probably needs to remain a small namedtuple for performance reasons.
-    """
-    __slots__ = ()
-
-
-def blank_node_activation_record() -> ActivationRecord:
-    """A record for an unactivated node."""
-    return ActivationRecord(activation=0, time_activated=-1)
-
-
-class ItemActivatedEvent(namedtuple('ItemActivatedEvent', ['activation',
-                                                           'time_activated',
-                                                           'label'])):
-    """
-    A node activation event.
-    Used to pass out of TSA.tick().
-    """
-    # TODO: this is basically the same as ActivationRecord, and could probably be removed in favour of it.
-    label: ItemLabel
-    activation: ActivationValue
-    time_activated: int
-
-    def __repr__(self) -> str:
-        return f"<'{self.label}' ({self.activation}) @ {self.time_activated}>"
 
 
 class TemporalSpreadingActivation:
@@ -333,11 +292,3 @@ def load_labels_from_sensorimotor():
     return _load_labels(path.join(Preferences.graphs_dir, "sensorimotor words.nodelabels"))
 
 
-def _load_labels(nodelabel_path: str) -> Dict[ItemIdx, ItemLabel]:
-    with open(nodelabel_path, mode="r", encoding="utf-8") as nrd_file:
-        node_relabelling_dictionary_json = json.load(nrd_file)
-    # TODO: this isn't a great way to do this
-    node_labelling_dictionary = dict()
-    for k, v in node_relabelling_dictionary_json.items():
-        node_labelling_dictionary[ItemIdx(k)] = v
-    return node_labelling_dictionary

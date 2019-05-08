@@ -18,8 +18,8 @@ caiwingfield.net
 from typing import Dict, Set
 
 from model.graph import Graph
-from model.temporal_spreading_activation import TemporalSpreadingActivation, ActivationValue, ItemLabel, \
-    ItemActivatedEvent, ItemIdx
+from model.temporal_spreading_activation import TemporalSpreadingActivation
+from model.component import ActivationValue, ItemIdx, ItemLabel, ItemActivatedEvent
 
 
 class TemporalSpatialPropagation:
