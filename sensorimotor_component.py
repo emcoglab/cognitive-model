@@ -21,7 +21,7 @@ from typing import Set
 import yaml
 
 from ldm.utils.maths import DistanceType
-from model.common import ActivationValue, ItemLabel, _load_labels
+from model.common import ActivationValue, ItemLabel, _load_labels, ItemIdx
 from model.graph import Graph, Node
 from model.temporal_spatial_propagation import TemporalSpatialPropagation
 from model.utils.maths import make_decay_function_lognormal
@@ -58,14 +58,38 @@ class SensorimotorComponent(TemporalSpatialPropagation):
             # Sigma for the log-normal decay gets multiplied by the length factor, so that if we change the length
             # factor, sigma doesn't also  have to change for the behaviour of the model to be approximately equivalent.
             node_decay_function=make_decay_function_lognormal(sigma=lognormal_sigma * length_factor),
-            buffer_pruning_threshold=buffer_pruning_threshold,
             activation_cap=activation_cap,
             impulse_pruning_threshold=impulse_pruning_threshold,
         )
 
+        # region Set once
+        # These fields are set on first init and then don't need to change even if .reset() is used.
+
+        # Thresholds
+        # Use >= and < to test for above/below
+        self.buffer_pruning_threshold = buffer_pruning_threshold
+
+        # endregion
+
     @property
     def concept_labels(self) -> Set[ItemLabel]:
         return set(w for i, w in self.idx2label.items())
+
+    def items_in_buffer(self) -> Set[ItemIdx]:
+        """
+        Items which are above the firing threshold.
+        May take a long time to compute.
+        :return:
+        """
+        return set(
+            n
+            for n in self.graph.nodes
+            if self.activation_of_item_with_idx(n) >= self.buffer_pruning_threshold
+        )
+
+    def _presynaptic_firing_guard(self, activation: ActivationValue) -> bool:
+        # Node can only fire if not in the buffer (i.e. activation below pruning threshold)
+        return activation < self.buffer_pruning_threshold
 
 
 def save_model_spec_sensorimotor(length_factor, max_sphere_radius, sigma, response_dir):

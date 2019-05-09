@@ -15,7 +15,7 @@ caiwingfield.net
 ---------------------------
 """
 
-from typing import Dict, Set
+from typing import Dict
 
 from model.common import ActivationValue, GraphPropagationComponent, ItemIdx
 from model.graph import Graph
@@ -26,12 +26,10 @@ class TemporalSpatialPropagation(GraphPropagationComponent):
     def __init__(self,
                  underlying_graph: Graph,
                  idx2label: Dict,
-                 buffer_pruning_threshold: ActivationValue,
                  impulse_pruning_threshold: ActivationValue,
                  activation_cap: ActivationValue,
                  node_decay_function: callable):
         """
-        :param buffer_pruning_threshold:
         :param activation_cap:
             If None is supplied, no cap is used.
         :param node_decay_function:
@@ -52,24 +50,8 @@ class TemporalSpatialPropagation(GraphPropagationComponent):
         # region Set once
         # These fields are set on first init and then don't need to change even if .reset() is used.
 
-        # Thresholds
-        # Use >= and < to test for above/below
-        self.buffer_pruning_threshold = buffer_pruning_threshold
-
         # Cap on a node's total activation after receiving incoming.
         self.activation_cap = activation_cap
-
-    def items_in_buffer(self) -> Set[ItemIdx]:
-        """
-        Items which are above the firing threshold.
-        May take a long time to compute.
-        :return:
-        """
-        return set(
-            n
-            for n in self.graph.nodes
-            if self.activation_of_item_with_idx(n) >= self.buffer_pruning_threshold
-        )
 
         # endregion
     def _postsynaptic_modification(self, item: ItemIdx, activation: ActivationValue) -> ActivationValue:
@@ -77,7 +59,3 @@ class TemporalSpatialPropagation(GraphPropagationComponent):
         # The activation cap, if used, MUST be greater than the firing threshold (this is checked in __init__,
         # so applying the cap does not effect whether the node will fire or not.
         return activation if activation <= self.activation_cap else self.activation_cap
-
-    def _presynaptic_firing_guard(self, activation: ActivationValue) -> bool:
-        # Node can only fire if not in the buffer (i.e. activation below pruning threshold)
-        return activation < self.buffer_pruning_threshold
