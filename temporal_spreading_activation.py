@@ -17,8 +17,6 @@ caiwingfield.net
 
 from typing import Set, Dict
 
-from numpy import Infinity
-
 from model.common import ActivationValue, ItemIdx, GraphPropagationComponent
 from model.graph import Graph
 
@@ -34,16 +32,12 @@ class TemporalSpreadingActivation(GraphPropagationComponent):
                  idx2label: Dict,
                  firing_threshold: ActivationValue,
                  impulse_pruning_threshold: ActivationValue,
-                 activation_cap: ActivationValue = Infinity,
                  node_decay_function: callable = None,
                  edge_decay_function: callable = None):
         """
         :param firing_threshold:
             Firing threshold.
             A node will fire on receiving activation if its activation crosses this threshold.
-        :param activation_cap:
-            Any node which would be activated above this gets its activation clamped at this level.
-            Default: Infinity.
         """
 
         super(TemporalSpreadingActivation, self).__init__(
@@ -60,11 +54,6 @@ class TemporalSpreadingActivation(GraphPropagationComponent):
         # Thresholds
         # Use >= and < to test for above/below
         self.firing_threshold: ActivationValue = firing_threshold
-
-        # Cap on a node's total activation after receiving incoming.
-        self.activation_cap = activation_cap
-        if self.activation_cap < self.firing_threshold:
-            raise ValueError(f"activation cap {self.activation_cap} cannot be less than the firing threshold {self.firing_threshold}")
 
         # endregion
 
@@ -87,11 +76,6 @@ class TemporalSpreadingActivation(GraphPropagationComponent):
             for t, activation_arriving_at_time_t in self._scheduled_activations.items()
             if n in activation_arriving_at_time_t.keys()
         }
-
-    def _postsynaptic_modulation(self, item: ItemIdx, activation: ActivationValue) -> ActivationValue:
-        # The activation cap, if used, MUST be greater than the firing threshold (this is checked in __init__,
-        # so applying the cap does not effect whether the node will fire or not.
-        return activation if activation <= self.activation_cap else self.activation_cap
 
     def _postsynaptic_guard(self, activation: ActivationValue) -> bool:
         # Activation must exceed a firing threshold to cause further propagation.

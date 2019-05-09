@@ -60,6 +60,8 @@ class SensorimotorComponent(TemporalSpatialPropagation):
             The sigma parameter for the lognormal decay.
         :param buffer_pruning_threshold:
             The activation threshold at which to remove items from the buffer.
+        :param activation_cap:
+            If None is supplied, no cap is used.
         :param use_prepruned:
             Whether to use the prepruned graphs or do pruning on load.
             Only to be used for testing purposes.
@@ -75,7 +77,6 @@ class SensorimotorComponent(TemporalSpatialPropagation):
             # Sigma for the log-normal decay gets multiplied by the length factor, so that if we change the length
             # factor, sigma doesn't also  have to change for the behaviour of the model to be approximately equivalent.
             node_decay_function=make_decay_function_lognormal(sigma=lognormal_sigma * length_factor),
-            activation_cap=activation_cap,
             impulse_pruning_threshold=impulse_pruning_threshold,
         )
 
@@ -85,6 +86,9 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         # Thresholds
         # Use >= and < to test for above/below
         self.buffer_pruning_threshold = buffer_pruning_threshold
+
+        # Cap on a node's total activation after receiving incoming.
+        self.activation_cap = activation_cap
 
         # A local copy of the sensorimotor norms data
         self.sensorimotor_norms = SensorimotorNorms()
@@ -107,6 +111,11 @@ class SensorimotorComponent(TemporalSpatialPropagation):
     def _presynaptic_modulation(self, item: ItemIdx, activation: ActivationValue) -> ActivationValue:
         # Attenuate the incoming activations to a concept based on a statistic of the concept
         return self._attenuate_activation_by_fraction_known(item, activation)
+
+    def _postsynaptic_modulation(self, item: ItemIdx, activation: ActivationValue) -> ActivationValue:
+        # The activation cap, if used, MUST be greater than the firing threshold (this is checked in __init__,
+        # so applying the cap does not effect whether the node will fire or not.
+        return activation if activation <= self.activation_cap else self.activation_cap
 
     def _presynaptic_guard(self, activation: ActivationValue) -> bool:
         # Node can only fire if not in the buffer (i.e. activation below pruning threshold)

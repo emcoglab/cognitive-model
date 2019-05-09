@@ -21,13 +21,14 @@ from typing import Set
 import logging
 
 import yaml
+from numpy import Infinity
 from pandas import DataFrame
 
 from ldm.corpus.corpus import CorpusMetadata
 from ldm.corpus.indexing import FreqDist
 from ldm.model.base import DistributionalSemanticModel
 from ldm.utils.maths import DistanceType
-from model.common import ActivationValue, ItemLabel, _load_labels
+from model.common import ActivationValue, ItemLabel, _load_labels, ItemIdx
 from model.graph import Graph
 from model.temporal_spreading_activation import TemporalSpreadingActivation
 from model.utils.maths import make_decay_function_exponential_with_decay_factor, make_decay_function_gaussian_with_sd
@@ -58,6 +59,7 @@ class LinguisticComponent(TemporalSpreadingActivation):
                  edge_decay_sd_factor: float,
                  impulse_pruning_threshold: ActivationValue,
                  firing_threshold: ActivationValue,
+                 activation_cap: ActivationValue = Infinity,
                  distance_type: DistanceType = None,
                  edge_pruning=None,
                  edge_pruning_type: EdgePruningType = None,
@@ -100,7 +102,22 @@ class LinguisticComponent(TemporalSpreadingActivation):
                 sd=edge_decay_sd_factor * length_factor)
         )
 
+        # region Set once
+        # These fields are set on first init and then don't need to change even if .reset() is used.
+
+        # Cap on a node's total activation after receiving incoming.
+        self.activation_cap = activation_cap
+        if self.activation_cap < self.firing_threshold:
+            raise ValueError(f"activation cap {self.activation_cap} cannot be less than the firing threshold {self.firing_threshold}")
+
         self.available_words: Set[ItemLabel] = set(freq_dist.most_common_tokens(n_words))
+
+        # endregion
+
+    def _postsynaptic_modulation(self, item: ItemIdx, activation: ActivationValue) -> ActivationValue:
+        # The activation cap, if used, MUST be greater than the firing threshold (this is checked in __init__,
+        # so applying the cap does not effect whether the node will fire or not.
+        return activation if activation <= self.activation_cap else self.activation_cap
 
 
 def _load_graph(n_words, length_factor, distributional_model, distance_type, edge_pruning_type, edge_pruning) -> Graph:
