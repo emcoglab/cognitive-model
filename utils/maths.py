@@ -108,7 +108,15 @@ def make_decay_function_lognormal(sigma: float) -> callable:
 
 
 def mean(*items):
+    """Returns the arithmetic mean of its arguments."""
     return sum(items) / len(items)
+
+
+def rescale01(range_min: float, range_max: float, value: float) -> float:
+    """
+    Rescales a `value` which is known to exist in the range (`range_min`, `range_max`) to the range (0, 1).
+    """
+    return (value - range_min) / (range_max - range_min)
 
 
 def nearest_value_at_quantile(values, quantile):
@@ -138,5 +146,6 @@ def prevalence_from_fraction_known(fraction_known: float) -> float:
     """
     Brysbaert et al.'s (2019) formula for converting fraction-known values into prevalences.
     "The specific formula we used in Microsoft Excel was =NORM.INV(0.005+ Pknown*0.99;0;1)."
+    This value is guaranteed to be in the range [-2.575829303548901, 2.5758293035489004]
     """
     return ndtri(0.005 + fraction_known * 0.99)

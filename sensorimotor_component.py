@@ -24,8 +24,9 @@ from ldm.utils.maths import DistanceType
 from model.common import ActivationValue, ItemLabel, _load_labels, ItemIdx
 from model.graph import Graph, Node
 from model.temporal_spatial_propagation import TemporalSpatialPropagation
-from model.utils.maths import make_decay_function_lognormal
+from model.utils.maths import make_decay_function_lognormal, prevalence_from_fraction_known, rescale01
 from preferences import Preferences
+from sensorimotor_norms.sensorimotor_norms import SensorimotorNorms
 
 logger = logging.getLogger()
 logger_format = '%(asctime)s | %(levelname)s | %(module)s | %(message)s'
@@ -69,6 +70,9 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         # Use >= and < to test for above/below
         self.buffer_pruning_threshold = buffer_pruning_threshold
 
+        # A local copy of the sensorimotor norms data
+        self.sensorimotor_norms = SensorimotorNorms()
+
         # endregion
 
     @property
@@ -87,9 +91,24 @@ class SensorimotorComponent(TemporalSpatialPropagation):
             if self.activation_of_item_with_idx(n) >= self.buffer_pruning_threshold
         )
 
+    def _presynaptic_modification(self, item: ItemIdx, activation: ActivationValue) -> ActivationValue:
+        return self._attenuate_activation_by_fraction_known(item, activation)
+
     def _presynaptic_firing_guard(self, activation: ActivationValue) -> bool:
         # Node can only fire if not in the buffer (i.e. activation below pruning threshold)
         return activation < self.buffer_pruning_threshold
+
+    def _attenuate_activation_by_prevelence(self, item: ItemIdx, activation: ActivationValue) -> ActivationValue:
+        """Attenuates the activation by the prevalence of the item."""
+        prevalence = prevalence_from_fraction_known(self.sensorimotor_norms.fraction_known(self.idx2label[item]))
+        # Brysbaert's prevelence has a defined range, so we can rescale it into [0, 1] for the purposes of attenuating the activation
+        scaled_prevalence = rescale01(-2.575829303548901, 2.5758293035489004, prevalence)
+        # Linearly scale prevalence into [0, 1] for purposes of scaling
+        return activation * scaled_prevalence
+
+    def _attenuate_activation_by_fraction_known(self, item: ItemIdx, activation: ActivationValue) -> ActivationValue:
+        # Fraction known will all be in the range [0, 1], so we can use it as a scaling factor directly
+        return activation * self.sensorimotor_norms.fraction_known(self.idx2label[item])
 
 
 def save_model_spec_sensorimotor(length_factor, max_sphere_radius, sigma, response_dir):
