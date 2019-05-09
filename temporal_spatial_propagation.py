@@ -59,6 +59,9 @@ class TemporalSpatialPropagation:
             activation_cap=activation_cap,
         )
 
+    def activation_of_item_with_label(self, label: ItemLabel):
+        return self._tsa.activation_of_item_with_label(label)
+
     def activate_item_with_label(self, label: ItemLabel, activation: ActivationValue) -> bool:
         return self._tsa.activate_item_with_label(label, activation)
 
