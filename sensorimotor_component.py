@@ -36,24 +36,40 @@ logger_dateformat = "%Y-%m-%d %H:%M:%S"
 class SensorimotorComponent(TemporalSpatialPropagation):
     """
     The sensorimotor component of the model.
+    Uses a lognormal decay on nodes.
     """
 
     def __init__(self,
                  distance_type: DistanceType,
                  length_factor: int,
-                 pruning_length: int,
+                 max_sphere_radius: int,
                  lognormal_sigma: float,
                  impulse_pruning_threshold: ActivationValue,
                  buffer_pruning_threshold: ActivationValue,
                  activation_cap: ActivationValue,
                  use_prepruned: bool = False,
                  ):
+        """
+        :param distance_type:
+            The metric used to determine distances between points.
+        :param length_factor:
+            How distances are scaled into connection lengths.
+        :param max_sphere_radius:
+            What is the maximum radius of a sphere
+        :param lognormal_sigma:
+            The sigma parameter for the lognormal decay.
+        :param buffer_pruning_threshold:
+            The activation threshold at which to remove items from the buffer.
+        :param use_prepruned:
+            Whether to use the prepruned graphs or do pruning on load.
+            Only to be used for testing purposes.
+        """
 
         # Load graph
         idx2label = load_labels_from_sensorimotor()
         super(SensorimotorComponent, self).__init__(
 
-            underlying_graph=_load_graph(distance_type, length_factor, pruning_length,
+            underlying_graph=_load_graph(distance_type, length_factor, max_sphere_radius,
                                          use_prepruned, idx2label),
             idx2label=idx2label,
             # Sigma for the log-normal decay gets multiplied by the length factor, so that if we change the length
@@ -77,24 +93,22 @@ class SensorimotorComponent(TemporalSpatialPropagation):
 
     @property
     def concept_labels(self) -> Set[ItemLabel]:
+        """Labels of concepts"""
         return set(w for i, w in self.idx2label.items())
 
     def items_in_buffer(self) -> Set[ItemIdx]:
-        """
-        Items which are above the firing threshold.
-        May take a long time to compute.
-        :return:
-        """
+        """Items which are above the buffer-pruning threshold. """
         return set(
             n
             for n in self.graph.nodes
             if self.activation_of_item_with_idx(n) >= self.buffer_pruning_threshold
         )
 
-    def _presynaptic_modification(self, item: ItemIdx, activation: ActivationValue) -> ActivationValue:
+    def _presynaptic_modulation(self, item: ItemIdx, activation: ActivationValue) -> ActivationValue:
+        # Attenuate the incoming activations to a concept based on a statistic of the concept
         return self._attenuate_activation_by_fraction_known(item, activation)
 
-    def _presynaptic_firing_guard(self, activation: ActivationValue) -> bool:
+    def _presynaptic_guard(self, activation: ActivationValue) -> bool:
         # Node can only fire if not in the buffer (i.e. activation below pruning threshold)
         return activation < self.buffer_pruning_threshold
 
@@ -107,6 +121,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         return activation * scaled_prevalence
 
     def _attenuate_activation_by_fraction_known(self, item: ItemIdx, activation: ActivationValue) -> ActivationValue:
+        """Attenuates the activation by the fraction of people who know the item."""
         # Fraction known will all be in the range [0, 1], so we can use it as a scaling factor directly
         return activation * self.sensorimotor_norms.fraction_known(self.idx2label[item])
 
@@ -125,11 +140,11 @@ def load_labels_from_sensorimotor():
     return _load_labels(path.join(Preferences.graphs_dir, "sensorimotor words.nodelabels"))
 
 
-def _load_graph(distance_type, length_factor, pruning_length, use_prepruned, node_labelling_dictionary):
+def _load_graph(distance_type, length_factor, max_sphere_radius, use_prepruned, node_labelling_dictionary):
     if use_prepruned:
         logger.warning("Using pre-pruned graph. THIS SHOULD BE USED FOR TESTING PURPOSES ONLY!")
 
-        edgelist_filename = f"sensorimotor for testing only {distance_type.name} distance length {length_factor} pruned {pruning_length}.edgelist"
+        edgelist_filename = f"sensorimotor for testing only {distance_type.name} distance length {length_factor} pruned {max_sphere_radius}.edgelist"
         edgelist_path = path.join(Preferences.graphs_dir, edgelist_filename)
 
         logger.info(f"Loading sensorimotor graph ({edgelist_filename})")
@@ -146,5 +161,5 @@ def _load_graph(distance_type, length_factor, pruning_length, use_prepruned, nod
 
         logger.info(f"Loading sensorimotor graph ({edgelist_filename})")
         sensorimotor_graph = Graph.load_from_edgelist(file_path=edgelist_path,
-                                                      ignore_edges_longer_than=pruning_length)
+                                                      ignore_edges_longer_than=max_sphere_radius)
     return sensorimotor_graph

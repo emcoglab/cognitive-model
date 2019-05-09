@@ -24,6 +24,10 @@ from model.graph import Graph
 
 
 class TemporalSpreadingActivation(GraphPropagationComponent):
+    """
+    Spreading activation on a graph over time.
+    Nodes have a firing threshold and an activation cap.
+    """
 
     def __init__(self,
                  graph: Graph,
@@ -84,15 +88,16 @@ class TemporalSpreadingActivation(GraphPropagationComponent):
             if n in activation_arriving_at_time_t.keys()
         }
 
-    def _postsynaptic_modification(self, item: ItemIdx, activation: ActivationValue) -> ActivationValue:
+    def _postsynaptic_modulation(self, item: ItemIdx, activation: ActivationValue) -> ActivationValue:
         # The activation cap, if used, MUST be greater than the firing threshold (this is checked in __init__,
         # so applying the cap does not effect whether the node will fire or not.
         return activation if activation <= self.activation_cap else self.activation_cap
 
-    def _postsynaptic_firing_guard(self, activation: ActivationValue) -> bool:
+    def _postsynaptic_guard(self, activation: ActivationValue) -> bool:
+        # Activation must exceed a firing threshold to cause further propagation.
         return activation >= self.firing_threshold
 
-    def _presynaptic_firing_guard(self, activation: ActivationValue) -> bool:
+    def _presynaptic_guard(self, activation: ActivationValue) -> bool:
         # If this node is currently suprathreshold, it acts as activation sink.
         # It doesn't accumulate new activation and cannot fire.
         return activation < self.firing_threshold

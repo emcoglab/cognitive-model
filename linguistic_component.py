@@ -47,12 +47,12 @@ class EdgePruningType(Enum):
 class LinguisticComponent(TemporalSpreadingActivation):
     """
     The linguistic component of the model.
+    Uses an exponential decay on nodes and a gaussian decay on edges.
     """
 
     def __init__(self,
                  n_words: int,
                  distributional_model: DistributionalSemanticModel,
-                 freq_dist: FreqDist,
                  length_factor: int,
                  node_decay_factor: float,
                  edge_decay_sd_factor: float,
@@ -62,7 +62,30 @@ class LinguisticComponent(TemporalSpreadingActivation):
                  edge_pruning=None,
                  edge_pruning_type: EdgePruningType = None,
                  ):
-
+        """
+        :param n_words:
+            The number of words to use for this model.
+        :param distributional_model:
+            The form of the linguistic distributional space.
+        :param length_factor:
+            How distances are scaled into connection lengths.
+        :param node_decay_factor:
+            The decay factor for the exponential decay on nodes.
+        :param edge_decay_sd_factor:
+            The SD of the gaussian curve governing edge decay.
+        :param firing_threshold:
+        :param distance_type:
+            The metric used to determine distances between vectors.
+        :param edge_pruning:
+            The level of edge pruning.
+            Only used if `edge_pruning_type` is not None.
+        :param edge_pruning_type:
+            How edges should be pruned.
+            This determines how the `edge_pruning` value is interpreted (e.g. as a percentage, absolute length or
+            importance value).
+            Use None to not prune, and ignore `edge_pruning`.
+        """
+        freq_dist = FreqDist.load(distributional_model.corpus_meta.freq_dist_path)
         node_labelling_dictionary = load_labels_from_corpus(distributional_model.corpus_meta, n_words)
 
         super(LinguisticComponent, self).__init__(

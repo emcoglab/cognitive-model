@@ -22,6 +22,11 @@ from model.graph import Graph
 
 
 class TemporalSpatialPropagation(GraphPropagationComponent):
+    """
+    Propagate activation by expanding spheres through space, where spheres have a maximum radius.
+    Implemented by using the underlying graph of connections between points which are mutually within the maximum sphere
+    radius.
+    """
 
     def __init__(self,
                  underlying_graph: Graph,
@@ -32,8 +37,6 @@ class TemporalSpatialPropagation(GraphPropagationComponent):
         """
         :param activation_cap:
             If None is supplied, no cap is used.
-        :param node_decay_function:
-            If None is supplied, a constant function is used by default (i.e. no decay).
         """
 
         super(TemporalSpatialPropagation, self).__init__(
@@ -54,7 +57,7 @@ class TemporalSpatialPropagation(GraphPropagationComponent):
         self.activation_cap = activation_cap
 
         # endregion
-    def _postsynaptic_modification(self, item: ItemIdx, activation: ActivationValue) -> ActivationValue:
+    def _postsynaptic_modulation(self, item: ItemIdx, activation: ActivationValue) -> ActivationValue:
 
         # The activation cap, if used, MUST be greater than the firing threshold (this is checked in __init__,
         # so applying the cap does not effect whether the node will fire or not.
