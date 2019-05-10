@@ -14,7 +14,7 @@ caiwingfield.net
 2018
 ---------------------------
 """
-from typing import Sequence
+from typing import Sequence, Tuple
 
 from numpy import percentile, float_power, pi, sqrt
 from scipy.special import ndtri
@@ -112,11 +112,34 @@ def mean(*items):
     return sum(items) / len(items)
 
 
-def scale01(range_min: float, range_max: float, value: float) -> float:
+def scale01(original_range: Tuple[float, float], value: float) -> float:
     """
-    Rescales a `value` which is known to exist in the range (`range_min`, `range_max`) to the range (0, 1).
+    Scales a `value` which is known to exist in the range (`range_min`, `range_max`) to the range (0, 1).
+    Ranges can be in RTL order if their endpoints are descending. The `value` does not need to be within its
+    `original_range`; the affine transformation of the numberline maps the `original_range` to (0,1).
+    The `original_range` must have non-zero width.
     """
-    return (value - range_min) / (range_max - range_min)
+    range_start, range_end = original_range
+    return affine_scale((range_start, range_end), (0, 1), value)
+
+
+def affine_scale(original_range: Tuple[float, float], new_range: Tuple[float, float], value: float) -> float:
+    """
+    Scales a `value` which is known to exist in the range (`original_range[0]`, `original_range[1]`) to the range
+    (`new_range[0]`, `new_range[1]`).
+    Ranges can be in RTL order if their endpoints are descending. The `value` does not need to be within its
+    `original_range`; the affine transformation of the numberline maps the `original_range` to the `new_range`.
+    The `original_range` must have non-zero width.
+    """
+    original_start, original_end = original_range
+    new_start, new_end = new_range
+    original_width = original_end - original_start
+    new_width = new_end - new_start
+
+    if original_width == 0:
+        raise ValueError("Original range cannot have zero width.")
+
+    return new_start + (new_width * (value - original_start) / original_width)
 
 
 def nearest_value_at_quantile(values, quantile):

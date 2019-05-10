@@ -124,10 +124,9 @@ class SensorimotorComponent(TemporalSpatialPropagation):
     def _attenuate_by_prevalence(self, item: ItemIdx, activation: ActivationValue) -> ActivationValue:
         """Attenuates the activation by the prevalence of the item."""
         prevalence = prevalence_from_fraction_known(self.sensorimotor_norms.fraction_known(self.idx2label[item]))
-        # Brysbaert's prevalence has a defined range, so we can rescale it into [0, 1] for the purposes of attenuating
-        # the activation
-        scaled_prevalence = scale01(-2.575829303548901, 2.5758293035489004, prevalence)
-        # Linearly scale prevalence into [0, 1] for purposes of scaling
+        # Brysbaert et al.'s (2019) prevalence has a defined range, so we can affine-scale it into [0, 1] for the
+        # purposes of attenuating the activation
+        scaled_prevalence = scale01((-2.575829303548901, 2.5758293035489004), prevalence)
         return activation * scaled_prevalence
 
     def _attenuate_by_fraction_known(self, item: ItemIdx, activation: ActivationValue) -> ActivationValue:
