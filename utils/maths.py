@@ -112,7 +112,7 @@ def mean(*items):
     return sum(items) / len(items)
 
 
-def rescale01(range_min: float, range_max: float, value: float) -> float:
+def scale01(range_min: float, range_max: float, value: float) -> float:
     """
     Rescales a `value` which is known to exist in the range (`range_min`, `range_max`) to the range (0, 1).
     """
