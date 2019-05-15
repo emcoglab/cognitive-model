@@ -17,11 +17,11 @@ caiwingfield.net
 
 from typing import Dict
 
-from model.common import GraphPropagationComponent
+from model.graph_propagation import GraphPropagation, ActivationValue
 from model.graph import Graph
 
 
-class TemporalSpatialPropagation(GraphPropagationComponent):
+class TemporalSpatialPropagation(GraphPropagation):
     """
     Propagate activation by expanding spheres through space, where spheres have a maximum radius.
     Implemented by using the underlying graph of connections between points which are mutually within the maximum sphere

@@ -1,6 +1,6 @@
 """
 ===========================
-Common aspects of model components.
+Base class for all components.
 ===========================
 
 Dr. Cai Wingfield
@@ -14,7 +14,6 @@ caiwingfield.net
 2019
 ---------------------------
 """
-
 import json
 from abc import ABCMeta
 from collections import namedtuple, defaultdict
@@ -24,7 +23,9 @@ from typing import Dict, Set, DefaultDict
 import yaml
 
 from model.graph import Node, Graph
+from model.events import ModelEvent, ItemActivatedEvent
 from model.utils.maths import make_decay_function_constant
+
 
 ActivationValue = float
 ItemIdx = Node
@@ -52,30 +53,7 @@ def blank_node_activation_record() -> ActivationRecord:
     return ActivationRecord(activation=0, time_activated=-1)
 
 
-class ItemActivatedEvent:
-    """
-    A node activation event.
-    Used to pass out of TSA.tick().
-    """
-
-    def __init__(self, label: str, activation: ActivationValue, time_activated: int):
-        self.label = label
-        # Use an ActivationRecord to store this so we don't have repeated code
-        self._record = ActivationRecord(activation=activation, time_activated=time_activated)
-
-    @property
-    def activation(self) -> ActivationValue:
-        return self._record.activation
-
-    @property
-    def time_activated(self) -> int:
-        return self._record.time_activated
-
-    def __repr__(self) -> str:
-        return f"<'{self.label}' ({self.activation}) @ {self.time_activated}>"
-
-
-class GraphPropagationComponent(metaclass=ABCMeta):
+class GraphPropagation(metaclass=ABCMeta):
 
     def __init__(self,
                  graph: Graph,
@@ -162,7 +140,7 @@ class GraphPropagationComponent(metaclass=ABCMeta):
         self._activation_records: DefaultDict[ItemIdx, ActivationRecord] = defaultdict(blank_node_activation_record)
         self._scheduled_activations: DefaultDict[int, DefaultDict[ItemIdx, ActivationValue]] = defaultdict(lambda: defaultdict(ActivationValue))
 
-    def tick(self) -> Set[ItemActivatedEvent]:
+    def tick(self) -> Set[ModelEvent]:
         """
         Performs the spreading activation algorithm for one tick of the clock.
         :return:
@@ -173,9 +151,9 @@ class GraphPropagationComponent(metaclass=ABCMeta):
         nodes_which_became_active = self._apply_activations()
 
         return set(
-            ItemActivatedEvent(label=self.idx2label[node],
+            ItemActivatedEvent(item=node,
                                activation=self.activation_of_item_with_idx(node),
-                               time_activated=self.clock)
+                               time=self.clock)
             for node in nodes_which_became_active)
 
     def activate_item_with_label(self, label: ItemLabel, activation: ActivationValue) -> bool:
@@ -188,7 +166,7 @@ class GraphPropagationComponent(metaclass=ABCMeta):
         """
         return self.activate_item_with_idx(self.label2idx[label], activation)
 
-    def _apply_activations(self) -> Set:
+    def _apply_activations(self) -> Set[ItemIdx]:
         """
         Applies scheduled all scheduled activations.
         :return:

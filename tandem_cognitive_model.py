@@ -19,7 +19,8 @@ from typing import Set, DefaultDict, List
 
 from model.sensorimotor_component import SensorimotorComponent
 from model.linguistic_component import LinguisticComponent
-from model.common import ActivationValue, ItemLabel, ItemActivatedEvent
+from model.graph_propagation import ActivationValue, ItemLabel
+from model.events import LabelledItemActivatedEvent
 
 
 class TandemCognitiveModel:
@@ -53,8 +54,8 @@ class TandemCognitiveModel:
         assert self.clock == self.sensorimotor_component.clock
 
         self.clock += 1
-        lc_activated_words: Set[ItemActivatedEvent] = self.linguistic_component.tick()
-        smc_activated_concepts: Set[ItemActivatedEvent] = self.sensorimotor_component.tick()
+        lc_activated_words: Set[LabelledItemActivatedEvent] = self.linguistic_component.tick()
+        smc_activated_concepts: Set[LabelledItemActivatedEvent] = self.sensorimotor_component.tick()
 
         # Set up future _activation_records from smc to lc
         for concept in smc_activated_concepts:

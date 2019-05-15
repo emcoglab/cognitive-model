@@ -17,12 +17,13 @@ caiwingfield.net
 
 import logging
 from os import path
-from typing import Set
+from typing import Set, List
 
 import yaml
 
 from ldm.utils.maths import DistanceType
-from model.common import ActivationValue, ItemLabel, _load_labels, ItemIdx
+from model.graph_propagation import ActivationValue, ItemIdx, ItemLabel, _load_labels
+from model.events import ModelEvent, ItemActivatedEvent, ItemEnteredBufferEvent
 from model.graph import Graph, Node
 from model.temporal_spatial_propagation import TemporalSpatialPropagation
 from model.utils.maths import make_decay_function_lognormal, prevalence_from_fraction_known, scale01
@@ -123,9 +124,21 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         super(SensorimotorComponent, self).reset()
         self.working_memory_buffer = set()
 
-    def tick(self):
-        super(SensorimotorComponent, self).tick()
+    def tick(self) -> Set[ModelEvent]:
+        # Apply super's tick() and see what became activated
+        events: Set[ModelEvent] = super(SensorimotorComponent, self).tick()
+
+        # Clear cruft from the buffer
         self._prune_decayed_items_in_buffer()
+
+        # Present each activated item to buffer and record buffer events
+        item_activations: List[ItemActivatedEvent] = [e for e in events if isinstance(e, ItemActivatedEvent)]
+        for ia in item_activations:
+            item_did_enter_buffer = self._present_to_working_memory_buffer(ia.item)
+            if item_did_enter_buffer:
+                events.add(ItemEnteredBufferEvent(time=ia.time, item=ia.item))
+
+        return events
 
     def activate_item_with_idx(self, n: ItemIdx, activation: ActivationValue) -> bool:
         # Activate the item

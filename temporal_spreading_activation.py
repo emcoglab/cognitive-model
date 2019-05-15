@@ -17,11 +17,11 @@ caiwingfield.net
 
 from typing import Set, Dict
 
-from model.common import ActivationValue, ItemIdx, GraphPropagationComponent
+from model.graph_propagation import GraphPropagation, ActivationValue, ItemIdx
 from model.graph import Graph
 
 
-class TemporalSpreadingActivation(GraphPropagationComponent):
+class TemporalSpreadingActivation(GraphPropagation):
     """
     Spreading activation on a graph over time.
     Nodes have a firing threshold and an activation cap.

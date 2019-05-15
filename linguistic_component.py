@@ -28,7 +28,7 @@ from ldm.corpus.corpus import CorpusMetadata
 from ldm.corpus.indexing import FreqDist
 from ldm.model.base import DistributionalSemanticModel
 from ldm.utils.maths import DistanceType
-from model.common import ActivationValue, ItemLabel, _load_labels, ItemIdx
+from model.graph_propagation import ActivationValue, ItemIdx, ItemLabel, _load_labels
 from model.graph import Graph
 from model.temporal_spreading_activation import TemporalSpreadingActivation
 from model.utils.maths import make_decay_function_exponential_with_decay_factor, make_decay_function_gaussian_with_sd
