@@ -91,6 +91,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         # These fields are set on first init and then don't need to change even if .reset() is used.
 
         # Thresholds
+
         # Use >= and < to test for above/below
         self.buffer_entry_threshold: ActivationValue = buffer_entry_threshold
         self.buffer_pruning_threshold: ActivationValue = buffer_pruning_threshold
@@ -105,8 +106,16 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         # endregion
 
         # region Resettable
+        # These fields are reinitialised in .reset()
 
-        # The set of items which are currently being consciously considered
+        # The set of items which are currently being consciously considered.
+        #
+        # A fixed size (self.buffer_size_limit).  Items may enter the buffer when they are activated and leave when they
+        # decay sufficiently (self.buffer_pruning_threshold) or are displaced.
+        #
+        # Currently this *could* be implemented as a simple property which lists the top-n most activated things, rather
+        # than being meticulously maintained during as the model runs.  However it is better to maintain it as we go as
+        # it will be easier to extend it into a multi-component buffer in the future.
         self.working_memory_buffer: Set[ItemIdx] = set()
 
         # endregion
