@@ -264,7 +264,7 @@ class Graph:
         """
         for node, edges_to_keep_this_node in edges_to_keep_buffer.items():
             # We only want to force-keep *up-to* n edges, so if we've already got some, we don't need to force-add
-            # all n in the buffer.
+            # all n in the working_memory_buffer.
             # So we first forget to add any edges the node already has...
             forget = []
             for edge, length in edges_to_keep_this_node:
