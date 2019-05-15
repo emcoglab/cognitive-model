@@ -17,7 +17,7 @@ caiwingfield.net
 
 from typing import Dict
 
-from model.common import ActivationValue, GraphPropagationComponent
+from model.common import GraphPropagationComponent
 from model.graph import Graph
 
 
@@ -31,8 +31,12 @@ class TemporalSpatialPropagation(GraphPropagationComponent):
     def __init__(self,
                  underlying_graph: Graph,
                  idx2label: Dict,
-                 impulse_pruning_threshold: ActivationValue,
                  node_decay_function: callable):
+        """
+        :param underlying_graph:
+            The graph of distances between items, where there is an edge iff the distance is within the max sphere
+            radius.
+        """
 
         super(TemporalSpatialPropagation, self).__init__(
             graph=underlying_graph,
@@ -42,5 +46,7 @@ class TemporalSpatialPropagation(GraphPropagationComponent):
             # full activations of their source items at the time they were last activated.
             # The maximal sphere radius is achieved by the initial graph pruning.
             edge_decay_function=None,
-            impulse_pruning_threshold=impulse_pruning_threshold,
+            # Impulses reach their destination iff their destination is within the max sphere radius.
+            # The max sphere radius is baked into the underlying graph.
+            impulse_pruning_threshold=0,
         )

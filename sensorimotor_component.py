@@ -14,6 +14,7 @@ caiwingfield.net
 2019
 ---------------------------
 """
+
 import logging
 from os import path
 from typing import Set
@@ -44,7 +45,6 @@ class SensorimotorComponent(TemporalSpatialPropagation):
                  length_factor: int,
                  max_sphere_radius: int,
                  lognormal_sigma: float,
-                 impulse_pruning_threshold: ActivationValue,
                  buffer_size_limit: int,
                  buffer_entry_threshold: ActivationValue,
                  buffer_pruning_threshold: ActivationValue,
@@ -84,7 +84,6 @@ class SensorimotorComponent(TemporalSpatialPropagation):
             # Sigma for the log-normal decay gets multiplied by the length factor, so that if we change the length
             # factor, sigma doesn't also  have to change for the behaviour of the model to be approximately equivalent.
             node_decay_function=make_decay_function_lognormal(sigma=lognormal_sigma * length_factor),
-            impulse_pruning_threshold=impulse_pruning_threshold,
         )
 
         # region Set once
@@ -203,7 +202,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         return set(
             n
             for n in self.graph.nodes
-            if self.activation_of_item_with_idx(n) >= self.impulse_pruning_threshold
+            if self.activation_of_item_with_idx(n) > 0
         )
 
     def _presynaptic_modulation(self, item: ItemIdx, activation: ActivationValue) -> ActivationValue:
