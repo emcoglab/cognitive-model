@@ -101,11 +101,19 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         return set(w for i, w in self.idx2label.items())
 
     def items_in_buffer(self) -> Set[ItemIdx]:
-        """Items which are above the buffer-pruning threshold. """
+        """Items which are above the buffer-pruning threshold."""
         return set(
             n
             for n in self.graph.nodes
             if self.activation_of_item_with_idx(n) >= self.buffer_pruning_threshold
+        )
+
+    def accessible_set(self) -> Set[ItemIdx]:
+        """The items in the accessible set."""
+        return set(
+            n
+            for n in self.graph.nodes
+            if self.activation_of_item_with_idx(n) >= self.impulse_pruning_threshold
         )
 
     def _presynaptic_modulation(self, item: ItemIdx, activation: ActivationValue) -> ActivationValue:
