@@ -77,11 +77,11 @@ class TemporalSpreadingActivation(GraphPropagationComponent):
             if n in activation_arriving_at_time_t.keys()
         }
 
-    def _postsynaptic_guard(self, activation: ActivationValue) -> bool:
+    def _postsynaptic_guard(self, item: ItemIdx, activation: ActivationValue) -> bool:
         # Activation must exceed a firing threshold to cause further propagation.
         return activation >= self.firing_threshold
 
-    def _presynaptic_guard(self, activation: ActivationValue) -> bool:
+    def _presynaptic_guard(self, item: ItemIdx, activation: ActivationValue) -> bool:
         # If this node is currently suprathreshold, it acts as activation sink.
         # It doesn't accumulate new activation and cannot fire.
         return activation < self.firing_threshold

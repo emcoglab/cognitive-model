@@ -239,7 +239,7 @@ class GraphPropagationComponent(metaclass=ABCMeta):
 
         current_activation = self.activation_of_item_with_idx(n)
 
-        if not self._presynaptic_guard(current_activation):
+        if not self._presynaptic_guard(n, current_activation):
             # Node didn't fire
             return False
 
@@ -257,7 +257,7 @@ class GraphPropagationComponent(metaclass=ABCMeta):
         self._activation_records[n] = ActivationRecord(new_activation, self.clock)
 
         # Check if we reached the firing threshold.
-        if self._postsynaptic_guard(new_activation):
+        if self._postsynaptic_guard(n, new_activation):
 
             # If so, fire and rebroadcast!
             rebroadcast_source_node = n
@@ -323,10 +323,12 @@ class GraphPropagationComponent(metaclass=ABCMeta):
         # Default implementation: no modification
         return activation
 
-    def _presynaptic_guard(self, activation: ActivationValue) -> bool:
+    def _presynaptic_guard(self, item: ItemIdx, activation: ActivationValue) -> bool:
         """
         Guards a node's accumulation (and firing) based on its activation before incoming activation has accumulated.
         (E.g. making sufficiently-activated nodes into sinks until they decay.)
+        :param item:
+            The item receiving the activation.
         :param activation:
             The activation level of the item before accumulation.
         :return:
@@ -335,10 +337,12 @@ class GraphPropagationComponent(metaclass=ABCMeta):
         # Default implementation: never prevent firing.
         return True
 
-    def _postsynaptic_guard(self, activation: ActivationValue) -> bool:
+    def _postsynaptic_guard(self, item: ItemIdx, activation: ActivationValue) -> bool:
         """
         Guards a node's firing based on its activation after incoming activation has accumulated.
         (E.g. applying a firing threshold.)
+        :param item:
+            The item receiving the activation.
         :param activation:
             The activation level of the item after accumulation.
         :return:

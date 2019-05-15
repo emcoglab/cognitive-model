@@ -214,9 +214,9 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         # so applying the cap does not effect whether the node will fire or not.
         return activation if activation <= self.activation_cap else self.activation_cap
 
-    def _presynaptic_guard(self, activation: ActivationValue) -> bool:
+    def _presynaptic_guard(self, item: ItemIdx, activation: ActivationValue) -> bool:
         # Node can only fire if not in the working_memory_buffer (i.e. activation below pruning threshold)
-        return activation < self.buffer_pruning_threshold
+        return item not in self.accessible_set()
 
     def _attenuate_by_prevalence(self, item: ItemIdx, activation: ActivationValue) -> ActivationValue:
         """Attenuates the activation by the prevalence of the item."""
