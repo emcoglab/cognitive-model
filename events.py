@@ -14,37 +14,38 @@ caiwingfield.net
 2019
 ---------------------------
 """
+from dataclasses import dataclass
 
 from model.basic_types import ActivationValue, ItemIdx
 
 
+@dataclass
 class ModelEvent:
     """An event associated with model activity."""
-    def __init__(self, time: int):
-        """
-        :param time: The time at which the event occurred.
-        """
-        self.time: int = time
+    # The time at which the event occurred.
+    time: int
+
+    # Events are always Truthy, so we can use None as the Falsy alternative.
+    def __bool__(self) -> bool: return True
 
 
+@dataclass
 class ItemEvent(ModelEvent):
     """An event involving an item."""
-    def __init__(self, time: int, item: ItemIdx):
-        """
-        :param item: The item being activated.
-        """
-        super(ItemEvent, self).__init__(time=time)
-        self.item: ItemIdx = item
+    # The item being activated.
+    item: ItemIdx
 
 
+@dataclass
 class ItemActivatedEvent(ItemEvent):
     """An item is activated."""
-    def __init__(self, time: int, item: ItemIdx, activation: ActivationValue):
-        super(ItemActivatedEvent, self).__init__(time=time, item=item)
-        self.activation: ActivationValue = activation
+    activation: ActivationValue
 
 
-class ItemEnteredBufferEvent(ItemEvent):
-    """An item entered the working memory buffer."""
-    def __init__(self, time: int, item: ItemIdx):
-        super(ItemEnteredBufferEvent, self).__init__(time=time, item=item)
+@dataclass
+class ItemEnteredBufferEvent(ItemActivatedEvent):
+    """An item was activated and entered the working memory buffer."""
+    @classmethod
+    def from_activation_event(cls, event: ItemActivatedEvent) -> 'ItemEnteredBufferEvent':
+        """Convert from ItemActivatedEvent."""
+        return cls(time=event.time, item=event.item, activation=event.activation)
