@@ -22,9 +22,10 @@ from typing import Set, List
 import yaml
 
 from ldm.utils.maths import DistanceType
-from model.graph_propagation import ActivationValue, ItemIdx, ItemLabel, _load_labels
+from model.graph_propagation import _load_labels
+from model.basic_types import ActivationValue, ItemIdx, ItemLabel, Node
 from model.events import ModelEvent, ItemActivatedEvent, ItemEnteredBufferEvent
-from model.graph import Graph, Node
+from model.graph import Graph
 from model.temporal_spatial_propagation import TemporalSpatialPropagation
 from model.utils.maths import make_decay_function_lognormal, prevalence_from_fraction_known, scale01
 from preferences import Preferences

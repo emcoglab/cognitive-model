@@ -27,13 +27,11 @@ from scipy.sparse import coo_matrix, csr_matrix
 from scipy.stats import percentileofscore
 from sortedcontainers import SortedSet
 
+from model.basic_types import Node, Length
 from model.utils.maths import mean, nearest_value_at_quantile
 from ldm.utils.logging import print_progress
 
 logger = logging.getLogger()
-
-Node = int
-Length = int
 
 
 class Edge(tuple):

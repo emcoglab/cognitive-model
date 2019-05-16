@@ -17,7 +17,8 @@ caiwingfield.net
 
 from typing import Set, Dict
 
-from model.graph_propagation import GraphPropagation, ActivationValue, ItemIdx
+from model.graph_propagation import GraphPropagation
+from model.basic_types import ActivationValue, ItemIdx
 from model.graph import Graph
 
 

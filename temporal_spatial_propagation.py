@@ -17,8 +17,8 @@ caiwingfield.net
 
 from typing import Dict
 
-from model.graph_propagation import GraphPropagation, ActivationValue
 from model.graph import Graph
+from model.graph_propagation import GraphPropagation
 
 
 class TemporalSpatialPropagation(GraphPropagation):

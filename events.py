@@ -15,7 +15,7 @@ caiwingfield.net
 ---------------------------
 """
 
-from model.graph_propagation import ActivationValue, ItemIdx
+from model.basic_types import ActivationValue, ItemIdx
 
 
 class ModelEvent:

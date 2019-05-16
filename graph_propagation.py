@@ -22,14 +22,10 @@ from typing import Dict, Set, DefaultDict
 
 import yaml
 
-from model.graph import Node, Graph
-from model.events import ModelEvent, ItemActivatedEvent
+from model.basic_types import ActivationValue, ItemIdx, ItemLabel
+from model.events import ModelEvent, ItemActivatedEvent, ItemFiredEvent
+from model.graph import Graph
 from model.utils.maths import make_decay_function_constant
-
-
-ActivationValue = float
-ItemIdx = Node
-ItemLabel = str
 
 
 class ActivationRecord(namedtuple('ActivationRecord', ['activation',

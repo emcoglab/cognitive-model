@@ -17,10 +17,10 @@ caiwingfield.net
 from collections import defaultdict
 from typing import Set, DefaultDict, List
 
-from model.sensorimotor_component import SensorimotorComponent
+from model.basic_types import ActivationValue, ItemIdx
+from model.events import ItemActivatedEvent
 from model.linguistic_component import LinguisticComponent
-from model.graph_propagation import ActivationValue, ItemLabel
-from model.events import LabelledItemActivatedEvent
+from model.sensorimotor_component import SensorimotorComponent
 
 
 class TandemCognitiveModel:
