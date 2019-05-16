@@ -17,7 +17,7 @@ caiwingfield.net
 
 import logging
 from os import path
-from typing import Set, List
+from typing import Set, Optional, List
 
 import yaml
 
@@ -125,30 +125,25 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         super(SensorimotorComponent, self).reset()
         self.working_memory_buffer = set()
 
-    def tick(self) -> Set[ModelEvent]:
-        # Apply super's tick() and see what became activated
-        events: Set[ModelEvent] = super(SensorimotorComponent, self).tick()
-
+    def tick(self) -> List[ModelEvent]:
         # Clear cruft from the buffer
         self._prune_decayed_items_in_buffer()
 
-        # Present each activated item to buffer and record buffer events
-        item_activations: List[ItemActivatedEvent] = [e for e in events if isinstance(e, ItemActivatedEvent)]
-        for ia in item_activations:
-            item_did_enter_buffer = self._present_to_working_memory_buffer(ia.item)
-            if item_did_enter_buffer:
-                events.add(ItemEnteredBufferEvent(time=ia.time, item=ia.item))
+        # Proceed with the tick
+        return super(SensorimotorComponent, self).tick()
 
-        return events
-
-    def activate_item_with_idx(self, idx: ItemIdx, activation: ActivationValue) -> bool:
+    def activate_item_with_idx(self, idx: ItemIdx, activation: ActivationValue) -> Optional[ItemActivatedEvent]:
         # Activate the item
-        item_did_activate = super(SensorimotorComponent, self).activate_item_with_idx(n, activation)
+        activation_event = super(SensorimotorComponent, self).activate_item_with_idx(idx, activation)
 
-        # Present it as available to enter the buffer
-        self._present_to_working_memory_buffer(idx)
+        # Present it as available to enter the buffer if it activated
+        if activation_event:
+            item_did_enter_buffer = self._present_to_working_memory_buffer(idx)
+            if item_did_enter_buffer:
+                # If it entered the buffer, upgrade the event
+                activation_event = ItemEnteredBufferEvent.from_activation_event(activation_event)
 
-        return item_did_activate
+        return activation_event
 
     def _present_to_working_memory_buffer(self, item: ItemIdx) -> bool:
         """

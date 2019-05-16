@@ -43,6 +43,15 @@ class ItemActivatedEvent(ItemEvent):
 
 
 @dataclass
+class ItemFiredEvent(ItemActivatedEvent):
+    """An item is activated enough to repropagate its activation."""
+    @classmethod
+    def from_activation_event(cls, event: ItemActivatedEvent) -> 'ItemFiredEvent':
+        """Convert from ItemActivatedEvent."""
+        return cls(time=event.time, item=event.item, activation=event.activation)
+
+
+@dataclass
 class ItemEnteredBufferEvent(ItemActivatedEvent):
     """An item was activated and entered the working memory buffer."""
     @classmethod

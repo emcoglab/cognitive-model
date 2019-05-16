@@ -36,7 +36,7 @@ class TandemCognitiveModel:
         self.smc_to_lc_delay: int = smc_to_lc_delay
 
         # A clock-keyed dictionary of label-keyed dictionaries of _activation_records
-        self.future_smc_activations: DefaultDict[int, DefaultDict[ItemLabel, ActivationValue]] = defaultdict(lambda: defaultdict(ActivationValue))
+        self.future_smc_activations: DefaultDict[int, DefaultDict[ItemIdx, ActivationValue]] = defaultdict(lambda: defaultdict(ActivationValue))
 
         self.clock: int = int(0)
 
@@ -54,23 +54,26 @@ class TandemCognitiveModel:
         assert self.clock == self.sensorimotor_component.clock
 
         self.clock += 1
-        lc_activated_words: Set[LabelledItemActivatedEvent] = self.linguistic_component.tick()
-        smc_activated_concepts: Set[LabelledItemActivatedEvent] = self.sensorimotor_component.tick()
+        lc_events = self.linguistic_component.tick()
+        smc_events = self.sensorimotor_component.tick()
+
+        lc_activation_events: Set[ItemActivatedEvent] = set(e for e in lc_events if isinstance(e, ItemActivatedEvent))
+        smc_activation_events: Set[ItemActivatedEvent] = set(e for e in smc_events if isinstance(e, ItemActivatedEvent))
 
         # Set up future _activation_records from smc to lc
-        for concept in smc_activated_concepts:
+        for event in smc_activation_events:
             self.linguistic_component.schedule_activation_of_item_with_idx(
-                self.linguistic_component.label2idx(concept.label),
-                concept.activation,
-                concept.time_activated + self.smc_to_lc_delay)
+                event.item,
+                event.activation,
+                event.time + self.smc_to_lc_delay)
 
         # TODO: This should be refactored into model_component.schedule_activation(l, a, t) methods
         # Set up future _activation_records from lc to smc
-        for word in lc_activated_words:
-            self.future_smc_activations[word.time_activated + self.smc_to_lc_delay][word.label] += word.activation
+        for event in lc_activation_events:
+            self.future_smc_activations[event.time + self.smc_to_lc_delay][event.item] += event.activation
 
         # Apply predestined _activation_records
         if self.clock in self.future_smc_activations.keys():
             smc_activations = self.future_smc_activations.pop(self.clock)
-            for concept_label, activation in smc_activations.items():
-                self.sensorimotor_component.activate_item_with_label(concept_label, activation)
+            for idx, activation in smc_activations.items():
+                self.sensorimotor_component.activate_item_with_idx(idx, activation)
