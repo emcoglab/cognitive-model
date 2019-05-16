@@ -165,7 +165,7 @@ class GraphPropagation(metaclass=ABCMeta):
         """
         Applies scheduled all scheduled activations.
         :return:
-            Set of nodes which became activated.
+            Events for items which became activated.
         """
 
         activation_events = []

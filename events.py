@@ -52,8 +52,7 @@ class ItemFiredEvent(ItemActivatedEvent):
 
 
 @dataclass
-# An item enters the buffer only if it fired.
-# It is impossible that an item enters a buffer without firing.
+# An item enters the buffer only if it fired.  It is impossible that an item enters a buffer without firing.
 # Therefore ItemEnteredBufferEvent is a ItemFiredEvent.
 class ItemEnteredBufferEvent(ItemFiredEvent):
     """An item was activated and entered the working memory buffer."""
