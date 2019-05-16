@@ -140,12 +140,12 @@ class SensorimotorComponent(TemporalSpatialPropagation):
 
         return events
 
-    def activate_item_with_idx(self, n: ItemIdx, activation: ActivationValue) -> bool:
+    def activate_item_with_idx(self, idx: ItemIdx, activation: ActivationValue) -> bool:
         # Activate the item
         item_did_activate = super(SensorimotorComponent, self).activate_item_with_idx(n, activation)
 
         # Present it as available to enter the buffer
-        self._present_to_working_memory_buffer(n)
+        self._present_to_working_memory_buffer(idx)
 
         return item_did_activate
 
@@ -218,18 +218,18 @@ class SensorimotorComponent(TemporalSpatialPropagation):
             if self.activation_of_item_with_idx(n) > 0
         )
 
-    def _presynaptic_modulation(self, item: ItemIdx, activation: ActivationValue) -> ActivationValue:
+    def _presynaptic_modulation(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
         # Attenuate the incoming activations to a concept based on a statistic of the concept
-        return self._attenuate_by_fraction_known(item, activation)
+        return self._attenuate_by_fraction_known(idx, activation)
 
-    def _postsynaptic_modulation(self, item: ItemIdx, activation: ActivationValue) -> ActivationValue:
+    def _postsynaptic_modulation(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
         # The activation cap, if used, MUST be greater than the firing threshold (this is checked in __init__,
         # so applying the cap does not effect whether the node will fire or not.
         return activation if activation <= self.activation_cap else self.activation_cap
 
-    def _presynaptic_guard(self, item: ItemIdx, activation: ActivationValue) -> bool:
+    def _presynaptic_guard(self, idx: ItemIdx, activation: ActivationValue) -> bool:
         # Node can only fire if not in the working_memory_buffer (i.e. activation below pruning threshold)
-        return item not in self.accessible_set()
+        return idx not in self.accessible_set()
 
     def _attenuate_by_prevalence(self, item: ItemIdx, activation: ActivationValue) -> ActivationValue:
         """Attenuates the activation by the prevalence of the item."""

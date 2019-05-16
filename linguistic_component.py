@@ -114,7 +114,7 @@ class LinguisticComponent(TemporalSpreadingActivation):
 
         # endregion
 
-    def _postsynaptic_modulation(self, item: ItemIdx, activation: ActivationValue) -> ActivationValue:
+    def _postsynaptic_modulation(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
         # The activation cap, if used, MUST be greater than the firing threshold (this is checked in __init__,
         # so applying the cap does not effect whether the node will fire or not.
         return activation if activation <= self.activation_cap else self.activation_cap
