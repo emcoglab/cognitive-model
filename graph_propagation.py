@@ -249,7 +249,7 @@ class GraphPropagation(metaclass=ABCMeta):
             # If we did, not only did this node activated, it fired as well, so we upgrade the event
             event = ItemFiredEvent.from_activation_event(event)
 
-            # If so, fire and rebroadcast!
+            # Fire and rebroadcast!
             source_idx = idx
 
             # For each incident edge

@@ -27,7 +27,7 @@ class ModelEvent(metaclass=ABCMeta):
     time: int
     # Events are always Truthy, so we can use None as the Falsy alternative.
     def __bool__(self) -> bool: return True
-    def __repr__(self) -> str: return f"{type(self).__name__}(time={self.time!r})"
+    def __repr__(self) -> str: return f"{type(self).__name__}( time={self.time!r} )"
 
 
 @dataclass
@@ -35,7 +35,7 @@ class ItemEvent(ModelEvent, metaclass=ABCMeta):
     """An event involving an item."""
     # The item being activated.
     item: ItemIdx
-    def __repr__(self) -> str: return f"{type(self).__name__}(time={self.time!r}, item={self.item!r})"
+    def __repr__(self) -> str: return f"{type(self).__name__}( time={self.time!r}, item={self.item!r} )"
 
 
 @dataclass
@@ -48,7 +48,7 @@ class BufferEvent(ItemEvent, metaclass=ABCMeta):
 class ItemActivatedEvent(ItemEvent):
     """An item is activated."""
     activation: ActivationValue
-    def __repr__(self) -> str: return f"{type(self).__name__}(time={self.time!r}, item={self.item!r}, activation={self.activation!r})"
+    def __repr__(self) -> str: return f"{type(self).__name__}( time={self.time!r}, item={self.item!r}, activation={self.activation!r} )"
 
 
 @dataclass
@@ -72,4 +72,4 @@ class ItemEnteredBufferEvent(BufferEvent, ItemFiredEvent):
 class BailoutEvent(ModelEvent):
     """Model running ended with a bailout"""
     concurrent_activations: int
-    def __repr__(self) -> str: return f"{type(self).__name__}(time={self.time!r}, concurrent_activations={self.concurrent_activations!r})"
+    def __repr__(self) -> str: return f"{type(self).__name__}( time={self.time!r}, concurrent_activations={self.concurrent_activations!r} )"
