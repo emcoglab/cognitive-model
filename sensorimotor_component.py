@@ -207,12 +207,20 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         )
 
     def accessible_set(self) -> Set[ItemIdx]:
-        """The items in the accessible set."""
-        return set(
-            n
-            for n in self.graph.nodes
-            if self.activation_of_item_with_idx(n) > 0
-        )
+        """
+        The items in the accessible set.
+        May take a long time to produce, so for quick internal checks use self._is_in_accessible_set(item)
+        """
+        return set(n
+                   for n in self.graph.nodes
+                   if self._is_in_accessible_set(n))
+
+    def _is_in_accessible_set(self, item: ItemIdx) -> bool:
+        """
+        Use this rather than in self.accessible_set() for quick internal checks, to avoid having to run through the set
+        generator.
+        """
+        return self.activation_of_item_with_idx(item) > 0
 
     def _presynaptic_modulation(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
         # Attenuate the incoming activations to a concept based on a statistic of the concept
@@ -225,7 +233,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
 
     def _presynaptic_guard(self, idx: ItemIdx, activation: ActivationValue) -> bool:
         # Node can only fire if not in the working_memory_buffer (i.e. activation below pruning threshold)
-        return idx not in self.accessible_set()
+        return not self._is_in_accessible_set(idx)
 
     def _attenuate_by_prevalence(self, item: ItemIdx, activation: ActivationValue) -> ActivationValue:
         """Attenuates the activation by the prevalence of the item."""
