@@ -18,6 +18,7 @@ from typing import Sequence, Tuple
 
 from numpy import percentile, float_power, pi, sqrt
 from scipy.special import ndtri
+from scipy.stats import t as student_t
 
 from model.utils.maths_core import gaussian_decay, exponential_decay, lognormal_sf
 
@@ -172,3 +173,16 @@ def prevalence_from_fraction_known(fraction_known: float) -> float:
     This value is guaranteed to be in the range [-2.575829303548901, 2.5758293035489004]
     """
     return ndtri(0.005 + fraction_known * 0.99)
+
+
+def t_confidence_interval(sd: float, n: float, alpha: float) -> float:
+    """
+    Confidence interval for t distribution.
+    Roughly equivalent to Excell's confidence.t()
+    :param sd:
+    :param n:
+    :param alpha:
+    :return:
+    """
+    sem = sd/sqrt(n)
+    return sem * student_t.ppf((1 + alpha) / 2, df=n - 1)
