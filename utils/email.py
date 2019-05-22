@@ -22,6 +22,12 @@ from typing import Dict
 logger = logging.getLogger(__name__)
 
 
+def _log_exception(ex: Exception):
+    """Log an exception. Use this when an exception is to be suppressed."""
+    logger.warning(f"The following exception was raised and suppressed:")
+    logger.warning(str(ex))
+
+
 class Emailer(object):
 
     MAX_SUBJECT_LENGTH = 80
@@ -31,9 +37,8 @@ class Emailer(object):
             with open(connection_details_path, mode="r", encoding="utf-8") as connection_details_file:
                 self.__connection_details: Dict = json.load(connection_details_file)
         except Exception as ex:
-            self.__connection_details: Dict = None
-            logger.warning(f"The following exception was thrown and suppressed:")
-            logger.warning(str(ex))
+            self.__connection_details = None
+            _log_exception(ex)
 
     def send_email(self, message: str, recipient_address: str, max_subject_length: int = MAX_SUBJECT_LENGTH):
         """
@@ -62,5 +67,4 @@ class Emailer(object):
                             f"Subject: {subject}\r\n\r\n"
                             f"{message}")
         except Exception as ex:
-            logger.warning(f"The following exception was thrown and suppressed:")
-            logger.warning(str(ex))
+            _log_exception(ex)
