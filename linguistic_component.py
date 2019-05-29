@@ -120,6 +120,20 @@ class LinguisticComponent(TemporalSpreadingActivation):
         # so applying the cap does not effect whether the node will fire or not.
         return activation if activation <= self.activation_cap else self.activation_cap
 
+    # Signature chaging is explicitly permitted for this function.
+    # noinspection PyMethodOverriding
+    @classmethod
+    def save_model_spec(cls, response_dir, length_factor, edge_decay_sd_factor, firing_threshold, model_name, n_words):
+        spec = {
+            "Model name": model_name,
+            "Length factor": length_factor,
+            "SD factor": edge_decay_sd_factor,
+            "Firing threshold": firing_threshold,
+            "Words": n_words,
+        }
+        with open(path.join(response_dir, " model_spec.yaml"), mode="w", encoding="utf-8") as spec_file:
+            yaml.dump(spec, spec_file, yaml.SafeDumper)
+
 
 def _load_graph(n_words, length_factor, distributional_model, distance_type, edge_pruning_type, edge_pruning) -> Graph:
 
@@ -167,19 +181,6 @@ def _load_graph(n_words, length_factor, distributional_model, distance_type, edg
         raise NotImplementedError()
 
     return graph
-
-
-def save_model_spec_linguistic(edge_decay_sd_factor, firing_threshold, length_factor, model_name, n_words,
-                               response_dir):
-    spec = {
-        "Model name": model_name,
-        "Length factor": length_factor,
-        "SD factor": edge_decay_sd_factor,
-        "Firing threshold": firing_threshold,
-        "Words": n_words,
-    }
-    with open(path.join(response_dir, " model_spec.yaml"), mode="w", encoding="utf-8") as spec_file:
-        yaml.dump(spec, spec_file, yaml.SafeDumper)
 
 
 def load_labels_from_corpus(corpus: CorpusMetadata, n_words: int):

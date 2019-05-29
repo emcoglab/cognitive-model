@@ -15,7 +15,7 @@ caiwingfield.net
 ---------------------------
 """
 import json
-from abc import ABCMeta
+from abc import ABCMeta, abstractmethod
 from collections import namedtuple, defaultdict
 from os import path
 from typing import Dict, DefaultDict, Optional, List
@@ -344,10 +344,19 @@ class GraphPropagation(metaclass=ABCMeta):
             string_builder += f"\t{self.idx2label[node]}: {self.activation_of_item_with_idx(node)}\n"
         return string_builder
 
+    @classmethod
+    @abstractmethod
+    def save_model_spec(cls, response_dir):
+        """
+        Save the model spec to the `response_dir`.
+        Change the signature when you override this to accept the appropriate data.
+        """
+        raise NotImplementedError()
 
-def load_model_spec(response_dir) -> dict:
-    with open(path.join(response_dir, " model_spec.yaml"), mode="r", encoding="utf-8") as spec_file:
-        return yaml.load(spec_file, yaml.SafeLoader)
+    @classmethod
+    def load_model_spec(cls, response_dir) -> dict:
+        with open(path.join(response_dir, " model_spec.yaml"), mode="r", encoding="utf-8") as spec_file:
+            return yaml.load(spec_file, yaml.SafeLoader)
 
 
 def _load_labels(nodelabel_path: str) -> Dict[ItemIdx, ItemLabel]:
