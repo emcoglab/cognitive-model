@@ -222,7 +222,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
 
     def _presynaptic_modulation(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
         # Attenuate the incoming activations to a concept based on a statistic of the concept
-        return self._attenuate_by_fraction_known(idx, activation)
+        return self._attenuate_by_prevalence(idx, activation)
 
     def _postsynaptic_modulation(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
         # The activation cap, if used, MUST be greater than the firing threshold (this is checked in __init__,
