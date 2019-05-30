@@ -248,15 +248,17 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         # Fraction known will all be in the range [0, 1], so we can use it as a scaling factor directly
         return activation * self.sensorimotor_norms.fraction_known(self.idx2label[item])
 
-
-def save_model_spec_sensorimotor(length_factor, max_sphere_radius, sigma, response_dir):
-    spec = {
-        "Length factor": length_factor,
-        "Max sphere radius": max_sphere_radius,
-        "Log-normal sigma": sigma,
-    }
-    with open(path.join(response_dir, " model_spec.yaml"), mode="w", encoding="utf-8") as spec_file:
-        yaml.dump(spec, spec_file, yaml.SafeDumper)
+    # Signature chaging is explicitly permitted for this function.
+    # noinspection PyMethodOverriding
+    @classmethod
+    def save_model_spec(cls, response_dir, length_factor, sigma, max_sphere_radius):
+        spec = {
+            "Length factor": length_factor,
+            "Max sphere radius": max_sphere_radius,
+            "Log-normal sigma": sigma,
+        }
+        with open(path.join(response_dir, " model_spec.yaml"), mode="w", encoding="utf-8") as spec_file:
+            yaml.dump(spec, spec_file, yaml.SafeDumper)
 
 
 def load_labels_from_sensorimotor():

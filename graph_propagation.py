@@ -15,7 +15,7 @@ caiwingfield.net
 ---------------------------
 """
 import json
-from abc import ABCMeta
+from abc import ABCMeta, abstractmethod
 from collections import namedtuple, defaultdict
 from os import path
 from typing import Dict, DefaultDict, Optional, List
@@ -150,17 +150,6 @@ class GraphPropagation(metaclass=ABCMeta):
 
         return activation_events
 
-    def activate_item_with_label(self, label: ItemLabel, activation: ActivationValue) -> Optional[ItemActivatedEvent]:
-        """
-        Activate an item.
-        :param label:
-        :param activation:
-        :return:
-            ItemActivatedEvent if the item did activate.
-            None if not.
-        """
-        return self.activate_item_with_idx(self.label2idx[label], activation)
-
     def _apply_activations(self) -> List[ItemActivatedEvent]:
         """
         Applies scheduled all scheduled activations.
@@ -199,6 +188,21 @@ class GraphPropagation(metaclass=ABCMeta):
     def activation_of_item_with_label(self, label: ItemLabel) -> ActivationValue:
         """Returns the current activation of a node."""
         return self.activation_of_item_with_idx(self.label2idx[label])
+
+    def activate_items_with_idxs(self, idxs: List[ItemIdx], activation: ActivationValue) -> List[ItemActivatedEvent]:
+        """
+        Activate a list of items.
+        :param idxs:
+        :param activation:
+        :return:
+            List of any activation events which occurred.
+        """
+        events = []
+        for idx in idxs:
+            event = self.activate_item_with_idx(idx, activation)
+            if event:
+                events.append(event)
+        return events
 
     def activate_item_with_idx(self, idx: ItemIdx, activation: ActivationValue) -> Optional[ItemActivatedEvent]:
         """
@@ -279,6 +283,27 @@ class GraphPropagation(metaclass=ABCMeta):
 
         return event
 
+    def activate_item_with_label(self, label: ItemLabel, activation: ActivationValue) -> Optional[ItemActivatedEvent]:
+        """
+        Activate an item.
+        :param label:
+        :param activation:
+        :return:
+            ItemActivatedEvent if the item did activate.
+            None if not.
+        """
+        return self.activate_item_with_idx(self.label2idx[label], activation)
+
+    def activate_items_with_labels(self, labels: List[ItemLabel], activation: ActivationValue) -> List[ItemActivatedEvent]:
+        """
+        Activate a list of items.
+        :param labels:
+        :param activation:
+        :return:
+            List of any activation events which occurred.
+        """
+        return self.activate_items_with_idxs([self.label2idx[label] for label in labels], activation)
+
     def _presynaptic_modulation(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
         """
         Modulates the incoming activations to items.
@@ -344,10 +369,19 @@ class GraphPropagation(metaclass=ABCMeta):
             string_builder += f"\t{self.idx2label[node]}: {self.activation_of_item_with_idx(node)}\n"
         return string_builder
 
+    @classmethod
+    @abstractmethod
+    def save_model_spec(cls, response_dir):
+        """
+        Save the model spec to the `response_dir`.
+        Change the signature when you override this to accept the appropriate data.
+        """
+        raise NotImplementedError()
 
-def load_model_spec(response_dir) -> dict:
-    with open(path.join(response_dir, " model_spec.yaml"), mode="r", encoding="utf-8") as spec_file:
-        return yaml.load(spec_file, yaml.SafeLoader)
+    @classmethod
+    def load_model_spec(cls, response_dir) -> dict:
+        with open(path.join(response_dir, " model_spec.yaml"), mode="r", encoding="utf-8") as spec_file:
+            return yaml.load(spec_file, yaml.SafeLoader)
 
 
 def _load_labels(nodelabel_path: str) -> Dict[ItemIdx, ItemLabel]:
