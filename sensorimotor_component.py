@@ -251,11 +251,12 @@ class SensorimotorComponent(TemporalSpatialPropagation):
     # Signature chaging is explicitly permitted for this function.
     # noinspection PyMethodOverriding
     @classmethod
-    def save_model_spec(cls, response_dir, length_factor, sigma, max_sphere_radius):
+    def save_model_spec(cls, response_dir, length_factor, sigma, max_sphere_radius, buffer_entry_threshold):
         spec = {
             "Length factor": length_factor,
             "Max sphere radius": max_sphere_radius,
             "Log-normal sigma": sigma,
+            "Buffer entry threshold": buffer_entry_threshold,
         }
         with open(path.join(response_dir, " model_spec.yaml"), mode="w", encoding="utf-8") as spec_file:
             yaml.dump(spec, spec_file, yaml.SafeDumper)
