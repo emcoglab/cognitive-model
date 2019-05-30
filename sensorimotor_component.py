@@ -19,13 +19,11 @@ import logging
 from os import path
 from typing import Set, Optional, List
 
-import yaml
-
 from ldm.utils.maths import DistanceType
-from model.graph_propagation import _load_labels
 from model.basic_types import ActivationValue, ItemIdx, ItemLabel, Node
 from model.events import ModelEvent, ItemActivatedEvent, ItemEnteredBufferEvent
 from model.graph import Graph
+from model.graph_propagation import _load_labels
 from model.temporal_spatial_propagation import TemporalSpatialPropagation
 from model.utils.maths import make_decay_function_lognormal, prevalence_from_fraction_known, scale01
 from preferences import Preferences
@@ -247,19 +245,6 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         """Attenuates the activation by the fraction of people who know the item."""
         # Fraction known will all be in the range [0, 1], so we can use it as a scaling factor directly
         return activation * self.sensorimotor_norms.fraction_known(self.idx2label[item])
-
-    # Signature chaging is explicitly permitted for this function.
-    # noinspection PyMethodOverriding
-    @classmethod
-    def save_model_spec(cls, response_dir, length_factor, sigma, max_sphere_radius, buffer_entry_threshold):
-        spec = {
-            "Length factor": length_factor,
-            "Max sphere radius": max_sphere_radius,
-            "Log-normal sigma": sigma,
-            "Buffer entry threshold": buffer_entry_threshold,
-        }
-        with open(path.join(response_dir, " model_spec.yaml"), mode="w", encoding="utf-8") as spec_file:
-            yaml.dump(spec, spec_file, yaml.SafeDumper)
 
 
 def load_labels_from_sensorimotor():

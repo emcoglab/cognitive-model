@@ -15,7 +15,7 @@ caiwingfield.net
 ---------------------------
 """
 import json
-from abc import ABCMeta, abstractmethod
+from abc import ABCMeta
 from collections import namedtuple, defaultdict
 from os import path
 from typing import Dict, DefaultDict, Optional, List
@@ -370,13 +370,12 @@ class GraphPropagation(metaclass=ABCMeta):
         return string_builder
 
     @classmethod
-    @abstractmethod
-    def save_model_spec(cls, response_dir):
+    def save_model_spec(cls, spec, response_dir):
         """
         Save the model spec to the `response_dir`.
-        Change the signature when you override this to accept the appropriate data.
         """
-        raise NotImplementedError()
+        with open(path.join(response_dir, " model_spec.yaml"), mode="w", encoding="utf-8") as spec_file:
+            yaml.dump(spec, spec_file, yaml.SafeDumper)
 
     @classmethod
     def load_model_spec(cls, response_dir) -> dict:
