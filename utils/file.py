@@ -54,15 +54,3 @@ def add_column_to_csv(column, column_name: str, csv_path: str, index_col=None):
 def comment_line_from_str(message: str) -> str:
     """Converts a string into a commented line (with trailing newline)."""
     return f"# {message}\n"
-
-
-def pivot_table_to_csv(pt, csv_path):
-    """
-    Saves a simple DataFrame.pivot_table to a csv, including columns names.
-    Thanks to https://stackoverflow.com/a/55360229/2883198
-    :param pt:
-    :param csv_path:
-    :return:
-    """
-    csv_df: DataFrame = DataFrame(columns=pt.columns, index=[pt.index.name]).append(pt)
-    csv_df.to_csv(csv_path, index_label=pt.columns.name)

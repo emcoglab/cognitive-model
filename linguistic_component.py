@@ -15,12 +15,11 @@ caiwingfield.net
 ---------------------------
 """
 
+import logging
 from enum import Enum, auto
 from os import path
 from typing import Set
-import logging
 
-import yaml
 from numpy import Infinity
 from pandas import DataFrame
 
@@ -28,9 +27,9 @@ from ldm.corpus.corpus import CorpusMetadata
 from ldm.corpus.indexing import FreqDist
 from ldm.model.base import DistributionalSemanticModel
 from ldm.utils.maths import DistanceType
-from model.graph_propagation import _load_labels
 from model.basic_types import ActivationValue, ItemIdx, ItemLabel
 from model.graph import Graph
+from model.graph_propagation import _load_labels
 from model.temporal_spreading_activation import TemporalSpreadingActivation
 from model.utils.maths import make_decay_function_exponential_with_decay_factor, make_decay_function_gaussian_with_sd
 from preferences import Preferences
@@ -119,20 +118,6 @@ class LinguisticComponent(TemporalSpreadingActivation):
         # The activation cap, if used, MUST be greater than the firing threshold (this is checked in __init__,
         # so applying the cap does not effect whether the node will fire or not.
         return activation if activation <= self.activation_cap else self.activation_cap
-
-    # Signature chaging is explicitly permitted for this function.
-    # noinspection PyMethodOverriding
-    @classmethod
-    def save_model_spec(cls, response_dir, length_factor, edge_decay_sd_factor, firing_threshold, model_name, n_words):
-        spec = {
-            "Model name": model_name,
-            "Length factor": length_factor,
-            "SD factor": edge_decay_sd_factor,
-            "Firing threshold": firing_threshold,
-            "Words": n_words,
-        }
-        with open(path.join(response_dir, " model_spec.yaml"), mode="w", encoding="utf-8") as spec_file:
-            yaml.dump(spec, spec_file, yaml.SafeDumper)
 
 
 def _load_graph(n_words, length_factor, distributional_model, distance_type, edge_pruning_type, edge_pruning) -> Graph:
