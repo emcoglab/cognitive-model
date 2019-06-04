@@ -95,7 +95,7 @@ def make_decay_function_lognormal(sigma: float) -> callable:
     """
     Lognormal survival decay function.
     :param sigma:
-        The spread or shape
+        The spread or shape.w
     :return:
     """
 
