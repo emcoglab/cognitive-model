@@ -142,7 +142,7 @@ class GraphPropagation(metaclass=ABCMeta):
         """
         Performs the spreading activation algorithm for one tick of the clock.
         :return:
-            List of items which were activated.
+            List of events.
         """
         self.clock += 1
 
