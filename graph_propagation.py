@@ -162,10 +162,10 @@ class GraphPropagation(metaclass=ABCMeta):
         if self.clock in self._scheduled_activations:
 
             # This should be a item-keyed dict of activation ready to arrive
-            scheduled_activation: DefaultDict = self._scheduled_activations.pop(self.clock)
+            scheduled_activations: DefaultDict = self._scheduled_activations.pop(self.clock)
 
-            if len(scheduled_activation) > 0:
-                for destination_item, activation in scheduled_activation.items():
+            if len(scheduled_activations) > 0:
+                for destination_item, activation in scheduled_activations.items():
                     activation_event = self.activate_item_with_idx(destination_item, activation)
                     if activation_event:
                         activation_events.append(activation_event)

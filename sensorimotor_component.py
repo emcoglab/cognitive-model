@@ -227,7 +227,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
     def accessible_set(self) -> Set[ItemIdx]:
         """
         The items in the accessible set.
-        May take a long time to produce, so for quick internal checks use self._is_in_accessible_set(item)
+        May take a long time to produce: for quick internal checks use self._is_in_accessible_set(item)
         """
         return set(n
                    for n in self.graph.nodes
