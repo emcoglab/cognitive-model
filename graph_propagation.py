@@ -283,6 +283,16 @@ class GraphPropagation(metaclass=ABCMeta):
 
         return event
 
+    def activate_items_with_labels(self, labels: List[ItemLabel], activation: ActivationValue) -> List[ItemActivatedEvent]:
+        """
+        Activate a list of items.
+        :param labels:
+        :param activation:
+        :return:
+            List of any activation events which occurred.
+        """
+        return self.activate_items_with_idxs([self.label2idx[label] for label in labels], activation)
+
     def activate_item_with_label(self, label: ItemLabel, activation: ActivationValue) -> Optional[ItemActivatedEvent]:
         """
         Activate an item.
@@ -293,16 +303,6 @@ class GraphPropagation(metaclass=ABCMeta):
             None if not.
         """
         return self.activate_item_with_idx(self.label2idx[label], activation)
-
-    def activate_items_with_labels(self, labels: List[ItemLabel], activation: ActivationValue) -> List[ItemActivatedEvent]:
-        """
-        Activate a list of items.
-        :param labels:
-        :param activation:
-        :return:
-            List of any activation events which occurred.
-        """
-        return self.activate_items_with_idxs([self.label2idx[label] for label in labels], activation)
 
     def _presynaptic_modulation(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
         """

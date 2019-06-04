@@ -16,6 +16,7 @@ caiwingfield.net
 """
 
 import logging
+from enum import Enum, auto
 from os import path
 from typing import Set, Optional, List
 
@@ -34,6 +35,22 @@ logger_format = '%(asctime)s | %(levelname)s | %(module)s | %(message)s'
 logger_dateformat = "%Y-%m-%d %H:%M:%S"
 
 
+class NormAttenuationStatistic(Enum):
+    """The statistic to use for attenuating activation of norms labels."""
+    FractionKnown = auto()
+    Prevalence = auto()
+
+    @property
+    def name(self) -> str:
+        """The name of the NormAttenuationStatistic"""
+        if self is NormAttenuationStatistic.FractionKnown:
+            return "Fraction known"
+        if self is NormAttenuationStatistic.Prevalence:
+            return "Prevalence"
+        else:
+            raise NotImplementedError()
+
+
 class SensorimotorComponent(TemporalSpatialPropagation):
     """
     The sensorimotor component of the model.
@@ -49,6 +66,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
                  buffer_entry_threshold: ActivationValue,
                  buffer_pruning_threshold: ActivationValue,
                  activation_cap: ActivationValue,
+                 norm_attenuation_statistic: NormAttenuationStatistic,
                  use_prepruned: bool = False,
                  ):
         """
@@ -96,6 +114,8 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         self.buffer_pruning_threshold: ActivationValue = buffer_pruning_threshold
         # Cap on a node's total activation after receiving incoming.
         self.activation_cap: ActivationValue = activation_cap
+
+        self.norm_attenuation_statistic: NormAttenuationStatistic = norm_attenuation_statistic
 
         self.buffer_size_limit = buffer_size_limit
 
@@ -222,7 +242,12 @@ class SensorimotorComponent(TemporalSpatialPropagation):
 
     def _presynaptic_modulation(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
         # Attenuate the incoming activations to a concept based on a statistic of the concept
-        return self._attenuate_by_prevalence(idx, activation)
+        if self.norm_attenuation_statistic is NormAttenuationStatistic.FractionKnown:
+            return self._attenuate_by_fraction_known(idx, activation)
+        elif self.norm_attenuation_statistic is NormAttenuationStatistic.Prevalence:
+            return self._attenuate_by_prevalence(idx, activation)
+        else:
+            raise NotImplementedError()
 
     def _postsynaptic_modulation(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
         # The activation cap, if used, MUST be greater than the firing threshold (this is checked in __init__,
