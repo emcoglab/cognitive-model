@@ -107,6 +107,22 @@ class SensorimotorComponent(TemporalSpatialPropagation):
             node_decay_function=make_decay_function_lognormal(sigma=lognormal_sigma * length_factor),
         )
 
+        # region Validation
+
+        assert (max_sphere_radius > 0)
+        assert (lognormal_sigma > 0)
+        assert (buffer_size_limit > 0)
+        assert (activation_cap
+                > buffer_entry_threshold
+                > buffer_pruning_threshold
+                # If buffer_pruning_threshold == activation_threshold then the only things in the accessible set with be
+                # those items which were displaced from the buffer before being pruned. We probably won't use this but
+                # it's not invalid or degenerate.
+                >= activation_threshold
+                > 0)
+
+        # endregion
+
         # region Set once
         # These fields are set on first init and then don't need to change even if .reset() is used.
 
