@@ -70,6 +70,7 @@ class GraphPropagation(metaclass=ABCMeta):
             This lets us keep the graph data stored throughout as ints rather than strings, saving a bunch of memory.
         :param impulse_pruning_threshold
             Any impulse which decays to less than this threshold before reaching its destination will be deleted.
+            This is primarily an optimisation facility, to stop trickle impulses flooding the graph.
         :param node_decay_function:
             A function governing the decay of activations on nodes.
             Use the decay_function_*_with_params methods to create these.

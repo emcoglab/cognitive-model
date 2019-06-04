@@ -65,6 +65,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
                  buffer_size_limit: int,
                  buffer_entry_threshold: ActivationValue,
                  buffer_pruning_threshold: ActivationValue,
+                 activation_threshold: ActivationValue,
                  activation_cap: ActivationValue,
                  norm_attenuation_statistic: NormAttenuationStatistic,
                  use_prepruned: bool = False,
@@ -85,6 +86,8 @@ class SensorimotorComponent(TemporalSpatialPropagation):
             The minimum activation required for a concept to enter the working_memory_buffer.
         :param buffer_pruning_threshold:
             The activation threshold at which to remove items from the working_memory_buffer.
+        :param activation_threshold:
+            Used to determine what counts as "activated" and in the accessible set.
         :param activation_cap:
             If None is supplied, no cap is used.
         :param use_prepruned:
@@ -112,6 +115,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         # Use >= and < to test for above/below
         self.buffer_entry_threshold: ActivationValue = buffer_entry_threshold
         self.buffer_pruning_threshold: ActivationValue = buffer_pruning_threshold
+        self.activation_threshold: ActivationValue = activation_threshold
         # Cap on a node's total activation after receiving incoming.
         self.activation_cap: ActivationValue = activation_cap
 
@@ -238,7 +242,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         Use this rather than in self.accessible_set() for quick internal checks, to avoid having to run through the set
         generator.
         """
-        return self.activation_of_item_with_idx(item) > 0
+        return self.activation_of_item_with_idx(item) > self.activation_threshold
 
     def _presynaptic_modulation(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
         # Attenuate the incoming activations to a concept based on a statistic of the concept
