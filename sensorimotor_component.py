@@ -18,7 +18,7 @@ caiwingfield.net
 import logging
 from enum import Enum, auto
 from os import path
-from typing import Set, Optional, List
+from typing import Set, List
 
 from ldm.utils.maths import DistanceType
 from model.basic_types import ActivationValue, ItemIdx, ItemLabel, Node
@@ -26,6 +26,7 @@ from model.events import ModelEvent, ItemActivatedEvent, ItemEnteredBufferEvent
 from model.graph import Graph
 from model.graph_propagation import _load_labels
 from model.temporal_spatial_propagation import TemporalSpatialPropagation
+from model.utils.iterable import partition
 from model.utils.maths import make_decay_function_lognormal, prevalence_from_fraction_known, scale01
 from preferences import Preferences
 from sensorimotor_norms.sensorimotor_norms import SensorimotorNorms
@@ -154,9 +155,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         # A fixed size (self.buffer_size_limit).  Items may enter the buffer when they are activated and leave when they
         # decay sufficiently (self.buffer_pruning_threshold) or are displaced.
         #
-        # Currently this *could* be implemented as a simple property which lists the top-n most activated things, rather
-        # than being meticulously maintained during as the model runs.  However it is better to maintain it as we go as
-        # it will be easier to extend it into a multi-component buffer in the future.
+        # This is updated each .tick() based on items which fired (a prerequisite for entering the buffer)
         self.working_memory_buffer: Set[ItemIdx] = set()
 
         # endregion
@@ -165,86 +164,95 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         super(SensorimotorComponent, self).reset()
         self.working_memory_buffer = set()
 
+    # region tick()
+
     def tick(self) -> List[ModelEvent]:
-        # Clear cruft from the buffer
-        self._prune_decayed_items_in_buffer()
 
-        # Proceed with the tick
-        return super(SensorimotorComponent, self).tick()
+        # Proceed with .tick() and record what became activated
+        model_events = super(SensorimotorComponent, self).tick()
 
-    def activate_item_with_idx(self, idx: ItemIdx, activation: ActivationValue) -> Optional[ItemActivatedEvent]:
-        # Activate the item
-        activation_event = super(SensorimotorComponent, self).activate_item_with_idx(idx, activation)
+        activation_events, other_events = partition(model_events, lambda e: isinstance(e, ItemActivatedEvent))
 
-        # Present it as available to enter the buffer if it activated
-        if activation_event:
-            item_did_enter_buffer = self._present_to_working_memory_buffer(idx)
-            if item_did_enter_buffer:
-                # If it entered the buffer, upgrade the event
-                activation_event = ItemEnteredBufferEvent.from_activation_event(activation_event)
+        # There will be at most one event for each item which has an event
+        assert len(activation_events) == len(set(e.item for e in activation_events))
 
-        return activation_event
+        # Update buffer
 
-    def _present_to_working_memory_buffer(self, item: ItemIdx) -> bool:
-        """
-        Try to get an item into the buffer just as it's being activated.
-        :param item:
-            The candidate item
-        :return:
-            True if the item got into the buffer, else False.
-        """
-        activation: ActivationValue = self.activation_of_item_with_idx(item)
+        self.__prune_decayed_items_in_buffer()
+        # Some events will get updated commensurately
+        activation_events = self.__present_items_to_buffer(activation_events)
 
-        # Check if item can enter buffer
-        if activation < self.buffer_threshold:
-            return False
+        return activation_events + other_events
 
-        # The item is eligible for adding, but if only if there is room for it, else it may displace something
-        # already in the buffer.
-
-        # If there is room, it just goes in
-        if len(self.working_memory_buffer) < self.buffer_size_limit:
-            self.working_memory_buffer.add(item)
-            return True
-
-        # If there wasn't room, we may displace something
-
-        # Item with the lowest activation in the WM buffer
-        lowest_item, lowest_activation = min(
-            ((n, self.activation_of_item_with_idx(n)) for n in self.working_memory_buffer),
-            key=lambda tup: tup[1])
-
-        # If everything already in the buffer is larger than the candidate, it doesn't get let in
-        if activation < lowest_activation:
-            return False
-
-        # If it's larger than something, it does
-        self.working_memory_buffer.remove(lowest_item)
-        self.working_memory_buffer.add(item)
-        return True
-
-    def _prune_decayed_items_in_buffer(self):
+    def __prune_decayed_items_in_buffer(self):
         """Removes items from the buffer which have dropped below threshold."""
-        items_to_prune = []
-        for item in self.working_memory_buffer:
-            if self.activation_of_item_with_idx(item) < self.buffer_threshold:
-                items_to_prune.append(item)
+        self.working_memory_buffer = {
+            item
+            for item in self.working_memory_buffer
+            if self.activation_of_item_with_idx(item) >= self.buffer_threshold
+        }
 
-        for item in items_to_prune:
-            self.working_memory_buffer.remove(item)
+    def __present_items_to_buffer(self, activation_events: List[ItemActivatedEvent]) -> List[ItemActivatedEvent]:
+        """
+        Present a list of item activations to the buffer, and upgrades those which entered the buffer.
+        :param activation_events:
+            All activation events.
+        :return:
+            The same events, with some upgraded to buffer entry events.
+        :side effects:
+            Mutates self.working_memory_buffer.
+        """
+
+        # At this point self.working_memory_buffer is still the old buffer (after decayed items have been removed)
+        items_already_in_buffer = self.working_memory_buffer & set(e.item for e in activation_events)
+        # I have a feeling that we'll never present things to the buffer which are already in there, but just in case...
+        if len(items_already_in_buffer) > 0:
+            logger.warning("Tried to present items to the buffer which were already in there.")
+
+        # region New buffer items list of (item, activation)s
+
+        # The new buffer is everything in old buffer...
+        new_buffer_items = {
+            item: self.activation_of_item_with_idx(item)
+            for item in self.working_memory_buffer
+        }
+        # ...plus everything above threshold.
+        # We use a dictionary with .update() here to overwrite the activation of anything already in the buffer.
+        new_buffer_items.update({
+            e.item: e.activation
+            for e in activation_events
+            if e.activation >= self.buffer_threshold
+        })
+        # Convert to a list of key-value pairs, sorted by activation, descending
+        # Random order amongst equals
+        new_buffer_items = sorted(new_buffer_items.items(), key=lambda kv: kv[1], reverse=True)
+
+        # Trim down to size if necessary
+        if len(new_buffer_items) > self.buffer_size_limit:
+            new_buffer_items = new_buffer_items[:self.buffer_size_limit]
+
+        # endregion
+
+        # Update buffer
+        self.working_memory_buffer = set(item_activation_pair[0] for item_activation_pair in new_buffer_items)
+
+        # Upgrade events
+        upgraded_events = [
+            # Upgrade only those events which newly entered the buffer
+            (ItemEnteredBufferEvent.from_activation_event(e)
+             if e.item in self.working_memory_buffer - items_already_in_buffer
+             else e)
+            for e in activation_events
+        ]
+
+        return upgraded_events
+
+    # endregion
 
     @property
     def concept_labels(self) -> Set[ItemLabel]:
         """Labels of concepts"""
         return set(w for i, w in self.idx2label.items())
-
-    def items_in_buffer(self) -> Set[ItemIdx]:
-        """Items which are above the working_memory_buffer-pruning threshold."""
-        return set(
-            n
-            for n in self.graph.nodes
-            if self.activation_of_item_with_idx(n) >= self.buffer_threshold
-        )
 
     def accessible_set(self) -> Set[ItemIdx]:
         """
