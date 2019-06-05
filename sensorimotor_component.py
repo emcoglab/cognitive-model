@@ -109,16 +109,25 @@ class SensorimotorComponent(TemporalSpatialPropagation):
 
         # region Validation
 
+        # max_sphere_radius == 0 would be degenerate: no item can ever activate any other item.
         assert (max_sphere_radius > 0)
+        # lognormal_sigma == 0 will probably cause a division-by-zero error, and anyway causes everything to decay to 0
+        # activation in a single tick
         assert (lognormal_sigma > 0)
+        # zero-size buffer size limit is degenerate: the buffer is always empty
         assert (buffer_size_limit > 0)
         assert (activation_cap
-                > buffer_entry_threshold
-                > buffer_pruning_threshold
+                # If activation_cap == buffer_entry_threshold, items will only enter the buffer when fully activated.
+                >= buffer_entry_threshold
+                # If buffer_entry_threshold == buffer_pruning_threshold, items are in the buffer iff they are above this
+                # threshold, limited to the buffer_size_limit most-activated items.
+                >= buffer_pruning_threshold
                 # If buffer_pruning_threshold == activation_threshold then the only things in the accessible set with be
                 # those items which were displaced from the buffer before being pruned. We probably won't use this but
                 # it's not invalid or degenerate.
                 >= activation_threshold
+                # activation_threshold must be strictly positive, else no item can ever be reactivated (since membership
+                # to the accessible set is a guard to reactivation).
                 > 0)
 
         # endregion
@@ -275,7 +284,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         return activation if activation <= self.activation_cap else self.activation_cap
 
     def _presynaptic_guard(self, idx: ItemIdx, activation: ActivationValue) -> bool:
-        # Node can only fire if not in the working_memory_buffer (i.e. activation below pruning threshold)
+        # Node can only be activated if not in the working_memory_buffer (i.e. activation below pruning threshold)
         return not self._is_in_accessible_set(idx)
 
     def _attenuate_by_prevalence(self, item: ItemIdx, activation: ActivationValue) -> ActivationValue:
