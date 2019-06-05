@@ -63,8 +63,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
                  max_sphere_radius: int,
                  lognormal_sigma: float,
                  buffer_size_limit: int,
-                 buffer_entry_threshold: ActivationValue,
-                 buffer_pruning_threshold: ActivationValue,
+                 buffer_threshold: ActivationValue,
                  activation_threshold: ActivationValue,
                  activation_cap: ActivationValue,
                  norm_attenuation_statistic: NormAttenuationStatistic,
@@ -82,10 +81,8 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         :param buffer_size_limit:
             The maximum size of the buffer. After this, qualifying items will displace existing items rather than just
             being added.
-        :param buffer_entry_threshold:
+        :param buffer_threshold:
             The minimum activation required for a concept to enter the working_memory_buffer.
-        :param buffer_pruning_threshold:
-            The activation threshold at which to remove items from the working_memory_buffer.
         :param activation_threshold:
             Used to determine what counts as "activated" and in the accessible set.
         :param activation_cap:
@@ -117,11 +114,8 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         # zero-size buffer size limit is degenerate: the buffer is always empty
         assert (buffer_size_limit > 0)
         assert (activation_cap
-                # If activation_cap == buffer_entry_threshold, items will only enter the buffer when fully activated.
-                >= buffer_entry_threshold
-                # If buffer_entry_threshold == buffer_pruning_threshold, items are in the buffer iff they are above this
-                # threshold, limited to the buffer_size_limit most-activated items.
-                >= buffer_pruning_threshold
+                # If activation_cap == buffer_threshold, items will only enter the buffer when fully activated.
+                >= buffer_threshold
                 # If buffer_pruning_threshold == activation_threshold then the only things in the accessible set with be
                 # those items which were displaced from the buffer before being pruned. We probably won't use this but
                 # it's not invalid or degenerate.
@@ -138,8 +132,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         # Thresholds
 
         # Use >= and < to test for above/below
-        self.buffer_entry_threshold: ActivationValue = buffer_entry_threshold
-        self.buffer_pruning_threshold: ActivationValue = buffer_pruning_threshold
+        self.buffer_threshold: ActivationValue = buffer_threshold
         self.activation_threshold: ActivationValue = activation_threshold
         # Cap on a node's total activation after receiving incoming.
         self.activation_cap: ActivationValue = activation_cap
@@ -203,7 +196,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         activation: ActivationValue = self.activation_of_item_with_idx(item)
 
         # Check if item can enter buffer
-        if activation < self.buffer_entry_threshold:
+        if activation < self.buffer_threshold:
             return False
 
         # The item is eligible for adding, but if only if there is room for it, else it may displace something
@@ -234,7 +227,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         """Removes items from the buffer which have dropped below threshold."""
         items_to_prune = []
         for item in self.working_memory_buffer:
-            if self.activation_of_item_with_idx(item) < self.buffer_pruning_threshold:
+            if self.activation_of_item_with_idx(item) < self.buffer_threshold:
                 items_to_prune.append(item)
 
         for item in items_to_prune:
@@ -250,7 +243,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         return set(
             n
             for n in self.graph.nodes
-            if self.activation_of_item_with_idx(n) >= self.buffer_pruning_threshold
+            if self.activation_of_item_with_idx(n) >= self.buffer_threshold
         )
 
     def accessible_set(self) -> Set[ItemIdx]:
