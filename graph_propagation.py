@@ -139,24 +139,34 @@ class GraphPropagation(metaclass=ABCMeta):
         self._activation_records = defaultdict(blank_node_activation_record)
         self._scheduled_activations = defaultdict(lambda: defaultdict(ActivationValue))
 
+    # region tick()
+
     def tick(self) -> List[ModelEvent]:
         """
-        Performs the spreading activation algorithm for one tick of the clock.
+        Performs the spreading activation algorithm for one tick of the clock based on the current state.
+
+        Modifications to the model, such as activating items or scheduling activations, should be applied BEFORE calling
+        .tick().
+
+        .tick() will:
+
+            -   Apply all activations scheduled for the CURRENT time (before .tick())
+            -   Increment the clock.
+
+        EXAMPLE
+        -------
+
+        On __init__() the clock is 0.
+        Then some items are activated (i.e. activations scheduled for t=0).
+        .tick() is called.
+        The scheduled activations are applied and events returned.
+        The clock is now 1.
+
         :return:
             List of events.
         """
-        self.clock += 1
 
-        activation_events = self._apply_activations()
-
-        return activation_events
-
-    def _apply_activations(self) -> List[ItemActivatedEvent]:
-        """
-        Applies scheduled all scheduled activations.
-        :return:
-            Events for items which became activated.
-        """
+        # region Apply activations for the current time
 
         activation_events = []
 
@@ -167,47 +177,23 @@ class GraphPropagation(metaclass=ABCMeta):
 
             if len(scheduled_activations) > 0:
                 for destination_item, activation in scheduled_activations.items():
-                    activation_event = self.activate_item_with_idx(destination_item, activation)
+                    activation_event = self.__apply_activation_to_item_with_idx(destination_item, activation)
                     if activation_event:
                         activation_events.append(activation_event)
 
+        # endregion
+
+        # region Increment the clock
+
+        self.clock += 1
+
+        # endregion
+
         return activation_events
 
-    def activation_of_item_with_idx(self, idx: ItemIdx) -> ActivationValue:
-        """Returns the current activation of a node."""
-        assert idx in self.graph.nodes
-
-        activation_record: ActivationRecord = self._activation_records[idx]
-        return self.node_decay_function(
-            self.clock - activation_record.time_activated,  # node age
-            activation_record.activation)
-
-    def schedule_activation_of_item_with_idx(self, idx: ItemIdx, activation: ActivationValue, arrival_time: int):
-        """Schedule an item to receive activation at a future time."""
-        self._scheduled_activations[arrival_time][idx] += activation
-
-    def activation_of_item_with_label(self, label: ItemLabel) -> ActivationValue:
-        """Returns the current activation of a node."""
-        return self.activation_of_item_with_idx(self.label2idx[label])
-
-    def activate_items_with_idxs(self, idxs: List[ItemIdx], activation: ActivationValue) -> List[ItemActivatedEvent]:
+    def __apply_activation_to_item_with_idx(self, idx: ItemIdx, activation: ActivationValue) -> Optional[ItemActivatedEvent]:
         """
-        Activate a list of items.
-        :param idxs:
-        :param activation:
-        :return:
-            List of any activation events which occurred.
-        """
-        events = []
-        for idx in idxs:
-            event = self.activate_item_with_idx(idx, activation)
-            if event:
-                events.append(event)
-        return events
-
-    def activate_item_with_idx(self, idx: ItemIdx, activation: ActivationValue) -> Optional[ItemActivatedEvent]:
-        """
-        Activate an item.
+        Apply activation to an item.
         :param idx:
             Item to activate.
         :param activation:
@@ -284,26 +270,66 @@ class GraphPropagation(metaclass=ABCMeta):
 
         return event
 
-    def activate_items_with_labels(self, labels: List[ItemLabel], activation: ActivationValue) -> List[ItemActivatedEvent]:
+    # endregion
+
+    # region Get activations
+
+    def activation_of_item_with_idx(self, idx: ItemIdx) -> ActivationValue:
+        """
+        Returns the current activation of a node.
+        Call this AFTER .tick() to see effect of activations applied since .tick() was last called.
+        """
+        assert idx in self.graph.nodes
+
+        activation_record: ActivationRecord = self._activation_records[idx]
+        return self.node_decay_function(
+            self.clock - activation_record.time_activated,  # node age
+            activation_record.activation)
+
+    def activation_of_item_with_label(self, label: ItemLabel) -> ActivationValue:
+        """
+        Returns the current activation of a node.
+        Call this AFTER .tick() to see effect of activations applied since .tick() was last called.
+        """
+        return self.activation_of_item_with_idx(self.label2idx[label])
+
+    # endregion
+
+    # region Set activations
+
+    def activate_items_with_idxs(self, idxs: List[ItemIdx], activation: ActivationValue):
         """
         Activate a list of items.
-        :param labels:
-        :param activation:
-        :return:
-            List of any activation events which occurred.
+        Call this BEFORE .tick().
         """
-        return self.activate_items_with_idxs([self.label2idx[label] for label in labels], activation)
+        for idx in idxs:
+            self.activate_item_with_idx(idx, activation)
 
-    def activate_item_with_label(self, label: ItemLabel, activation: ActivationValue) -> Optional[ItemActivatedEvent]:
+    def activate_item_with_idx(self, idx: ItemIdx, activation: ActivationValue):
+        self.schedule_activation_of_item_with_idx(idx, activation, self.clock)
+
+    def activate_items_with_labels(self, labels: List[ItemLabel], activation: ActivationValue):
+        """
+        Activate a list of items.
+        Call this BEFORE .tick().
+        """
+        self.activate_items_with_idxs([self.label2idx[label] for label in labels], activation)
+
+    def activate_item_with_label(self, label: ItemLabel, activation: ActivationValue):
         """
         Activate an item.
-        :param label:
-        :param activation:
-        :return:
-            ItemActivatedEvent if the item did activate.
-            None if not.
+        Call this BEFORE .tick().
         """
-        return self.activate_item_with_idx(self.label2idx[label], activation)
+        self.activate_item_with_idx(self.label2idx[label], activation)
+
+    def schedule_activation_of_item_with_idx(self, idx: ItemIdx, activation: ActivationValue, arrival_time: int):
+        """
+        Schedule an item to receive activation at a future time.
+        Call this BEFORE .tick().
+        """
+        self._scheduled_activations[arrival_time][idx] += activation
+
+    # endregion
 
     def _presynaptic_modulation(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
         """
@@ -335,8 +361,8 @@ class GraphPropagation(metaclass=ABCMeta):
 
     def _presynaptic_guard(self, idx: ItemIdx, activation: ActivationValue) -> bool:
         """
-        Guards a node's accumulation (and firing) based on its activation before incoming activation has accumulated.
-        (E.g. making sufficiently-activated nodes into sinks until they decay.)
+        Guards a node's accumulation (and hence also its firing) based on its activation before incoming activation has
+        accumulated.  (E.g. making sufficiently-activated nodes into sinks until they decay.)
         :param idx:
             The item receiving the activation.
         :param activation:
