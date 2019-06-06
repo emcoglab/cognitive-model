@@ -166,10 +166,15 @@ class GraphPropagation(metaclass=ABCMeta):
             List of events.
         """
 
-        # region Apply activations for the current time
+        activation_events = self.__apply_activations()
 
+        self.clock += 1
+
+        return activation_events
+
+    def __apply_activations(self):
+        """Apply activations for the current time."""
         activation_events = []
-
         if self.clock in self._scheduled_activations:
 
             # This should be a item-keyed dict of activation ready to arrive
@@ -180,15 +185,6 @@ class GraphPropagation(metaclass=ABCMeta):
                     activation_event = self.__apply_activation_to_item_with_idx(destination_item, activation)
                     if activation_event:
                         activation_events.append(activation_event)
-
-        # endregion
-
-        # region Increment the clock
-
-        self.clock += 1
-
-        # endregion
-
         return activation_events
 
     def __apply_activation_to_item_with_idx(self, idx: ItemIdx, activation: ActivationValue) -> Optional[ItemActivatedEvent]:
@@ -225,11 +221,7 @@ class GraphPropagation(metaclass=ABCMeta):
         new_activation = self._postsynaptic_modulation(idx, new_activation)
 
         # The item activated, so an activation event occurs
-        event = ItemActivatedEvent(
-            time=self.clock,
-            item=idx,
-            activation=new_activation
-        )
+        event = ItemActivatedEvent(time=self.clock, item=idx, activation=new_activation)
 
         # Record the activation
         self._activation_records[idx] = ActivationRecord(new_activation, self.clock)
