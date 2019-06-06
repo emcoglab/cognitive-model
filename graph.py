@@ -493,6 +493,12 @@ class Graph:
 
     # endregion
 
+    def print(self):
+        print(f"{len(self.nodes)} nodes")
+        print(f"{len(self.edges)} edges")
+        for (n1, n2), l in self.edge_lengths.items():
+            print(f"{n1} → {n2}: {l}")
+
 
 def save_edgelist_from_distance_matrix(file_path: str,
                                        distance_matrix: ndarray,

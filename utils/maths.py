@@ -96,7 +96,7 @@ def make_decay_function_lognormal(sigma: float) -> callable:
     """
     Lognormal survival decay function.
     :param sigma:
-        The spread or shape
+        The spread or shape.w
     :return:
     """
 
@@ -115,9 +115,9 @@ def mean(*items):
 
 def scale01(original_range: Tuple[float, float], value: float) -> float:
     """
-    Scales a `value` which is known to exist in the range (`range_min`, `range_max`) to the range (0, 1).
+    Scales a `value` which is known to exist in the range [`range_min`, `range_max`] to the range [0, 1].
     Ranges can be in RTL order if their endpoints are descending. The `value` does not need to be within its
-    `original_range`; the affine transformation of the numberline maps the `original_range` to (0,1).
+    `original_range`; the affine transformation of the number-line maps the `original_range` to [0, 1].
     The `original_range` must have non-zero width.
     """
     range_start, range_end = original_range
@@ -126,10 +126,10 @@ def scale01(original_range: Tuple[float, float], value: float) -> float:
 
 def affine_scale(original_range: Tuple[float, float], new_range: Tuple[float, float], value: float) -> float:
     """
-    Scales a `value` which is known to exist in the range (`original_range[0]`, `original_range[1]`) to the range
-    (`new_range[0]`, `new_range[1]`).
+    Scales a `value` which is known to exist in the range [`original_range[0]`, `original_range[1]`] to the range
+    [`new_range[0]`, `new_range[1]`].
     Ranges can be in RTL order if their endpoints are descending. The `value` does not need to be within its
-    `original_range`; the affine transformation of the numberline maps the `original_range` to the `new_range`.
+    `original_range`; the affine transformation of the number-line maps the `original_range` to the `new_range`.
     The `original_range` must have non-zero width.
     """
     original_start, original_end = original_range

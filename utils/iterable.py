@@ -15,22 +15,16 @@ caiwingfield.net
 ---------------------------
 """
 
+from typing import Tuple, List, Iterable
 
-def partition(iterable, predicate):
+
+def partition(iterable: Iterable, predicate: callable) -> Tuple[List, List]:
     """
-    Separates the an iterable into two sub-iterables; those which satisfy predicate and those which don't.
+    Separates the an iterable into two sub-lists; those which satisfy predicate and those which don't.
     Thanks to https://stackoverflow.com/a/4578605/2883198 and https://stackoverflow.com/questions/949098/python-split-a-list-based-on-a-condition#comment24295861_12135169.
     """
     trues = []
     falses = []
     for item in iterable:
         trues.append(item) if predicate(item) else falses.append(item)
-    return trues, falses
-
-
-def set_partition(iterable, predicate):
-    trues = set()
-    falses = set()
-    for item in iterable:
-        trues.add(item) if predicate(item) else falses.add(item)
     return trues, falses
