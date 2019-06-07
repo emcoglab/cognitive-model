@@ -37,7 +37,7 @@ logger = logging.getLogger()
 class Edge(tuple):
     def __new__(cls, seq=()):
         assert len(seq) == 2
-        # By sorting on init, we guarantee that two edges are equal if their nodes are equal, regardless of order.
+        # By sorting on init, we guarantee that two edges are equal iff their nodes are equal, regardless of order.
         return tuple.__new__(tuple, sorted(seq))
 
 

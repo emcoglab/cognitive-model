@@ -327,11 +327,11 @@ def scale_prevalence_01(prevalence: float) -> float:
     return scale01((-2.575829303548901, 2.5758293035489004), prevalence)
 
 
-def load_labels_from_sensorimotor():
+def load_labels_from_sensorimotor() -> Dict[ItemIdx, ItemLabel]:
     return _load_labels(path.join(Preferences.graphs_dir, "sensorimotor words.nodelabels"))
 
 
-def _load_graph(distance_type, length_factor, max_sphere_radius, use_prepruned, node_labelling_dictionary):
+def _load_graph(distance_type, length_factor, max_sphere_radius, use_prepruned, node_labelling_dictionary) -> Graph:
     if use_prepruned:
         logger.warning("Using pre-pruned graph. THIS SHOULD BE USED FOR TESTING PURPOSES ONLY!")
 
