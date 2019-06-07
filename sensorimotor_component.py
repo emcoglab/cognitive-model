@@ -18,7 +18,7 @@ caiwingfield.net
 import logging
 from enum import Enum, auto
 from os import path
-from typing import Set, List
+from typing import Set, List, NamedTuple, Dict
 
 from ldm.utils.maths import DistanceType
 from model.basic_types import ActivationValue, ItemIdx, ItemLabel, Node
@@ -204,28 +204,45 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         """
 
         # At this point self.working_memory_buffer is still the old buffer (after decayed items have been removed)
-        items_already_in_buffer = self.working_memory_buffer & set(e.item for e in activation_events)
+        presented_items = set(e.item for e in activation_events)
+        items_already_in_buffer = self.working_memory_buffer & presented_items
         # I have a feeling that we'll never present things to the buffer which are already in there, but just in case...
         if len(items_already_in_buffer) > 0:
             logger.warning("Tried to present items to the buffer which were already in there.")
+        eligible_items = presented_items - items_already_in_buffer
 
         # region New buffer items list of (item, activation)s
 
+        # We will sort items in the buffer based on various bits of data. Temporarily make a sorting-data namedtuple.
+        ItemSortingData = NamedTuple('ItemSortingData', [('activation', ActivationValue), ('presented', bool)])
         # The new buffer is everything in old buffer...
-        new_buffer_items = {
-            item: self.activation_of_item_with_idx(item)
+        new_buffer_items: Dict[ItemIdx: ItemSortingData] = {
+            item: ItemSortingData(activation=self.activation_of_item_with_idx(item),
+                                  # These items already in the buffer were not presented
+                                  presented=False)
             for item in self.working_memory_buffer
         }
         # ...plus everything above threshold.
         # We use a dictionary with .update() here to overwrite the activation of anything already in the buffer.
         new_buffer_items.update({
-            e.item: e.activation
+            e.item: ItemSortingData(activation=e.activation,
+                                    # We've already worked out whether items are potentially entering the buffer
+                                    presented=e.item in eligible_items)
             for e in activation_events
             if e.activation >= self.buffer_threshold
         })
-        # Convert to a list of key-value pairs, sorted by activation, descending
-        # Random order amongst equals
-        new_buffer_items = sorted(new_buffer_items.items(), key=lambda kv: kv[1], reverse=True)
+        # Convert to a list of key-value pairs, sorted by activation, descending.
+        # We want the order to be by activation, but with ties broken by recency, i.e. items being presented to the
+        # buffer precede those already in the buffer.  Because Python's sorting is stable [0], meaning if we sort by
+        # recency first, and then by activation, we get what we want [1].
+        #     [0]: http://en.wikipedia.org/wiki/Sorting_algorithm#Stability
+        #     [1]: https://wiki.python.org/moin/HowTo/Sorting#Sort_Stability_and_Complex_Sorts
+        # So first we sort by recency (i.e. whether they were presented), descending
+        # (i.e. .presented==1 comes before .presented==0)
+        new_buffer_items = sorted(new_buffer_items.items(), key=lambda kv: kv[1].presented, reverse=True)
+        # Then we sort by activation, descending (larger activation first)
+        # Also new_buffer_items is now a list of kv pairs, not a dictionary, so we don't need to use .items()
+        new_buffer_items = sorted(new_buffer_items, key=lambda kv: kv[1].activation, reverse=True)
 
         # Trim down to size if necessary
         if len(new_buffer_items) > self.buffer_size_limit:
@@ -233,8 +250,8 @@ class SensorimotorComponent(TemporalSpatialPropagation):
 
         # endregion
 
-        # Update buffer
-        self.working_memory_buffer = set(item_activation_pair[0] for item_activation_pair in new_buffer_items)
+        # Update buffer: Get the keys (i.e. item idxs) from the sorted list
+        self.working_memory_buffer = set(kv[0] for kv in new_buffer_items)
 
         # Upgrade events
         upgraded_events = [
