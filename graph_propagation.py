@@ -153,6 +153,8 @@ class GraphPropagation(metaclass=ABCMeta):
             -   Apply all activations scheduled for the CURRENT time (before .tick())
             -   Increment the clock.
 
+        When modifying .tick() in an override, instead override _evolve_model().
+
         EXAMPLE
         -------
 
@@ -166,11 +168,21 @@ class GraphPropagation(metaclass=ABCMeta):
             List of events.
         """
 
-        activation_events = self.__apply_activations()
+        # Do the work
+        events = self._evolve_model()
 
+        # Advance the clock
         self.clock += 1
 
-        return activation_events
+        return events
+
+    def _evolve_model(self) -> List[ModelEvent]:
+        """
+        Do the work of tick() before the clock is advanced.
+        Override this intead of .tick()
+        """
+        events = self.__apply_activations()
+        return events
 
     def __apply_activations(self):
         """Apply activations for the current time."""

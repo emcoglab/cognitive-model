@@ -16,9 +16,10 @@ caiwingfield.net
 """
 
 import logging
+from dataclasses import dataclass
 from enum import Enum, auto
 from os import path
-from typing import Set, List, NamedTuple, Dict
+from typing import Set, List, Dict
 
 from ldm.utils.maths import DistanceType
 from model.basic_types import ActivationValue, ItemIdx, ItemLabel, Node
@@ -50,6 +51,15 @@ class NormAttenuationStatistic(Enum):
             return "Prevalence"
         else:
             raise NotImplementedError()
+
+
+@dataclass
+class _BufferSortingData:
+    """
+    For sorting items before entry to the buffer.
+    """
+    activation: ActivationValue
+    presented: bool
 
 
 class SensorimotorComponent(TemporalSpatialPropagation):
@@ -166,10 +176,10 @@ class SensorimotorComponent(TemporalSpatialPropagation):
 
     # region tick()
 
-    def tick(self) -> List[ModelEvent]:
+    def _evolve_model(self) -> List[ModelEvent]:
 
-        # Proceed with .tick() and record what became activated
-        model_events = super(SensorimotorComponent, self).tick()
+        # Proceed with ._evolve_model() and record what became activated
+        model_events = super(SensorimotorComponent, self)._evolve_model()
 
         activation_events, other_events = partition(model_events, lambda e: isinstance(e, ItemActivatedEvent))
 
@@ -203,6 +213,11 @@ class SensorimotorComponent(TemporalSpatialPropagation):
             Mutates self.working_memory_buffer.
         """
 
+        # Sometimes we can leave early. If nothing was activated, nothing will enter the buffer, and there are no events
+        # to upgrade.
+        if len(activation_events) == 0:
+            return []
+
         # At this point self.working_memory_buffer is still the old buffer (after decayed items have been removed)
         presented_items = set(e.item for e in activation_events)
         items_already_in_buffer = self.working_memory_buffer & presented_items
@@ -214,20 +229,19 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         # region New buffer items list of (item, activation)s
 
         # We will sort items in the buffer based on various bits of data. Temporarily make a sorting-data namedtuple.
-        ItemSortingData = NamedTuple('ItemSortingData', [('activation', ActivationValue), ('presented', bool)])
-        # The new buffer is everything in old buffer...
-        new_buffer_items: Dict[ItemIdx: ItemSortingData] = {
-            item: ItemSortingData(activation=self.activation_of_item_with_idx(item),
-                                  # These items already in the buffer were not presented
-                                  presented=False)
+        # The new buffer is everything in the current working_memory_buffer...
+        new_buffer_items: Dict[ItemIdx: _BufferSortingData] = {
+            item: _BufferSortingData(activation=self.activation_of_item_with_idx(item),
+                                     # These items already in the buffer were not presented
+                                     presented=False)
             for item in self.working_memory_buffer
         }
         # ...plus everything above threshold.
         # We use a dictionary with .update() here to overwrite the activation of anything already in the buffer.
         new_buffer_items.update({
-            e.item: ItemSortingData(activation=e.activation,
-                                    # We've already worked out whether items are potentially entering the buffer
-                                    presented=e.item in eligible_items)
+            e.item: _BufferSortingData(activation=e.activation,
+                                       # We've already worked out whether items are potentially entering the buffer
+                                       presented=e.item in eligible_items)
             for e in activation_events
             if e.activation >= self.buffer_threshold
         })
@@ -245,8 +259,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         new_buffer_items = sorted(new_buffer_items, key=lambda kv: kv[1].activation, reverse=True)
 
         # Trim down to size if necessary
-        if len(new_buffer_items) > self.buffer_size_limit:
-            new_buffer_items = new_buffer_items[:self.buffer_size_limit]
+        new_buffer_items = new_buffer_items[:self.buffer_size_limit]
 
         # endregion
 
