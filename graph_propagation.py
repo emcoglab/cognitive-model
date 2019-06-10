@@ -400,6 +400,8 @@ class GraphPropagation(metaclass=ABCMeta):
             string_builder += f"\t{self.idx2label[node]}: {self.activation_of_item_with_idx(node)}\n"
         return string_builder
 
+    # TODO: It's weird that the spec dict is built outside the class.
+    # TODO: There must be a more sensible way to do this.
     @classmethod
     def save_model_spec(cls, spec, response_dir):
         """
@@ -417,7 +419,6 @@ class GraphPropagation(metaclass=ABCMeta):
 def _load_labels(nodelabel_path: str) -> Dict[ItemIdx, ItemLabel]:
     with open(nodelabel_path, mode="r", encoding="utf-8") as nrd_file:
         node_relabelling_dictionary_json = json.load(nrd_file)
-    # TODO: this isn't a great way to do this
     node_labelling_dictionary = dict()
     for k, v in node_relabelling_dictionary_json.items():
         node_labelling_dictionary[ItemIdx(k)] = v
