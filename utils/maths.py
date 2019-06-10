@@ -16,7 +16,7 @@ caiwingfield.net
 """
 from typing import Sequence, Tuple
 
-from numpy import percentile, float_power, pi, sqrt
+from numpy import percentile, float_power, pi, sqrt, log
 from scipy.special import ndtri
 
 from model.utils.maths_core import gaussian_decay, exponential_decay, lognormal_sf
@@ -91,16 +91,23 @@ def make_decay_function_gaussian_with_sd(sd, height_coef=1, centre=0) -> callabl
     return decay_function
 
 
-def make_decay_function_lognormal(sigma: float) -> callable:
+def make_decay_function_lognormal(median: float, sigma: float) -> callable:
     """
     Lognormal survival decay function.
+    :param median:
+        Median of the decay.
     :param sigma:
         The spread or shape.w
     :return:
     """
 
+    # Where the lognormal_sf is paramterised by params mu and sigma, we can convert the median of the decay into the mu
+    # by taking the log. (See Mueller, S. T., & Krawitz, A. (2009). Reconsidering the two-second decay hypothesis in
+    # verbal working memory. Journal of Mathematical Psychology, 53(1), 14-25.)
+    mu = log(median)
+
     def decay_function(age, original_activation):
-        return original_activation * lognormal_sf(x=age, sigma=sigma)
+        return original_activation * lognormal_sf(x=age, mu=mu, sigma=sigma)
 
     return decay_function
 

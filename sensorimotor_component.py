@@ -72,6 +72,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
                  distance_type: DistanceType,
                  length_factor: int,
                  max_sphere_radius: int,
+                 lognormal_median: float,
                  lognormal_sigma: float,
                  buffer_size_limit: int,
                  buffer_threshold: ActivationValue,
@@ -87,6 +88,8 @@ class SensorimotorComponent(TemporalSpatialPropagation):
             How distances are scaled into connection lengths.
         :param max_sphere_radius:
             What is the maximum radius of a sphere
+        :param lognormal_median:
+            The median of the lognormal decay.
         :param lognormal_sigma:
             The sigma parameter for the lognormal decay.
         :param buffer_size_limit:
@@ -103,24 +106,13 @@ class SensorimotorComponent(TemporalSpatialPropagation):
             Only to be used for testing purposes.
         """
 
-        # Load graph
-        idx2label = load_labels_from_sensorimotor()
-        super(SensorimotorComponent, self).__init__(
-
-            underlying_graph=_load_graph(distance_type, length_factor, max_sphere_radius,
-                                         use_prepruned, idx2label),
-            idx2label=idx2label,
-            # Sigma for the log-normal decay gets multiplied by the length factor, so that if we change the length
-            # factor, sigma doesn't also  have to change for the behaviour of the model to be approximately equivalent.
-            node_decay_function=make_decay_function_lognormal(sigma=lognormal_sigma * length_factor),
-        )
-
         # region Validation
 
         # max_sphere_radius == 0 would be degenerate: no item can ever activate any other item.
         assert (max_sphere_radius > 0)
-        # lognormal_sigma == 0 will probably cause a division-by-zero error, and anyway causes everything to decay to 0
-        # activation in a single tick
+        # lognormal_sigma or lognormal_median == 0 will probably cause a division-by-zero error, and anyway causes
+        # everything to decay to 0 activation in a single tick
+        assert (lognormal_median > 0)
         assert (lognormal_sigma > 0)
         # zero-size buffer size limit is degenerate: the buffer is always empty
         assert (buffer_size_limit > 0)
@@ -136,6 +128,18 @@ class SensorimotorComponent(TemporalSpatialPropagation):
                 > 0)
 
         # endregion
+
+        # Load graph
+        idx2label = load_labels_from_sensorimotor()
+        super(SensorimotorComponent, self).__init__(
+
+            underlying_graph=_load_graph(distance_type, length_factor, max_sphere_radius,
+                                         use_prepruned, idx2label),
+            idx2label=idx2label,
+            # Sigma for the log-normal decay gets multiplied by the length factor, so that if we change the length
+            # factor, sigma doesn't also  have to change for the behaviour of the model to be approximately equivalent.
+            node_decay_function=make_decay_function_lognormal(median=length_factor * lognormal_median, sigma=lognormal_sigma),
+        )
 
         # region Set once
         # These fields are set on first init and then don't need to change even if .reset() is used.
