@@ -18,7 +18,7 @@ import json
 from abc import ABCMeta
 from collections import namedtuple, defaultdict
 from os import path
-from typing import Dict, DefaultDict, Optional, List
+from typing import Dict, DefaultDict, Optional, List, Callable
 
 import yaml
 
@@ -55,8 +55,8 @@ class GraphPropagation(metaclass=ABCMeta):
                  graph: Graph,
                  idx2label: Dict[ItemIdx, ItemLabel],
                  impulse_pruning_threshold: ActivationValue,
-                 node_decay_function: callable = None,
-                 edge_decay_function: callable = None,
+                 node_decay_function: Callable[[int, ActivationValue], ActivationValue] = None,
+                 edge_decay_function: Callable[[int, ActivationValue], ActivationValue] = None,
                  ):
         """
         Underlying shared code between model components which operate via spreading activation on a graph.
@@ -85,8 +85,8 @@ class GraphPropagation(metaclass=ABCMeta):
         # These fields are set on first init and then don't need to change even if .reset() is used.
 
         # Don't reset
-        self.idx2label = idx2label
-        self.label2idx = {v: k for k, v in idx2label.items()}
+        self.idx2label: Dict[ItemIdx, ItemLabel] = idx2label
+        self.label2idx: Dict[ItemLabel, ItemIdx] = {v: k for k, v in idx2label.items()}
 
         # Underlying graph: weighted, undirected
         self.graph: Graph = graph
@@ -99,8 +99,8 @@ class GraphPropagation(metaclass=ABCMeta):
         # activation.
         # Each should be of the form (age, initial_activation) ↦ current_activation
         # Use a constant function by default
-        self.node_decay_function: callable = node_decay_function if node_decay_function is not None else make_decay_function_constant()
-        self.edge_decay_function: callable = edge_decay_function if edge_decay_function is not None else make_decay_function_constant()
+        self.node_decay_function: Callable[[int, ActivationValue], ActivationValue] = node_decay_function if node_decay_function is not None else make_decay_function_constant()
+        self.edge_decay_function: Callable[[int, ActivationValue], ActivationValue] = edge_decay_function if edge_decay_function is not None else make_decay_function_constant()
 
         # endregion
 

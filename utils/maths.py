@@ -14,19 +14,20 @@ caiwingfield.net
 2018
 ---------------------------
 """
-from typing import Sequence, Tuple
+from typing import Sequence, Tuple, Callable
 
 from numpy import percentile, float_power, pi, sqrt, log
 from scipy.special import ndtri
 
 from model.utils.maths_core import gaussian_decay, exponential_decay, lognormal_sf
+from model.basic_types import ActivationValue
 
 TAU: float = 2 * pi
 
 
 # region Decay functions
 
-def make_decay_function_constant() -> callable:
+def make_decay_function_constant() -> Callable[[int, ActivationValue], ActivationValue]:
     """
     Constant decay function (i.e. does not decay).
     :return:
@@ -37,7 +38,7 @@ def make_decay_function_constant() -> callable:
     return decay_function
 
 
-def make_decay_function_exponential_with_decay_factor(decay_factor) -> callable:
+def make_decay_function_exponential_with_decay_factor(decay_factor) -> Callable[[int, ActivationValue], ActivationValue]:
     # Decay formula for activation a, original activation a_0, decay factor d, time t:
     #   a = a_0 d^t
     #
@@ -56,7 +57,7 @@ def make_decay_function_exponential_with_decay_factor(decay_factor) -> callable:
     return decay_function
 
 
-def make_decay_function_exponential_with_half_life(half_life) -> callable:
+def make_decay_function_exponential_with_half_life(half_life) -> Callable[[int, ActivationValue], ActivationValue]:
     assert half_life > 0
     # Using notation from above, with half-life hl
     #   λ = ln 2 / ln hl
@@ -65,7 +66,7 @@ def make_decay_function_exponential_with_half_life(half_life) -> callable:
     return make_decay_function_exponential_with_decay_factor(decay_factor)
 
 
-def make_decay_function_gaussian_with_sd(sd, height_coef=1, centre=0) -> callable:
+def make_decay_function_gaussian_with_sd(sd, height_coef=1, centre=0) -> Callable[[int, ActivationValue], ActivationValue]:
     """
     Gaussian decay function with sd specifying the number of ticks.
     :param sd:
@@ -91,7 +92,7 @@ def make_decay_function_gaussian_with_sd(sd, height_coef=1, centre=0) -> callabl
     return decay_function
 
 
-def make_decay_function_lognormal(median: float, sigma: float) -> callable:
+def make_decay_function_lognormal(median: float, sigma: float) -> Callable[[int, ActivationValue], ActivationValue]:
     """
     Lognormal survival decay function.
     :param median:
