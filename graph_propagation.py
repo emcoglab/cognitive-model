@@ -286,9 +286,13 @@ class GraphPropagation(metaclass=ABCMeta):
         assert idx in self.graph.nodes
 
         activation_record: ActivationRecord = self._activation_records[idx]
-        return self.node_decay_function(
-            self.clock - activation_record.time_activated,  # node age
-            activation_record.activation)
+        # If the last known activation is zero, we don't need to compute decay
+        if activation_record.activation == 0:
+            return ActivationValue(0)
+        else:
+            return self.node_decay_function(
+                self.clock - activation_record.time_activated,  # node age
+                activation_record.activation)
 
     def activation_of_item_with_label(self, label: ItemLabel) -> ActivationValue:
         """
