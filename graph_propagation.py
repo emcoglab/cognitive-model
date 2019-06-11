@@ -291,7 +291,8 @@ class GraphPropagation(metaclass=ABCMeta):
             return ActivationValue(0)
         else:
             return self.node_decay_function(
-                self.clock - activation_record.time_activated,  # node age
+                # node age
+                self.clock - activation_record.time_activated,
                 activation_record.activation)
 
     def activation_of_item_with_label(self, label: ItemLabel) -> ActivationValue:

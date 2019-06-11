@@ -110,11 +110,11 @@ class SensorimotorComponent(TemporalSpatialPropagation):
 
         # max_sphere_radius == 0 would be degenerate: no item can ever activate any other item.
         assert (max_sphere_radius > 0)
-        # lognormal_sigma or lognormal_median == 0 will probably cause a division-by-zero error, and anyway causes
-        # everything to decay to 0 activation in a single tick
+        # lognormal_sigma or lognormal_median == 0 will probably cause a division-by-zero error, and anyway is
+        # degenerate: it causes everything to decay to 0 activation in a single tick.
         assert (lognormal_median > 0)
         assert (lognormal_sigma > 0)
-        # zero-size buffer size limit is degenerate: the buffer is always empty
+        # zero-size buffer size limit is degenerate: the buffer is always empty.
         assert (buffer_size_limit > 0)
         assert (activation_cap
                 # If activation_cap == buffer_threshold, items will only enter the buffer when fully activated.
@@ -302,9 +302,11 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         The items in the accessible set.
         May take a long time to produce: for quick internal checks use self._is_in_accessible_set(item)
         """
-        return set(n
-                   for n in self.graph.nodes
-                   if self._is_in_accessible_set(n))
+        return {
+            n
+            for n in self.graph.nodes
+            if self._is_in_accessible_set(n)
+        }
 
     def _is_in_accessible_set(self, item: ItemIdx) -> bool:
         """
