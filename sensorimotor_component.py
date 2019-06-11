@@ -23,7 +23,7 @@ from typing import Set, List, Dict
 
 from ldm.utils.maths import DistanceType
 from model.basic_types import ActivationValue, ItemIdx, ItemLabel, Node
-from model.events import ModelEvent, ItemActivatedEvent, ItemEnteredBufferEvent
+from model.events import ModelEvent, ItemActivatedEvent, ItemEnteredBufferEvent, BufferFloodEvent
 from model.graph import Graph
 from model.graph_propagation import _load_labels
 from model.temporal_spatial_propagation import TemporalSpatialPropagation
@@ -206,13 +206,14 @@ class SensorimotorComponent(TemporalSpatialPropagation):
             if self.activation_of_item_with_idx(item) >= self.buffer_threshold
         }
 
-    def __present_items_to_buffer(self, activation_events: List[ItemActivatedEvent]) -> List[ItemActivatedEvent]:
+    def __present_items_to_buffer(self, activation_events: List[ItemActivatedEvent]) -> List[ModelEvent]:
         """
         Present a list of item activations to the buffer, and upgrades those which entered the buffer.
         :param activation_events:
             All activation events.
         :return:
             The same events, with some upgraded to buffer entry events.
+            May also return a BufferFlood event if that is detected.
         :side effects:
             Mutates self.working_memory_buffer.
         """
@@ -267,8 +268,13 @@ class SensorimotorComponent(TemporalSpatialPropagation):
 
         # endregion
 
+        new_buffer = set(kv[0] for kv in new_buffer_items)
+
+        # Detect if whole buffer will be replaced
+        whole_buffer_replaced = len(new_buffer - self.working_memory_buffer) == self.buffer_size_limit
+
         # Update buffer: Get the keys (i.e. item idxs) from the sorted list
-        self.working_memory_buffer = set(kv[0] for kv in new_buffer_items)
+        self.working_memory_buffer = new_buffer
 
         # Upgrade events
         upgraded_events = [
@@ -278,6 +284,9 @@ class SensorimotorComponent(TemporalSpatialPropagation):
              else e)
             for e in activation_events
         ]
+
+        if whole_buffer_replaced:
+            upgraded_events.append(BufferFloodEvent(time=self.clock))
 
         return upgraded_events
 

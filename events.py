@@ -39,7 +39,7 @@ class ItemEvent(ModelEvent, metaclass=ABCMeta):
 
 
 @dataclass
-class BufferEvent(ItemEvent, metaclass=ABCMeta):
+class BufferEvent(ModelEvent, metaclass=ABCMeta):
     """Events involving the working memory buffer."""
     pass
 
@@ -65,6 +65,12 @@ class ItemFiredEvent(ItemActivatedEvent):
 # Therefore ItemEnteredBufferEvent is a ItemFiredEvent.
 class ItemEnteredBufferEvent(BufferEvent, ItemFiredEvent):
     """An item was activated and entered the working memory buffer."""
+    pass
+
+
+@dataclass
+class BufferFloodEvent(BufferEvent):
+    """The buffer becomes full after having each member replaced."""
     pass
 
 
