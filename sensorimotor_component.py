@@ -138,9 +138,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
             underlying_graph=_load_graph(distance_type, length_factor, max_sphere_radius,
                                          use_prepruned, idx2label),
             idx2label=idx2label,
-            # Sigma for the log-normal decay gets multiplied by the length factor, so that if we change the length
-            # factor, sigma doesn't also  have to change for the behaviour of the model to be approximately equivalent.
-            node_decay_function=make_decay_function_lognormal(median=length_factor * lognormal_median, sigma=lognormal_sigma),
+            node_decay_function=make_decay_function_lognormal(median=lognormal_median, sigma=lognormal_sigma),
         )
 
         # region Set once
