@@ -1,6 +1,8 @@
 """
 ===========================
 Cythonised versions of math functions.
+Compile using:
+    python setup.py build_ext --inplace
 ===========================
 
 Dr. Cai Wingfield
@@ -69,41 +71,46 @@ def gaussian_pdf(x: cython.float, mu: cython.float, sd: cython.float) -> cython.
 
     return e_term / sd
 
-def lognormal_sf(x: cython.float, sigma: cython.float) -> cython.float:
+def lognormal_sf(x: cython.float, mu: cython.float = 0, sigma: cython.float = 1) -> cython.float:
     """
     Cythonised approximation of the lognormal sf.
     Assumes mu is 0.
     :param x:
+    :param mu:
+        Mean of the log of the random variable.
     :param sigma:
+        SD of the log of the random variable.
     :return:
     """
-    return 1 - lognormal_cdf(x, sigma)
+    return 1 - lognormal_cdf(x, mu, sigma)
 
 
-def lognormal_cdf(x: cython.float, sigma: cython.float) -> cython.float:
+def lognormal_cdf(x: cython.float, mu: cython.float = 0, sigma: cython.float = 1) -> cython.float:
     """
     Cythonised approximation of the lognormal cdf.
-    Assumes mu is 0.
     :param x:
+    :param mu:
+        Mean of the log of the random variable.
     :param sigma:
+        SD of the log of the random variable.
     :return:
     """
-    numerator:   cython.float = log(x)
+    numerator:   cython.float = log(x) - mu
     denomenator: cython.float = sqrt(2) * sigma
     fraction:    cython.float = numerator / denomenator
     return 0.5 + 0.5 * erf(fraction)
 
 
-def lognormal_pdf(x: cython.float, sigma: cython.float) -> cython.float:
+def lognormal_pdf(x: cython.float, mu: cython.float = 0, sigma: cython.float = 1) -> cython.float:
     """
     Cythonised approximation of the lognormal pdf.
-    Assumes mu is 0.
     :param x:
+    :param mu:
     :param sigma:
     :return:
     """
     coefficient: cython.float = 1 / (sigma * x * sqrt(TAU))
-    log_term:    cython.float = log(x)
+    log_term:    cython.float = log(x) - mu
     numerator:   cython.float = log_term * log_term
     denomenator: cython.float = 2 * sigma * sigma
     exponent:    cython.float = (-1) * numerator / denomenator

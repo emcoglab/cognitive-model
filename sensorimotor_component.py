@@ -16,9 +16,10 @@ caiwingfield.net
 """
 
 import logging
+from dataclasses import dataclass
 from enum import Enum, auto
 from os import path
-from typing import Set, List
+from typing import Set, List, Dict
 
 from ldm.utils.maths import DistanceType
 from model.basic_types import ActivationValue, ItemIdx, ItemLabel, Node
@@ -52,6 +53,15 @@ class NormAttenuationStatistic(Enum):
             raise NotImplementedError()
 
 
+@dataclass
+class _BufferSortingData:
+    """
+    For sorting items before entry to the buffer.
+    """
+    activation: ActivationValue
+    presented: bool
+
+
 class SensorimotorComponent(TemporalSpatialPropagation):
     """
     The sensorimotor component of the model.
@@ -62,6 +72,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
                  distance_type: DistanceType,
                  length_factor: int,
                  max_sphere_radius: int,
+                 lognormal_median: float,
                  lognormal_sigma: float,
                  buffer_size_limit: int,
                  buffer_threshold: ActivationValue,
@@ -77,6 +88,8 @@ class SensorimotorComponent(TemporalSpatialPropagation):
             How distances are scaled into connection lengths.
         :param max_sphere_radius:
             What is the maximum radius of a sphere
+        :param lognormal_median:
+            The median of the lognormal decay.
         :param lognormal_sigma:
             The sigma parameter for the lognormal decay.
         :param buffer_size_limit:
@@ -93,24 +106,13 @@ class SensorimotorComponent(TemporalSpatialPropagation):
             Only to be used for testing purposes.
         """
 
-        # Load graph
-        idx2label = load_labels_from_sensorimotor()
-        super(SensorimotorComponent, self).__init__(
-
-            underlying_graph=_load_graph(distance_type, length_factor, max_sphere_radius,
-                                         use_prepruned, idx2label),
-            idx2label=idx2label,
-            # Sigma for the log-normal decay gets multiplied by the length factor, so that if we change the length
-            # factor, sigma doesn't also  have to change for the behaviour of the model to be approximately equivalent.
-            node_decay_function=make_decay_function_lognormal(sigma=lognormal_sigma * length_factor),
-        )
-
         # region Validation
 
         # max_sphere_radius == 0 would be degenerate: no item can ever activate any other item.
         assert (max_sphere_radius > 0)
-        # lognormal_sigma == 0 will probably cause a division-by-zero error, and anyway causes everything to decay to 0
-        # activation in a single tick
+        # lognormal_sigma or lognormal_median == 0 will probably cause a division-by-zero error, and anyway causes
+        # everything to decay to 0 activation in a single tick
+        assert (lognormal_median > 0)
         assert (lognormal_sigma > 0)
         # zero-size buffer size limit is degenerate: the buffer is always empty
         assert (buffer_size_limit > 0)
@@ -126,6 +128,18 @@ class SensorimotorComponent(TemporalSpatialPropagation):
                 > 0)
 
         # endregion
+
+        # Load graph
+        idx2label = load_labels_from_sensorimotor()
+        super(SensorimotorComponent, self).__init__(
+
+            underlying_graph=_load_graph(distance_type, length_factor, max_sphere_radius,
+                                         use_prepruned, idx2label),
+            idx2label=idx2label,
+            # Sigma for the log-normal decay gets multiplied by the length factor, so that if we change the length
+            # factor, sigma doesn't also  have to change for the behaviour of the model to be approximately equivalent.
+            node_decay_function=make_decay_function_lognormal(median=length_factor * lognormal_median, sigma=lognormal_sigma),
+        )
 
         # region Set once
         # These fields are set on first init and then don't need to change even if .reset() is used.
@@ -166,10 +180,10 @@ class SensorimotorComponent(TemporalSpatialPropagation):
 
     # region tick()
 
-    def tick(self) -> List[ModelEvent]:
+    def _evolve_model(self) -> List[ModelEvent]:
 
-        # Proceed with .tick() and record what became activated
-        model_events = super(SensorimotorComponent, self).tick()
+        # Proceed with ._evolve_model() and record what became activated
+        model_events = super(SensorimotorComponent, self)._evolve_model()
 
         activation_events, other_events = partition(model_events, lambda e: isinstance(e, ItemActivatedEvent))
 
@@ -203,38 +217,58 @@ class SensorimotorComponent(TemporalSpatialPropagation):
             Mutates self.working_memory_buffer.
         """
 
+        # Sometimes we can leave early. If nothing was activated, nothing will enter the buffer, and there are no events
+        # to upgrade.
+        if len(activation_events) == 0:
+            return []
+
         # At this point self.working_memory_buffer is still the old buffer (after decayed items have been removed)
-        items_already_in_buffer = self.working_memory_buffer & set(e.item for e in activation_events)
+        presented_items = set(e.item for e in activation_events)
+        items_already_in_buffer = self.working_memory_buffer & presented_items
         # I have a feeling that we'll never present things to the buffer which are already in there, but just in case...
         if len(items_already_in_buffer) > 0:
             logger.warning("Tried to present items to the buffer which were already in there.")
+        eligible_items = presented_items - items_already_in_buffer
 
         # region New buffer items list of (item, activation)s
 
-        # The new buffer is everything in old buffer...
-        new_buffer_items = {
-            item: self.activation_of_item_with_idx(item)
+        # We will sort items in the buffer based on various bits of data. Temporarily make a sorting-data namedtuple.
+        # The new buffer is everything in the current working_memory_buffer...
+        new_buffer_items: Dict[ItemIdx: _BufferSortingData] = {
+            item: _BufferSortingData(activation=self.activation_of_item_with_idx(item),
+                                     # These items already in the buffer were not presented
+                                     presented=False)
             for item in self.working_memory_buffer
         }
         # ...plus everything above threshold.
         # We use a dictionary with .update() here to overwrite the activation of anything already in the buffer.
         new_buffer_items.update({
-            e.item: e.activation
+            e.item: _BufferSortingData(activation=e.activation,
+                                       # We've already worked out whether items are potentially entering the buffer
+                                       presented=e.item in eligible_items)
             for e in activation_events
             if e.activation >= self.buffer_threshold
         })
-        # Convert to a list of key-value pairs, sorted by activation, descending
-        # Random order amongst equals
-        new_buffer_items = sorted(new_buffer_items.items(), key=lambda kv: kv[1], reverse=True)
+        # Convert to a list of key-value pairs, sorted by activation, descending.
+        # We want the order to be by activation, but with ties broken by recency, i.e. items being presented to the
+        # buffer precede those already in the buffer.  Because Python's sorting is stable [0], meaning if we sort by
+        # recency first, and then by activation, we get what we want [1].
+        #     [0]: http://en.wikipedia.org/wiki/Sorting_algorithm#Stability
+        #     [1]: https://wiki.python.org/moin/HowTo/Sorting#Sort_Stability_and_Complex_Sorts
+        # So first we sort by recency (i.e. whether they were presented), descending
+        # (i.e. .presented==1 comes before .presented==0)
+        new_buffer_items = sorted(new_buffer_items.items(), key=lambda kv: kv[1].presented, reverse=True)
+        # Then we sort by activation, descending (larger activation first)
+        # Also new_buffer_items is now a list of kv pairs, not a dictionary, so we don't need to use .items()
+        new_buffer_items = sorted(new_buffer_items, key=lambda kv: kv[1].activation, reverse=True)
 
         # Trim down to size if necessary
-        if len(new_buffer_items) > self.buffer_size_limit:
-            new_buffer_items = new_buffer_items[:self.buffer_size_limit]
+        new_buffer_items = new_buffer_items[:self.buffer_size_limit]
 
         # endregion
 
-        # Update buffer
-        self.working_memory_buffer = set(item_activation_pair[0] for item_activation_pair in new_buffer_items)
+        # Update buffer: Get the keys (i.e. item idxs) from the sorted list
+        self.working_memory_buffer = set(kv[0] for kv in new_buffer_items)
 
         # Upgrade events
         upgraded_events = [
@@ -293,7 +327,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         prevalence = prevalence_from_fraction_known(self.sensorimotor_norms.fraction_known(self.idx2label[item]))
         # Brysbaert et al.'s (2019) prevalence has a defined range, so we can affine-scale it into [0, 1] for the
         # purposes of attenuating the activation
-        scaled_prevalence = scale01((-2.575829303548901, 2.5758293035489004), prevalence)
+        scaled_prevalence = scale_prevalence_01(prevalence)
         return activation * scaled_prevalence
 
     def _attenuate_by_fraction_known(self, item: ItemIdx, activation: ActivationValue) -> ActivationValue:
@@ -302,11 +336,19 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         return activation * self.sensorimotor_norms.fraction_known(self.idx2label[item])
 
 
-def load_labels_from_sensorimotor():
+def scale_prevalence_01(prevalence: float) -> float:
+    """
+    Brysbaert et al.'s (2019) prevalence has a defined range, so we can affine-scale it into [0, 1] for the purposes of
+    attenuating the activation.
+    """
+    return scale01((-2.575829303548901, 2.5758293035489004), prevalence)
+
+
+def load_labels_from_sensorimotor() -> Dict[ItemIdx, ItemLabel]:
     return _load_labels(path.join(Preferences.graphs_dir, "sensorimotor words.nodelabels"))
 
 
-def _load_graph(distance_type, length_factor, max_sphere_radius, use_prepruned, node_labelling_dictionary):
+def _load_graph(distance_type, length_factor, max_sphere_radius, use_prepruned, node_labelling_dictionary) -> Graph:
     if use_prepruned:
         logger.warning("Using pre-pruned graph. THIS SHOULD BE USED FOR TESTING PURPOSES ONLY!")
 

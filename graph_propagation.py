@@ -18,7 +18,7 @@ import json
 from abc import ABCMeta
 from collections import namedtuple, defaultdict
 from os import path
-from typing import Dict, DefaultDict, Optional, List
+from typing import Dict, DefaultDict, Optional, List, Callable
 
 import yaml
 
@@ -55,8 +55,8 @@ class GraphPropagation(metaclass=ABCMeta):
                  graph: Graph,
                  idx2label: Dict[ItemIdx, ItemLabel],
                  impulse_pruning_threshold: ActivationValue,
-                 node_decay_function: callable = None,
-                 edge_decay_function: callable = None,
+                 node_decay_function: Callable[[int, ActivationValue], ActivationValue] = None,
+                 edge_decay_function: Callable[[int, ActivationValue], ActivationValue] = None,
                  ):
         """
         Underlying shared code between model components which operate via spreading activation on a graph.
@@ -85,8 +85,8 @@ class GraphPropagation(metaclass=ABCMeta):
         # These fields are set on first init and then don't need to change even if .reset() is used.
 
         # Don't reset
-        self.idx2label = idx2label
-        self.label2idx = {v: k for k, v in idx2label.items()}
+        self.idx2label: Dict[ItemIdx, ItemLabel] = idx2label
+        self.label2idx: Dict[ItemLabel, ItemIdx] = {v: k for k, v in idx2label.items()}
 
         # Underlying graph: weighted, undirected
         self.graph: Graph = graph
@@ -99,8 +99,8 @@ class GraphPropagation(metaclass=ABCMeta):
         # activation.
         # Each should be of the form (age, initial_activation) ↦ current_activation
         # Use a constant function by default
-        self.node_decay_function: callable = node_decay_function if node_decay_function is not None else make_decay_function_constant()
-        self.edge_decay_function: callable = edge_decay_function if edge_decay_function is not None else make_decay_function_constant()
+        self.node_decay_function: Callable[[int, ActivationValue], ActivationValue] = node_decay_function if node_decay_function is not None else make_decay_function_constant()
+        self.edge_decay_function: Callable[[int, ActivationValue], ActivationValue] = edge_decay_function if edge_decay_function is not None else make_decay_function_constant()
 
         # endregion
 
@@ -153,6 +153,8 @@ class GraphPropagation(metaclass=ABCMeta):
             -   Apply all activations scheduled for the CURRENT time (before .tick())
             -   Increment the clock.
 
+        When modifying .tick() in an override, instead override _evolve_model().
+
         EXAMPLE
         -------
 
@@ -166,11 +168,21 @@ class GraphPropagation(metaclass=ABCMeta):
             List of events.
         """
 
-        activation_events = self.__apply_activations()
+        # Do the work
+        events = self._evolve_model()
 
+        # Advance the clock
         self.clock += 1
 
-        return activation_events
+        return events
+
+    def _evolve_model(self) -> List[ModelEvent]:
+        """
+        Do the work of tick() before the clock is advanced.
+        Override this intead of .tick()
+        """
+        events = self.__apply_activations()
+        return events
 
     def __apply_activations(self):
         """Apply activations for the current time."""
@@ -274,9 +286,13 @@ class GraphPropagation(metaclass=ABCMeta):
         assert idx in self.graph.nodes
 
         activation_record: ActivationRecord = self._activation_records[idx]
-        return self.node_decay_function(
-            self.clock - activation_record.time_activated,  # node age
-            activation_record.activation)
+        # If the last known activation is zero, we don't need to compute decay
+        if activation_record.activation == 0:
+            return ActivationValue(0)
+        else:
+            return self.node_decay_function(
+                self.clock - activation_record.time_activated,  # node age
+                activation_record.activation)
 
     def activation_of_item_with_label(self, label: ItemLabel) -> ActivationValue:
         """
@@ -388,6 +404,8 @@ class GraphPropagation(metaclass=ABCMeta):
             string_builder += f"\t{self.idx2label[node]}: {self.activation_of_item_with_idx(node)}\n"
         return string_builder
 
+    # TODO: It's weird that the spec dict is built outside the class.
+    # TODO: There must be a more sensible way to do this.
     @classmethod
     def save_model_spec(cls, spec, response_dir):
         """
@@ -405,7 +423,6 @@ class GraphPropagation(metaclass=ABCMeta):
 def _load_labels(nodelabel_path: str) -> Dict[ItemIdx, ItemLabel]:
     with open(nodelabel_path, mode="r", encoding="utf-8") as nrd_file:
         node_relabelling_dictionary_json = json.load(nrd_file)
-    # TODO: this isn't a great way to do this
     node_labelling_dictionary = dict()
     for k, v in node_relabelling_dictionary_json.items():
         node_labelling_dictionary[ItemIdx(k)] = v

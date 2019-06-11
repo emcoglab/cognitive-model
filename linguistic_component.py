@@ -18,7 +18,7 @@ caiwingfield.net
 import logging
 from enum import Enum, auto
 from os import path
-from typing import Set
+from typing import Set, Dict
 
 from numpy import Infinity
 from pandas import DataFrame
@@ -168,5 +168,5 @@ def _load_graph(n_words, length_factor, distributional_model, distance_type, edg
     return graph
 
 
-def load_labels_from_corpus(corpus: CorpusMetadata, n_words: int):
+def load_labels_from_corpus(corpus: CorpusMetadata, n_words: int) -> Dict[ItemIdx, ItemLabel]:
     return _load_labels(path.join(Preferences.graphs_dir, f"{corpus.name} {n_words} words.nodelabels"))

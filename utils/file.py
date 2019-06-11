@@ -22,7 +22,7 @@ from pandas import read_csv, DataFrame, Series
 from pandas.errors import EmptyDataError
 
 
-def touch(file_path):
+def touch(file_path: str) -> None:
     """Touches a file on disk."""
     with open(file_path, 'a'):
         os.utime(file_path, times=None)
