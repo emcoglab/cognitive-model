@@ -346,8 +346,8 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         # so applying the cap does not effect whether the node will fire or not)
         return activation if activation <= self.activation_cap else self.activation_cap
 
-    def _presynaptic_guard(self, idx: ItemIdx, activation: ActivationValue) -> bool:
-        # Node can only be activated if not in the working_memory_buffer (i.e. activation below pruning threshold)
+    def _postsynaptic_guard(self, idx: ItemIdx, activation: ActivationValue) -> bool:
+        # Node will only fire if not in the accessible set
         return not self._is_in_accessible_set(idx)
 
 
