@@ -68,6 +68,8 @@ class SensorimotorComponent(TemporalSpatialPropagation):
     Uses a lognormal decay on nodes.
     """
 
+    # region __init__
+
     def __init__(self,
                  distance_type: DistanceType,
                  length_factor: int,
@@ -152,12 +154,18 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         # Cap on a node's total activation after receiving incoming.
         self.activation_cap: ActivationValue = activation_cap
 
-        self.norm_attenuation_statistic: NormAttenuationStatistic = norm_attenuation_statistic
+        # Data
 
         self.buffer_size_limit = buffer_size_limit
 
         # A local copy of the sensorimotor norms data
-        self.sensorimotor_norms: SensorimotorNorms = SensorimotorNorms()
+        self._sensorimotor_norms: SensorimotorNorms = SensorimotorNorms()
+
+        self.norm_attenuation_statistic: NormAttenuationStatistic = norm_attenuation_statistic
+        self._attenuation_statistic: Dict[ItemIdx, float] = {
+            idx: self.__get_statistic_for_item(idx)
+            for idx in self.graph.nodes
+        }
 
         # endregion
 
@@ -173,6 +181,20 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         self.working_memory_buffer: Set[ItemIdx] = set()
 
         # endregion
+
+    def __get_statistic_for_item(self, idx: ItemIdx):
+        """Gets the correct statistic for an item."""
+        if self.norm_attenuation_statistic is NormAttenuationStatistic.FractionKnown:
+            # Fraction known will all be in the range [0, 1], so we can use it as a scaling factor directly
+            return self._sensorimotor_norms.fraction_known(self.idx2label[idx])
+        elif self.norm_attenuation_statistic is NormAttenuationStatistic.Prevalence:
+            # Brysbaert et al.'s (2019) prevalence has a defined range, so we can affine-scale it into [0, 1] for the
+            # purposes of attenuating the activation
+            return scale_prevalence_01(prevalence_from_fraction_known(self._sensorimotor_norms.fraction_known(self.idx2label[idx])))
+        else:
+            raise NotImplementedError()
+
+    # endregion
 
     def reset(self):
         super(SensorimotorComponent, self).reset()
@@ -317,12 +339,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
 
     def _presynaptic_modulation(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
         # Attenuate the incoming activations to a concept based on a statistic of the concept
-        if self.norm_attenuation_statistic is NormAttenuationStatistic.FractionKnown:
-            return self._attenuate_by_fraction_known(idx, activation)
-        elif self.norm_attenuation_statistic is NormAttenuationStatistic.Prevalence:
-            return self._attenuate_by_prevalence(idx, activation)
-        else:
-            raise NotImplementedError()
+        return activation * self._attenuation_statistic[idx]
 
     def _postsynaptic_modulation(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
         # The activation cap, if used, MUST be greater than the firing threshold (this is checked in __init__,
@@ -332,19 +349,6 @@ class SensorimotorComponent(TemporalSpatialPropagation):
     def _presynaptic_guard(self, idx: ItemIdx, activation: ActivationValue) -> bool:
         # Node can only be activated if not in the working_memory_buffer (i.e. activation below pruning threshold)
         return not self._is_in_accessible_set(idx)
-
-    def _attenuate_by_prevalence(self, item: ItemIdx, activation: ActivationValue) -> ActivationValue:
-        """Attenuates the activation by the prevalence of the item."""
-        prevalence = prevalence_from_fraction_known(self.sensorimotor_norms.fraction_known(self.idx2label[item]))
-        # Brysbaert et al.'s (2019) prevalence has a defined range, so we can affine-scale it into [0, 1] for the
-        # purposes of attenuating the activation
-        scaled_prevalence = scale_prevalence_01(prevalence)
-        return activation * scaled_prevalence
-
-    def _attenuate_by_fraction_known(self, item: ItemIdx, activation: ActivationValue) -> ActivationValue:
-        """Attenuates the activation by the fraction of people who know the item."""
-        # Fraction known will all be in the range [0, 1], so we can use it as a scaling factor directly
-        return activation * self.sensorimotor_norms.fraction_known(self.idx2label[item])
 
 
 def scale_prevalence_01(prevalence: float) -> float:
