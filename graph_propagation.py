@@ -234,9 +234,6 @@ class GraphPropagation(metaclass=ABCMeta):
         # The item activated, so an activation event occurs
         event = ItemActivatedEvent(time=self.clock, item=idx, activation=new_activation, fired=False)
 
-        # Record the activation
-        self._activation_records[idx] = ActivationRecord(new_activation, self.clock)
-
         # Check if the postsynaptic firing guard is passed
         if self._postsynaptic_guard(idx, new_activation):
 
@@ -270,6 +267,9 @@ class GraphPropagation(metaclass=ABCMeta):
                 self.schedule_activation_of_item_with_idx(idx=target_idx,
                                                           activation=arrival_activation,
                                                           arrival_time=self.clock + length)
+
+        # Record the activation
+        self._activation_records[idx] = ActivationRecord(new_activation, self.clock)
 
         return event
 
