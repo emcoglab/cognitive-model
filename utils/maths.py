@@ -33,10 +33,10 @@ def make_decay_function_constant() -> Callable[[int, ActivationValue], Activatio
     Constant decay function (i.e. does not decay).
     :return:
     """
-    def decay_function(_age, original_activation):
+    def constant_decay_function(_age, original_activation):
         return original_activation
 
-    return decay_function
+    return constant_decay_function
 
 
 def make_decay_function_exponential_with_decay_factor(decay_factor) -> Callable[[int, ActivationValue], ActivationValue]:
@@ -52,10 +52,10 @@ def make_decay_function_exponential_with_decay_factor(decay_factor) -> Callable[
     #   λ = - ln d
     assert 0 < decay_factor <= 1
 
-    def decay_function(age, original_activation):
+    def exponential_decay_function(age, original_activation):
         return exponential_decay(age=age, original_activation=original_activation, decay_factor=decay_factor)
 
-    return decay_function
+    return exponential_decay_function
 
 
 def make_decay_function_exponential_with_half_life(half_life) -> Callable[[int, ActivationValue], ActivationValue]:
@@ -82,7 +82,7 @@ def make_decay_function_gaussian_with_sd(sd, height_coef=1, centre=0) -> Callabl
     # by the original activation), so we force that here.
     reset_height = sqrt(TAU * sd * sd)
 
-    def decay_function(age, original_activation):
+    def gaussian_decay_function(age, original_activation):
         return gaussian_decay(age=age,
                               original_activation=original_activation,
                               height_coef=height_coef,
@@ -90,7 +90,7 @@ def make_decay_function_gaussian_with_sd(sd, height_coef=1, centre=0) -> Callabl
                               centre=centre,
                               sd=sd)
 
-    return decay_function
+    return gaussian_decay_function
 
 
 def make_decay_function_lognormal(median: float, sigma: float) -> Callable[[int, ActivationValue], ActivationValue]:
@@ -108,10 +108,10 @@ def make_decay_function_lognormal(median: float, sigma: float) -> Callable[[int,
     # verbal working memory. Journal of Mathematical Psychology, 53(1), 14-25.)
     mu = log(median)
 
-    def decay_function(age, original_activation):
+    def lognormal_decay_function(age, original_activation):
         return original_activation * lognormal_sf(x=age, mu=mu, sigma=sigma)
 
-    return decay_function
+    return lognormal_decay_function
 
 # endregion
 

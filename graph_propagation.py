@@ -23,7 +23,7 @@ from typing import Dict, DefaultDict, Optional, List, Callable
 import yaml
 
 from model.basic_types import ActivationValue, ItemIdx, ItemLabel
-from model.events import ModelEvent, ItemActivatedEvent, ItemFiredEvent
+from model.events import ModelEvent, ItemActivatedEvent
 from model.graph import Graph
 from model.utils.maths import make_decay_function_constant
 
@@ -209,8 +209,7 @@ class GraphPropagation(metaclass=ABCMeta):
             May have presynaptic and postynaptic modulation applied, and activation may or may not be prevented.
         :return:
             ItemActivatedEvent if the item did activate.
-            ItemFiredEvent if the item activated and fired.
-            None if neither.
+            None if not.
         """
         assert idx in self.graph.nodes
 
@@ -233,16 +232,13 @@ class GraphPropagation(metaclass=ABCMeta):
         new_activation = self._postsynaptic_modulation(idx, new_activation)
 
         # The item activated, so an activation event occurs
-        event = ItemActivatedEvent(time=self.clock, item=idx, activation=new_activation)
-
-        # Record the activation
-        self._activation_records[idx] = ActivationRecord(new_activation, self.clock)
+        event = ItemActivatedEvent(time=self.clock, item=idx, activation=new_activation, fired=False)
 
         # Check if the postsynaptic firing guard is passed
         if self._postsynaptic_guard(idx, new_activation):
 
             # If we did, not only did this node activated, it fired as well, so we upgrade the event
-            event = ItemFiredEvent.from_activation_event(event)
+            event.fired = True
 
             # Fire and rebroadcast!
             source_idx = idx
@@ -272,6 +268,9 @@ class GraphPropagation(metaclass=ABCMeta):
                                                           activation=arrival_activation,
                                                           arrival_time=self.clock + length)
 
+        # Record the activation
+        self._activation_records[idx] = ActivationRecord(new_activation, self.clock)
+
         return event
 
     # endregion
@@ -291,7 +290,8 @@ class GraphPropagation(metaclass=ABCMeta):
             return ActivationValue(0)
         else:
             return self.node_decay_function(
-                self.clock - activation_record.time_activated,  # node age
+                # node age
+                self.clock - activation_record.time_activated,
                 activation_record.activation)
 
     def activation_of_item_with_label(self, label: ItemLabel) -> ActivationValue:

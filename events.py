@@ -39,7 +39,7 @@ class ItemEvent(ModelEvent, metaclass=ABCMeta):
 
 
 @dataclass
-class BufferEvent(ItemEvent, metaclass=ABCMeta):
+class BufferEvent(ModelEvent, metaclass=ABCMeta):
     """Events involving the working memory buffer."""
     pass
 
@@ -48,23 +48,22 @@ class BufferEvent(ItemEvent, metaclass=ABCMeta):
 class ItemActivatedEvent(ItemEvent):
     """An item is activated."""
     activation: ActivationValue
-    def __repr__(self) -> str: return f"{type(self).__name__}( time={self.time!r}, item={self.item!r}, activation={self.activation!r} )"
+    fired:      bool
+    def __repr__(self) -> str: return f"{type(self).__name__}( time={self.time!r}, item={self.item!r}, activation={self.activation!r}, fired={self.fired!r} )"
 
 
 @dataclass
-class ItemFiredEvent(ItemActivatedEvent):
-    """An item is activated enough to repropagate its activation."""
+class ItemEnteredBufferEvent(BufferEvent, ItemActivatedEvent):
+    """An item was activated and entered the working memory buffer."""
     @classmethod
     def from_activation_event(cls, event: ItemActivatedEvent):
         """Convert from ItemActivatedEvent."""
-        return cls(time=event.time, item=event.item, activation=event.activation)
+        return cls(time=event.time, item=event.item, activation=event.activation, fired=event.fired)
 
 
 @dataclass
-# An item enters the buffer only if it fired.  It is impossible that an item enters a buffer without firing.
-# Therefore ItemEnteredBufferEvent is a ItemFiredEvent.
-class ItemEnteredBufferEvent(BufferEvent, ItemFiredEvent):
-    """An item was activated and entered the working memory buffer."""
+class BufferFloodEvent(BufferEvent):
+    """The buffer becomes full after having each member replaced."""
     pass
 
 

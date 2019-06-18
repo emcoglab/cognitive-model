@@ -23,7 +23,7 @@ from typing import Set, List, Dict
 
 from ldm.utils.maths import DistanceType
 from model.basic_types import ActivationValue, ItemIdx, ItemLabel, Node
-from model.events import ModelEvent, ItemActivatedEvent, ItemEnteredBufferEvent
+from model.events import ModelEvent, ItemActivatedEvent, ItemEnteredBufferEvent, BufferFloodEvent
 from model.graph import Graph
 from model.graph_propagation import _load_labels
 from model.temporal_spatial_propagation import TemporalSpatialPropagation
@@ -68,6 +68,8 @@ class SensorimotorComponent(TemporalSpatialPropagation):
     Uses a lognormal decay on nodes.
     """
 
+    # region __init__
+
     def __init__(self,
                  distance_type: DistanceType,
                  length_factor: int,
@@ -110,11 +112,11 @@ class SensorimotorComponent(TemporalSpatialPropagation):
 
         # max_sphere_radius == 0 would be degenerate: no item can ever activate any other item.
         assert (max_sphere_radius > 0)
-        # lognormal_sigma or lognormal_median == 0 will probably cause a division-by-zero error, and anyway causes
-        # everything to decay to 0 activation in a single tick
+        # lognormal_sigma or lognormal_median == 0 will probably cause a division-by-zero error, and anyway is
+        # degenerate: it causes everything to decay to 0 activation in a single tick.
         assert (lognormal_median > 0)
         assert (lognormal_sigma > 0)
-        # zero-size buffer size limit is degenerate: the buffer is always empty
+        # zero-size buffer size limit is degenerate: the buffer is always empty.
         assert (buffer_size_limit > 0)
         assert (activation_cap
                 # If activation_cap == buffer_threshold, items will only enter the buffer when fully activated.
@@ -136,9 +138,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
             underlying_graph=_load_graph(distance_type, length_factor, max_sphere_radius,
                                          use_prepruned, idx2label),
             idx2label=idx2label,
-            # Sigma for the log-normal decay gets multiplied by the length factor, so that if we change the length
-            # factor, sigma doesn't also  have to change for the behaviour of the model to be approximately equivalent.
-            node_decay_function=make_decay_function_lognormal(median=length_factor * lognormal_median, sigma=lognormal_sigma),
+            node_decay_function=make_decay_function_lognormal(median=lognormal_median, sigma=lognormal_sigma),
         )
 
         # region Set once
@@ -152,12 +152,18 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         # Cap on a node's total activation after receiving incoming.
         self.activation_cap: ActivationValue = activation_cap
 
-        self.norm_attenuation_statistic: NormAttenuationStatistic = norm_attenuation_statistic
+        # Data
 
         self.buffer_size_limit = buffer_size_limit
 
         # A local copy of the sensorimotor norms data
-        self.sensorimotor_norms: SensorimotorNorms = SensorimotorNorms()
+        self._sensorimotor_norms: SensorimotorNorms = SensorimotorNorms()
+
+        self.norm_attenuation_statistic: NormAttenuationStatistic = norm_attenuation_statistic
+        self._attenuation_statistic: Dict[ItemIdx, float] = {
+            idx: self.__get_statistic_for_item(idx)
+            for idx in self.graph.nodes
+        }
 
         # endregion
 
@@ -173,6 +179,20 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         self.working_memory_buffer: Set[ItemIdx] = set()
 
         # endregion
+
+    def __get_statistic_for_item(self, idx: ItemIdx):
+        """Gets the correct statistic for an item."""
+        if self.norm_attenuation_statistic is NormAttenuationStatistic.FractionKnown:
+            # Fraction known will all be in the range [0, 1], so we can use it as a scaling factor directly
+            return self._sensorimotor_norms.fraction_known(self.idx2label[idx])
+        elif self.norm_attenuation_statistic is NormAttenuationStatistic.Prevalence:
+            # Brysbaert et al.'s (2019) prevalence has a defined range, so we can affine-scale it into [0, 1] for the
+            # purposes of attenuating the activation
+            return scale_prevalence_01(prevalence_from_fraction_known(self._sensorimotor_norms.fraction_known(self.idx2label[idx])))
+        else:
+            raise NotImplementedError()
+
+    # endregion
 
     def reset(self):
         super(SensorimotorComponent, self).reset()
@@ -206,13 +226,14 @@ class SensorimotorComponent(TemporalSpatialPropagation):
             if self.activation_of_item_with_idx(item) >= self.buffer_threshold
         }
 
-    def __present_items_to_buffer(self, activation_events: List[ItemActivatedEvent]) -> List[ItemActivatedEvent]:
+    def __present_items_to_buffer(self, activation_events: List[ItemActivatedEvent]) -> List[ModelEvent]:
         """
         Present a list of item activations to the buffer, and upgrades those which entered the buffer.
         :param activation_events:
             All activation events.
         :return:
             The same events, with some upgraded to buffer entry events.
+            May also return a BufferFlood event if that is detected.
         :side effects:
             Mutates self.working_memory_buffer.
         """
@@ -267,8 +288,13 @@ class SensorimotorComponent(TemporalSpatialPropagation):
 
         # endregion
 
+        new_buffer = set(kv[0] for kv in new_buffer_items)
+
+        # Detect if whole buffer will be replaced
+        whole_buffer_replaced = len(new_buffer - self.working_memory_buffer) == self.buffer_size_limit
+
         # Update buffer: Get the keys (i.e. item idxs) from the sorted list
-        self.working_memory_buffer = set(kv[0] for kv in new_buffer_items)
+        self.working_memory_buffer = new_buffer
 
         # Upgrade events
         upgraded_events = [
@@ -278,6 +304,9 @@ class SensorimotorComponent(TemporalSpatialPropagation):
              else e)
             for e in activation_events
         ]
+
+        if whole_buffer_replaced:
+            upgraded_events.append(BufferFloodEvent(time=self.clock))
 
         return upgraded_events
 
@@ -293,9 +322,11 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         The items in the accessible set.
         May take a long time to produce: for quick internal checks use self._is_in_accessible_set(item)
         """
-        return set(n
-                   for n in self.graph.nodes
-                   if self._is_in_accessible_set(n))
+        return {
+            n
+            for n in self.graph.nodes
+            if self._is_in_accessible_set(n)
+        }
 
     def _is_in_accessible_set(self, item: ItemIdx) -> bool:
         """
@@ -306,34 +337,16 @@ class SensorimotorComponent(TemporalSpatialPropagation):
 
     def _presynaptic_modulation(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
         # Attenuate the incoming activations to a concept based on a statistic of the concept
-        if self.norm_attenuation_statistic is NormAttenuationStatistic.FractionKnown:
-            return self._attenuate_by_fraction_known(idx, activation)
-        elif self.norm_attenuation_statistic is NormAttenuationStatistic.Prevalence:
-            return self._attenuate_by_prevalence(idx, activation)
-        else:
-            raise NotImplementedError()
+        return activation * self._attenuation_statistic[idx]
 
     def _postsynaptic_modulation(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
         # The activation cap, if used, MUST be greater than the firing threshold (this is checked in __init__,
         # so applying the cap does not effect whether the node will fire or not)
         return activation if activation <= self.activation_cap else self.activation_cap
 
-    def _presynaptic_guard(self, idx: ItemIdx, activation: ActivationValue) -> bool:
-        # Node can only be activated if not in the working_memory_buffer (i.e. activation below pruning threshold)
+    def _postsynaptic_guard(self, idx: ItemIdx, activation: ActivationValue) -> bool:
+        # Node will only fire if not in the accessible set
         return not self._is_in_accessible_set(idx)
-
-    def _attenuate_by_prevalence(self, item: ItemIdx, activation: ActivationValue) -> ActivationValue:
-        """Attenuates the activation by the prevalence of the item."""
-        prevalence = prevalence_from_fraction_known(self.sensorimotor_norms.fraction_known(self.idx2label[item]))
-        # Brysbaert et al.'s (2019) prevalence has a defined range, so we can affine-scale it into [0, 1] for the
-        # purposes of attenuating the activation
-        scaled_prevalence = scale_prevalence_01(prevalence)
-        return activation * scaled_prevalence
-
-    def _attenuate_by_fraction_known(self, item: ItemIdx, activation: ActivationValue) -> ActivationValue:
-        """Attenuates the activation by the fraction of people who know the item."""
-        # Fraction known will all be in the range [0, 1], so we can use it as a scaling factor directly
-        return activation * self.sensorimotor_norms.fraction_known(self.idx2label[item])
 
 
 def scale_prevalence_01(prevalence: float) -> float:
