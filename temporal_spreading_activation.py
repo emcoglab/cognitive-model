@@ -75,7 +75,11 @@ class TemporalSpreadingActivation(GraphPropagation):
         return {
             t: activation_arriving_at_time_t[n]
             for t, activation_arriving_at_time_t in self._scheduled_activations.items()
-            if n in activation_arriving_at_time_t.keys()
+            if (n in activation_arriving_at_time_t.keys())
+            # Because self._scheduled_activations is a defaultdict, it's possible that checking for a non-existent
+            # destination at some time will produce a scheduled 0 activation at that time. We don't want to report
+            # these.
+            and (activation_arriving_at_time_t[n] > self.impulse_pruning_threshold)
         }
 
     def _postsynaptic_guard(self, idx: ItemIdx, activation: ActivationValue) -> bool:

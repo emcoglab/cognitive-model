@@ -189,11 +189,17 @@ class GraphPropagation(metaclass=ABCMeta):
         activation_events = []
         if self.clock in self._scheduled_activations:
 
-            # This should be a item-keyed dict of activation ready to arrive
+            # This is an item-keyed dict of activation ready to arrive
             scheduled_activations: DefaultDict = self._scheduled_activations.pop(self.clock)
 
             if len(scheduled_activations) > 0:
                 for destination_item, activation in scheduled_activations.items():
+                    # Because self._scheduled_activations is a defaultdict, it's possible that checking for a
+                    # non-existent destination at some time will produce a scheduled 0 activation at that time.
+                    # This should not happen in ordinary operation, but can happen during debugging etc.
+                    # These should not affect the model's behaviour, so we manually skip them here.
+                    if activation < self.impulse_pruning_threshold:
+                        continue
                     activation_event = self.__apply_activation_to_item_with_idx(destination_item, activation)
                     if activation_event:
                         activation_events.append(activation_event)
