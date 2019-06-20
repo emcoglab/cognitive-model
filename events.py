@@ -59,6 +59,12 @@ class ItemEnteredBufferEvent(BufferEvent, ItemActivatedEvent):
 
 
 @dataclass
+class ItemLeftBufferEvent(BufferEvent, ItemEvent):
+    """An item left the buffer by decaying or being displaced."""
+    pass
+
+
+@dataclass
 class BufferFloodEvent(BufferEvent):
     """The buffer becomes full after having each member replaced."""
     pass
