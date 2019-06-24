@@ -128,7 +128,7 @@ class GraphPropagation(metaclass=ABCMeta):
             lambda: defaultdict(
                 # In case there aren't any scheduled activations due to arrive at a particular node, we'll just find
                 # 0 activation, which allows for handy use of +=
-                ActivationValue
+                lambda: ActivationValue(0)
             ))
 
         # endregion
@@ -137,7 +137,7 @@ class GraphPropagation(metaclass=ABCMeta):
         """Resets the spreading to its initial state without having to reload any data."""
         self.clock = 0
         self._activation_records = defaultdict(blank_node_activation_record)
-        self._scheduled_activations = defaultdict(lambda: defaultdict(ActivationValue))
+        self._scheduled_activations = defaultdict(lambda: defaultdict(lambda: ActivationValue(0)))
 
     # region tick()
 
