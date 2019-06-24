@@ -202,6 +202,9 @@ class SensorimotorComponent(TemporalSpatialPropagation):
 
     def _evolve_model(self) -> List[ModelEvent]:
 
+        # Decay events before activating anything new (in case buffer membership is used to modulate or guard anything)
+        decay_events = self.__prune_decayed_items_in_buffer()
+
         # Proceed with ._evolve_model() and record what became activated
         model_events = super(SensorimotorComponent, self)._evolve_model()
 
@@ -212,12 +215,11 @@ class SensorimotorComponent(TemporalSpatialPropagation):
 
         # Update buffer
 
-        decay_events = self.__prune_decayed_items_in_buffer()
         # Some events will get updated commensurately.
         # `activation_events` may now contain some non-activation events.
         activation_events = self.__present_items_to_buffer(activation_events)
 
-        return activation_events + decay_events + other_events
+        return decay_events + activation_events + other_events
 
     def __prune_decayed_items_in_buffer(self) -> List[ItemLeftBufferEvent]:
         """
