@@ -15,6 +15,8 @@ caiwingfield.net
 ---------------------------
 """
 
+from __future__ import annotations
+
 import logging
 import os
 from collections import defaultdict
@@ -203,7 +205,7 @@ class Graph:
                            file_path: str,
                            ignore_edges_longer_than: Length = None,
                            keep_at_least_n_edges: int = 0,
-                           with_feedback: bool = False) -> 'Graph':
+                           with_feedback: bool = False) -> Graph:
         """
         Loads a Graph from an edgelist file.
         :param file_path:
@@ -296,7 +298,7 @@ class Graph:
                              distance_matrix: ndarray,
                              length_granularity: int,
                              ignore_edges_longer_than: Length = None,
-                             keep_at_least_n_edges: int = 0) -> 'Graph':
+                             keep_at_least_n_edges: int = 0) -> Graph:
         """
         Produces a Graph of the correct format to underlie a TemporalSpreadingActivation.
 
@@ -362,7 +364,7 @@ class Graph:
         return graph
 
     @classmethod
-    def from_adjacency_matrix(cls, adjacency_matrix: ndarray, length: int = None) -> 'Graph':
+    def from_adjacency_matrix(cls, adjacency_matrix: ndarray, length: int = None) -> Graph:
         graph = cls()
 
         n_nodes = adjacency_matrix.shape[0]
