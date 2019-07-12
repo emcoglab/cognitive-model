@@ -21,14 +21,15 @@ from enum import Enum, auto
 from os import path
 from typing import Set, List, Dict
 
-from ldm.utils.maths import DistanceType
+from ldm.utils.maths import DistanceType, clamp
+
 from model.basic_types import ActivationValue, ItemIdx, ItemLabel, Node
 from model.events import ModelEvent, ItemActivatedEvent, ItemEnteredBufferEvent, BufferFloodEvent, ItemLeftBufferEvent
 from model.graph import Graph
 from model.graph_propagation import _load_labels
 from model.temporal_spatial_propagation import TemporalSpatialPropagation
 from model.utils.iterable import partition
-from model.utils.maths import make_decay_function_lognormal, prevalence_from_fraction_known, scale01
+from model.utils.maths import make_decay_function_lognormal, prevalence_from_fraction_known, scale_prevalence_01
 from preferences import Preferences
 from sensorimotor_norms.sensorimotor_norms import SensorimotorNorms
 
@@ -76,7 +77,8 @@ class SensorimotorComponent(TemporalSpatialPropagation):
                  max_sphere_radius: int,
                  lognormal_median: float,
                  lognormal_sigma: float,
-                 buffer_size_limit: int,
+                 buffer_capacity: int,
+                 accessible_set_capacity: int,
                  buffer_threshold: ActivationValue,
                  activation_threshold: ActivationValue,
                  activation_cap: ActivationValue,
@@ -94,7 +96,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
             The median of the lognormal decay.
         :param lognormal_sigma:
             The sigma parameter for the lognormal decay.
-        :param buffer_size_limit:
+        :param buffer_capacity:
             The maximum size of the buffer. After this, qualifying items will displace existing items rather than just
             being added.
         :param buffer_threshold:
@@ -117,7 +119,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         assert (lognormal_median > 0)
         assert (lognormal_sigma > 0)
         # zero-size buffer size limit is degenerate: the buffer is always empty.
-        assert (buffer_size_limit > 0)
+        assert (buffer_capacity > 0)
         assert (activation_cap
                 # If activation_cap == buffer_threshold, items will only enter the buffer when fully activated.
                 >= buffer_threshold
@@ -154,7 +156,8 @@ class SensorimotorComponent(TemporalSpatialPropagation):
 
         # Data
 
-        self.buffer_size_limit = buffer_size_limit
+        self.buffer_capacity = buffer_capacity
+        self.accessible_set_capacity = accessible_set_capacity
 
         # A local copy of the sensorimotor norms data
         self._sensorimotor_norms: SensorimotorNorms = SensorimotorNorms()
@@ -172,11 +175,15 @@ class SensorimotorComponent(TemporalSpatialPropagation):
 
         # The set of items which are currently being consciously considered.
         #
-        # A fixed size (self.buffer_size_limit).  Items may enter the buffer when they are activated and leave when they
+        # A fixed size (self.buffer_capacity).  Items may enter the buffer when they are activated and leave when they
         # decay sufficiently (self.buffer_pruning_threshold) or are displaced.
         #
         # This is updated each .tick() based on items which fired (a prerequisite for entering the buffer)
         self.working_memory_buffer: Set[ItemIdx] = set()
+
+        # The set of items which are "accessible to conscious awareness" even if they are not in the working memory
+        # buffer
+        self.accessible_set: Set[ItemIdx] = set()
 
         # endregion
 
@@ -188,7 +195,8 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         elif self.norm_attenuation_statistic is NormAttenuationStatistic.Prevalence:
             # Brysbaert et al.'s (2019) prevalence has a defined range, so we can affine-scale it into [0, 1] for the
             # purposes of attenuating the activation
-            return scale_prevalence_01(prevalence_from_fraction_known(self._sensorimotor_norms.fraction_known(self.idx2label[idx])))
+            return scale_prevalence_01(
+                prevalence_from_fraction_known(self._sensorimotor_norms.fraction_known(self.idx2label[idx])))
         else:
             raise NotImplementedError()
 
@@ -197,29 +205,75 @@ class SensorimotorComponent(TemporalSpatialPropagation):
     def reset(self):
         super(SensorimotorComponent, self).reset()
         self.working_memory_buffer = set()
+        self.accessible_set = set()
 
     # region tick()
 
     def _evolve_model(self) -> List[ModelEvent]:
 
-        # Decay events before activating anything new (in case buffer membership is used to modulate or guard anything)
+        # Decay events before activating anything new
+        # (in case buffer or accessible set membership is used to modulate or guard anything)
         decay_events = self.__prune_decayed_items_in_buffer()
+        self.__prune_decayed_items_in_accessible_set()
 
         # Proceed with ._evolve_model() and record what became activated
+        # Activation and firing may be affected by the size of or membership to the accessible set and the buffer, but
+        # nothing will ENTER it until later, and everything that will LEAVE this tick already has done so.
         model_events = super(SensorimotorComponent, self)._evolve_model()
-
         activation_events, other_events = partition(model_events, lambda e: isinstance(e, ItemActivatedEvent))
-
         # There will be at most one event for each item which has an event
         assert len(activation_events) == len(set(e.item for e in activation_events))
 
+        # Update accessible set
+        self.__present_items_to_accessible_set(activation_events)
         # Update buffer
-
         # Some events will get updated commensurately.
         # `activation_events` may now contain some non-activation events.
         activation_events = self.__present_items_to_buffer(activation_events)
 
         return decay_events + activation_events + other_events
+
+    def _presynaptic_modulation(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
+        # Memory pressure depends on the number of concepts in the accessible set, which is reduced once at the start of
+        # a .tick() (in the prune method) and increased once at the end of a .tick() (in the present method); thus we
+        # can query the number of items in it for each activation and not worry that it will change unexpectedly.
+        # Can't let pressure get over 1, but it can't be less than 0 by definition, so we don't need to impose this.
+        memory_pressure = max(1.0, len(self.accessible_set) / self.accessible_set_capacity)
+        # Attenuate the incoming activations to a concept based on a statistic of the concept
+        statistic_attenuated_activation = activation * self._attenuation_statistic[idx]
+        # When AS is full, MP is 1, and activation is killed.
+        # When AS us empty, MP is 0, and activation is unaffected.
+        pressure_attenuated_activation = statistic_attenuated_activation * (1 - memory_pressure)
+        return pressure_attenuated_activation
+
+    def _postsynaptic_modulation(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
+        # The activation cap, if used, MUST be greater than the firing threshold (this is checked in __init__, so
+        # applying the cap does not effect whether the node will fire or not)
+        return activation if activation <= self.activation_cap else self.activation_cap
+
+    def _postsynaptic_guard(self, idx: ItemIdx, activation: ActivationValue) -> bool:
+        # Node will only fire if not in the accessible set
+        return idx not in self.accessible_set
+
+    def __prune_decayed_items_in_accessible_set(self):
+        """
+        Removes items from the accessible set which have dropped below threshold.
+
+        Cardinality of accessible set is used to dampen activation, but does not affect the accessible set threshold, so
+        we can safely prune things here without worrying about that.
+
+        :side effects:
+            Mutates self.accessible_set.
+        """
+
+        # unlike the buffer we don't care about what leaves, so we can just replace the set wholesale by those items
+        # which haven't decayed too much
+
+        self.accessible_set = {
+            item
+            for item in self.accessible_set
+            if self.activation_of_item_with_idx(item) >= self.activation_threshold
+        }
 
     def __prune_decayed_items_in_buffer(self) -> List[ItemLeftBufferEvent]:
         """
@@ -242,6 +296,26 @@ class SensorimotorComponent(TemporalSpatialPropagation):
             for item in decayed_out
         ]
 
+    def __present_items_to_accessible_set(self, activation_events: List[ItemActivatedEvent]):
+        """
+        Presents a list of item actiavtions to the accessible set.
+        :param activation_events:
+            All activatino events
+        :side effects:
+            Mutates self.accessible_set.
+        """
+        if len(activation_events) == 0:
+            return
+
+        # unlike the buffer, we're not returning any events, and there is no size limit, so we don't need to be so
+        # careful about confirming what's already in there and what's getting replaced, etc.
+
+        self.accessible_set += {
+            e.item
+            for e in activation_events
+            if e.activation >= self.activation_threshold
+        }
+
     def __present_items_to_buffer(self, activation_events: List[ItemActivatedEvent]) -> List[ModelEvent]:
         """
         Present a list of item activations to the buffer, and upgrades those which entered the buffer.
@@ -255,8 +329,6 @@ class SensorimotorComponent(TemporalSpatialPropagation):
             Mutates self.working_memory_buffer.
         """
 
-        # Sometimes we can leave early. If nothing was activated, nothing will enter the buffer, and there are no events
-        # to upgrade.
         if len(activation_events) == 0:
             return []
 
@@ -305,14 +377,14 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         new_buffer_items = sorted(new_buffer_items, key=lambda kv: kv[1].activation, reverse=True)
 
         # Trim down to size if necessary
-        new_buffer_items = new_buffer_items[:self.buffer_size_limit]
+        new_buffer_items = new_buffer_items[:self.buffer_capacity]
 
         # endregion
 
         new_buffer = set(kv[0] for kv in new_buffer_items)
 
         # For returning additional BufferEvents
-        whole_buffer_replaced = len(new_buffer - self.working_memory_buffer) == self.buffer_size_limit
+        whole_buffer_replaced = len(new_buffer - self.working_memory_buffer) == self.buffer_capacity
         displaced_items = self.working_memory_buffer - new_buffer
 
         # Update buffer: Get the keys (i.e. item idxs) from the sorted list
@@ -343,45 +415,6 @@ class SensorimotorComponent(TemporalSpatialPropagation):
     def concept_labels(self) -> Set[ItemLabel]:
         """Labels of concepts"""
         return set(w for i, w in self.idx2label.items())
-
-    def accessible_set(self) -> Set[ItemIdx]:
-        """
-        The items in the accessible set.
-        May take a long time to produce: for quick internal checks use self._is_in_accessible_set(item)
-        """
-        return {
-            n
-            for n in self.graph.nodes
-            if self._is_in_accessible_set(n)
-        }
-
-    def _is_in_accessible_set(self, item: ItemIdx) -> bool:
-        """
-        Use this rather than in self.accessible_set() for quick internal checks, to avoid having to run through the set
-        generator.
-        """
-        return self.activation_of_item_with_idx(item) > self.activation_threshold
-
-    def _presynaptic_modulation(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
-        # Attenuate the incoming activations to a concept based on a statistic of the concept
-        return activation * self._attenuation_statistic[idx]
-
-    def _postsynaptic_modulation(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
-        # The activation cap, if used, MUST be greater than the firing threshold (this is checked in __init__,
-        # so applying the cap does not effect whether the node will fire or not)
-        return activation if activation <= self.activation_cap else self.activation_cap
-
-    def _postsynaptic_guard(self, idx: ItemIdx, activation: ActivationValue) -> bool:
-        # Node will only fire if not in the accessible set
-        return not self._is_in_accessible_set(idx)
-
-
-def scale_prevalence_01(prevalence: float) -> float:
-    """
-    Brysbaert et al.'s (2019) prevalence has a defined range, so we can affine-scale it into [0, 1] for the purposes of
-    attenuating the activation.
-    """
-    return scale01((-2.575829303548901, 2.5758293035489004), prevalence)
 
 
 def load_labels_from_sensorimotor() -> Dict[ItemIdx, ItemLabel]:

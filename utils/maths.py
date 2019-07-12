@@ -183,6 +183,14 @@ def prevalence_from_fraction_known(fraction_known: float) -> float:
     return ndtri(0.005 + fraction_known * 0.99)
 
 
+def scale_prevalence_01(prevalence: float) -> float:
+    """
+    Brysbaert et al.'s (2019) prevalence has a defined range, so we can affine-scale it into [0, 1] for the purposes of
+    attenuating the activation.
+    """
+    return scale01((-2.575829303548901, 2.5758293035489004), prevalence)
+
+
 def t_confidence_interval(sd: float, n: float, alpha: float) -> float:
     """
     Confidence interval for t distribution.
