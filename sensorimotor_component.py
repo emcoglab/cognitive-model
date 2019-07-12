@@ -310,7 +310,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         # unlike the buffer, we're not returning any events, and there is no size limit, so we don't need to be so
         # careful about confirming what's already in there and what's getting replaced, etc.
 
-        self.accessible_set += {
+        self.accessible_set |= {
             e.item
             for e in activation_events
             if e.activation >= self.activation_threshold
