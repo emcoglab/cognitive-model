@@ -21,7 +21,7 @@ from enum import Enum, auto
 from os import path
 from typing import Set, List, Dict
 
-from ldm.utils.maths import DistanceType, clamp
+from ldm.utils.maths import DistanceType
 
 from model.basic_types import ActivationValue, ItemIdx, ItemLabel, Node
 from model.events import ModelEvent, ItemActivatedEvent, ItemEnteredBufferEvent, BufferFloodEvent, ItemLeftBufferEvent
@@ -187,6 +187,15 @@ class SensorimotorComponent(TemporalSpatialPropagation):
 
         # endregion
 
+    @property
+    def accessible_set(self):
+        return self.__accessible_set
+
+    @accessible_set.setter
+    def accessible_set(self, value):
+        self.__accessible_set = value
+        self._memory_pressure = max(1.0, len(self.__accessible_set) / self.accessible_set_capacity)
+
     def __get_statistic_for_item(self, idx: ItemIdx):
         """Gets the correct statistic for an item."""
         if self.norm_attenuation_statistic is NormAttenuationStatistic.FractionKnown:
@@ -234,16 +243,11 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         return decay_events + activation_events + other_events
 
     def _presynaptic_modulation(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
-        # Memory pressure depends on the number of concepts in the accessible set, which is reduced once at the start of
-        # a .tick() (in the prune method) and increased once at the end of a .tick() (in the present method); thus we
-        # can query the number of items in it for each activation and not worry that it will change unexpectedly.
-        # Can't let pressure get over 1, but it can't be less than 0 by definition, so we don't need to impose this.
-        memory_pressure = max(1.0, len(self.accessible_set) / self.accessible_set_capacity)
         # Attenuate the incoming activations to a concept based on a statistic of the concept
         statistic_attenuated_activation = activation * self._attenuation_statistic[idx]
         # When AS is full, MP is 1, and activation is killed.
         # When AS us empty, MP is 0, and activation is unaffected.
-        pressure_attenuated_activation = statistic_attenuated_activation * (1 - memory_pressure)
+        pressure_attenuated_activation = statistic_attenuated_activation * (1 - self._memory_pressure)
         return pressure_attenuated_activation
 
     def _postsynaptic_modulation(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
