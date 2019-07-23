@@ -21,7 +21,7 @@ from enum import Enum, auto
 from os import path
 from typing import Set, List, Dict
 
-from ldm.utils.maths import DistanceType
+from ldm.utils.maths import DistanceType, clamp01
 
 from model.basic_types import ActivationValue, ItemIdx, ItemLabel, Node
 from model.events import ModelEvent, ItemActivatedEvent, ItemEnteredBufferEvent, BufferFloodEvent, ItemLeftBufferEvent
@@ -120,6 +120,8 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         assert (lognormal_sigma > 0)
         # zero-size buffer size limit is degenerate: the buffer is always empty.
         assert (buffer_capacity > 0)
+        # zero-size accessible set size limit is degenerate: the set is always empty.
+        assert (accessible_set_capacity > 0)
         assert (activation_cap
                 # If activation_cap == buffer_threshold, items will only enter the buffer when fully activated.
                 >= buffer_threshold
@@ -194,7 +196,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
     @accessible_set.setter
     def accessible_set(self, value):
         self.__accessible_set = value
-        self._memory_pressure = min(1.0, len(self.__accessible_set) / self.accessible_set_capacity)
+        self._memory_pressure = clamp01(len(self.__accessible_set) / self.accessible_set_capacity)
 
     def __get_statistic_for_item(self, idx: ItemIdx):
         """Gets the correct statistic for an item."""
