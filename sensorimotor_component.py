@@ -338,16 +338,14 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         # At this point self.working_memory_buffer is still the old buffer (after decayed items have been removed)
         presented_items = set(e.item for e in activation_events)
 
-        # I have a feeling that we'll never present things to the buffer which are already in there, but just in case...
+        # Don't present items already in the buffer
         items_already_in_buffer = self.working_memory_buffer & presented_items
-        if len(items_already_in_buffer) > 0:
-            logger.warning("Tried to present items to the buffer which were already in there.")
-            presented_items = presented_items - items_already_in_buffer
+        presented_items -= items_already_in_buffer
 
         # region New buffer items list of (item, activation)s
 
-        # First build a newbuffer out of eveything which *could* end up in the buffer,
-        # then cut out things which don't belong there
+        # First build a new buffer out of everything which *could* end up in the buffer, then cut out things which don't
+        # belong there
 
         # We will sort items in the buffer based on various bits of data.
         # The new buffer is everything in the current working_memory_buffer...
