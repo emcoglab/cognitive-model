@@ -217,7 +217,6 @@ class GraphPropagation(metaclass=ABCMeta):
             ItemActivatedEvent if the item did activate.
             None if not.
         """
-        assert idx in self.graph.nodes
 
         current_activation = self.activation_of_item_with_idx(idx)
 
@@ -270,9 +269,7 @@ class GraphPropagation(metaclass=ABCMeta):
                     continue
 
                 # Accumulate activation at target node at time when it's due to arrive
-                self.schedule_activation_of_item_with_idx(idx=target_idx,
-                                                          activation=arrival_activation,
-                                                          arrival_time=self.clock + length)
+                self.schedule_activation_of_item_with_idx(idx=target_idx, activation=arrival_activation, arrival_time=self.clock + length)
 
         # Record the activation
         self._activation_records[idx] = ActivationRecord(new_activation, self.clock)
@@ -347,8 +344,9 @@ class GraphPropagation(metaclass=ABCMeta):
 
     def _presynaptic_modulation(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
         """
-        Modulates the incoming activations to items.
-        (E.g. scaling incoming activation by some property of the item).
+        Modulates the incoming activations to items. E.g. by scaling incoming activation by some property of the item.
+        Applies to the sum total of all converging activation, not to each individual incoming activation (this isn't
+        the same unless the modulation is linear).
         :param idx:
             The item receiving the activation.
         :param activation:

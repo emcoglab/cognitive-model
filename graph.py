@@ -54,13 +54,10 @@ class EdgeNotExistsError(GraphError):
 
 
 class Graph:
-    """
-    This is a fragile class that needs to be made more robust.
-    Right now Graph.nodes and Graph.edges are Dicts that can be modified at will.
-    They should be
-    """
 
-    # TODO: Make it more robust by protecting dictionaries from editing outside of the add_* methods.
+    # TODO: This is a fragile class that needs to be made more robust.
+    #  Right now Graph.nodes and Graph.edges are Dicts that can be modified at will.
+    #  It should be made more robust by protecting dicts and defaultdicts from editing outside of the add_* methods.
 
     def __init__(self, nodes: Set[Node] = None, edges: Dict[Edge, Length] = None):
         # The set of nodes of the graph
@@ -103,19 +100,17 @@ class Graph:
         # Add edge
         self.edge_lengths[edge] = length
         # Add incident edges information
-        nodes = list(edge)
-        self._incident_edges[nodes[0]].add(edge)
-        self._incident_edges[nodes[1]].add(edge)
+        for node in edge:
+            self._incident_edges[node].add(edge)
 
     def add_node(self, node: Node):
         """Add a bare node to the graph if it's not already there."""
         if node not in self.nodes:
             self.nodes.add(node)
 
-    def incident_edges(self, node: Node) -> Iterator[Edge]:
+    def incident_edges(self, node: Node) -> Set[Edge]:
         """The edges which have `node` as an endpoint."""
-        for edge in self._incident_edges[node]:
-            yield edge
+        return self._incident_edges[node]
 
     def neighbourhood(self, node: Node) -> Iterator[Node]:
         """The nodes which are connected to `node` by exactly one edge."""

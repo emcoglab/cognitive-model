@@ -204,8 +204,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         elif self.norm_attenuation_statistic is NormAttenuationStatistic.Prevalence:
             # Brysbaert et al.'s (2019) prevalence has a defined range, so we can affine-scale it into [0, 1] for the
             # purposes of attenuating the activation
-            return scale_prevalence_01(
-                prevalence_from_fraction_known(self._sensorimotor_norms.fraction_known(self.idx2label[idx])))
+            return scale_prevalence_01(prevalence_from_fraction_known(self._sensorimotor_norms.fraction_known(self.idx2label[idx])))
         else:
             raise NotImplementedError()
 
@@ -253,7 +252,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
     def _postsynaptic_modulation(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
         # The activation cap, if used, MUST be greater than the firing threshold (this is checked in __init__, so
         # applying the cap does not effect whether the node will fire or not)
-        return activation if activation <= self.activation_cap else self.activation_cap
+        return min(activation, self.activation_cap)
 
     def _postsynaptic_guard(self, idx: ItemIdx, activation: ActivationValue) -> bool:
         # Node will only fire if not in the accessible set
