@@ -80,7 +80,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
                  buffer_capacity: int,
                  accessible_set_capacity: int,
                  buffer_threshold: ActivationValue,
-                 activation_threshold: ActivationValue,
+                 accessible_set_threshold: ActivationValue,
                  activation_cap: ActivationValue,
                  norm_attenuation_statistic: NormAttenuationStatistic,
                  use_prepruned: bool = False,
@@ -101,7 +101,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
             being added.
         :param buffer_threshold:
             The minimum activation required for a concept to enter the working_memory_buffer.
-        :param activation_threshold:
+        :param accessible_set_threshold:
             Used to determine what counts as "activated" and in the accessible set.
         :param activation_cap:
             If None is supplied, no cap is used.
@@ -123,11 +123,11 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         assert (activation_cap
                 # If activation_cap == buffer_threshold, items will only enter the buffer when fully activated.
                 >= buffer_threshold
-                # If buffer_pruning_threshold == activation_threshold then the only things in the accessible set with be
+                # If buffer_pruning_threshold == accessible_set_threshold then the only things in the accessible set with be
                 # those items which were displaced from the buffer before being pruned. We probably won't use this but
                 # it's not invalid or degenerate.
-                >= activation_threshold
-                # activation_threshold must be strictly positive, else no item can ever be reactivated (since membership
+                >= accessible_set_threshold
+                # accessible_set_threshold must be strictly positive, else no item can ever be reactivated (since membership
                 # to the accessible set is a guard to reactivation).
                 > 0)
 
@@ -150,7 +150,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
 
         # Use >= and < to test for above/below
         self.buffer_threshold: ActivationValue = buffer_threshold
-        self.activation_threshold: ActivationValue = activation_threshold
+        self.accessible_set_threshold: ActivationValue = accessible_set_threshold
         # Cap on a node's total activation after receiving incoming.
         self.activation_cap: ActivationValue = activation_cap
 
@@ -255,7 +255,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         return min(activation, self.activation_cap)
 
     def _postsynaptic_guard(self, idx: ItemIdx, activation: ActivationValue) -> bool:
-        # Node will only fire if not in the accessible set
+        # Node will only fire if it's not in the accessible set
         return idx not in self.accessible_set
 
     def __prune_decayed_items_in_accessible_set(self):
@@ -275,7 +275,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         self.accessible_set = {
             item
             for item in self.accessible_set
-            if self.activation_of_item_with_idx(item) >= self.activation_threshold
+            if self.activation_of_item_with_idx(item) >= self.accessible_set_threshold
         }
 
     def __prune_decayed_items_in_buffer(self) -> List[ItemLeftBufferEvent]:
@@ -316,7 +316,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         self.accessible_set |= {
             e.item
             for e in activation_events
-            if e.activation >= self.activation_threshold
+            if e.activation >= self.accessible_set_threshold
         }
 
     def __present_items_to_buffer(self, activation_events: List[ItemActivatedEvent]) -> List[ModelEvent]:
