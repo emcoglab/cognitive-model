@@ -194,7 +194,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
     @accessible_set.setter
     def accessible_set(self, value):
         self.__accessible_set = value
-        self._memory_pressure = max(1.0, len(self.__accessible_set) / self.accessible_set_capacity)
+        self._memory_pressure = min(1.0, len(self.__accessible_set) / self.accessible_set_capacity)
 
     def __get_statistic_for_item(self, idx: ItemIdx):
         """Gets the correct statistic for an item."""

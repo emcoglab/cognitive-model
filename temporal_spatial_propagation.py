@@ -20,6 +20,8 @@ from typing import Dict
 from model.graph import Graph
 from model.graph_propagation import GraphPropagation
 
+IMPULSE_PRUNING_THRESHOLD = 0.05
+
 
 class TemporalSpatialPropagation(GraphPropagation):
     """
@@ -48,5 +50,6 @@ class TemporalSpatialPropagation(GraphPropagation):
             edge_decay_function=None,
             # Impulses reach their destination iff their destination is within the max sphere radius.
             # The max sphere radius is baked into the underlying graph.
-            impulse_pruning_threshold=0,
+            # However we add a minute threshold here in case activation has been modulated down to zero
+            impulse_pruning_threshold=IMPULSE_PRUNING_THRESHOLD,
         )
