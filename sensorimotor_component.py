@@ -166,7 +166,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
 
         self.norm_attenuation_statistic: NormAttenuationStatistic = norm_attenuation_statistic
         self._attenuation_statistic: Dict[ItemIdx, float] = {
-            idx: self.__get_statistic_for_item(idx)
+            idx: self._get_statistic_for_item(idx)
             for idx in self.graph.nodes
         }
 
@@ -195,10 +195,15 @@ class SensorimotorComponent(TemporalSpatialPropagation):
 
     @accessible_set.setter
     def accessible_set(self, value):
+        # Update memory pressure whenever we alter the accessible set
         self.__accessible_set = value
-        self._memory_pressure = clamp01(len(self.__accessible_set) / self.accessible_set_capacity)
+        self.__memory_pressure = clamp01(len(self.__accessible_set) / self.accessible_set_capacity)
 
-    def __get_statistic_for_item(self, idx: ItemIdx):
+    @property
+    def memory_pressure(self) -> float:
+        return self.__memory_pressure
+
+    def _get_statistic_for_item(self, idx: ItemIdx):
         """Gets the correct statistic for an item."""
         if self.norm_attenuation_statistic is NormAttenuationStatistic.FractionKnown:
             # Fraction known will all be in the range [0, 1], so we can use it as a scaling factor directly
@@ -248,7 +253,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         statistic_attenuated_activation = activation * self._attenuation_statistic[idx]
         # When AS is full, MP is 1, and activation is killed.
         # When AS us empty, MP is 0, and activation is unaffected.
-        pressure_attenuated_activation = statistic_attenuated_activation * (1 - self._memory_pressure)
+        pressure_attenuated_activation = statistic_attenuated_activation * (1 - self.memory_pressure)
         return pressure_attenuated_activation
 
     def _postsynaptic_modulation(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
