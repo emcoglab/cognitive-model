@@ -231,7 +231,7 @@ class GraphPropagation(metaclass=ABCMeta):
         # Apply presynaptic modulation
         activation = self._presynaptic_modulation(idx, activation)
 
-        if activation == 0:
+        if (activation < self.impulse_pruning_threshold) or (activation == 0):
             return None
 
         # Accumulate activation

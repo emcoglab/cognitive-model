@@ -60,7 +60,7 @@ class _BufferSortingData:
     For sorting items before entry to the buffer.
     """
     activation: ActivationValue
-    presented: bool
+    being_presented: bool
 
 
 class SensorimotorComponent(TemporalSpatialPropagation):
@@ -231,6 +231,9 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         decay_events = self.__prune_decayed_items_in_buffer()
         self.__prune_decayed_items_in_accessible_set()
 
+        logger.info(f"\tAS: {len(self.accessible_set)}/{self.accessible_set_capacity} "
+                    f"(MP: {self.memory_pressure})")
+
         # Proceed with ._evolve_model() and record what became activated
         # Activation and firing may be affected by the size of or membership to the accessible set and the buffer, but
         # nothing will ENTER it until later, and everything that will LEAVE this tick already has done so.
@@ -249,12 +252,14 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         return decay_events + activation_events + other_events
 
     def _presynaptic_modulation(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
+        # If accumulated activation is over the cap, apply the cap
+        activation = min(activation, self.activation_cap)
         # Attenuate the incoming activations to a concept based on a statistic of the concept
-        statistic_attenuated_activation = activation * self._attenuation_statistic[idx]
+        activation *= self._attenuation_statistic[idx]
         # When AS is full, MP is 1, and activation is killed.
         # When AS us empty, MP is 0, and activation is unaffected.
-        pressure_attenuated_activation = statistic_attenuated_activation * (1 - self.memory_pressure)
-        return pressure_attenuated_activation
+        activation *= 1 - self.memory_pressure
+        return activation
 
     def _postsynaptic_modulation(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
         # The activation cap, if used, MUST be greater than the firing threshold (this is checked in __init__, so
@@ -274,15 +279,12 @@ class SensorimotorComponent(TemporalSpatialPropagation):
 
         :side effects:
             Mutates self.accessible_set.
+            Mutates self.memory_pressure.
         """
-
-        # unlike the buffer we don't care about what leaves, so we can just replace the set wholesale by those items
-        # which haven't decayed too much
-
-        self.accessible_set = {
+        self.accessible_set -= {
             item
             for item in self.accessible_set
-            if self.activation_of_item_with_idx(item) >= self.accessible_set_threshold
+            if self.activation_of_item_with_idx(item) < self.accessible_set_threshold
         }
 
     def __prune_decayed_items_in_buffer(self) -> List[ItemLeftBufferEvent]:
@@ -313,6 +315,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
             All activatino events
         :side effects:
             Mutates self.accessible_set.
+            Mutates self.memory_pressure.
         """
         if len(activation_events) == 0:
             return
@@ -359,7 +362,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         new_buffer_items: Dict[ItemIdx: _BufferSortingData] = {
             item: _BufferSortingData(activation=self.activation_of_item_with_idx(item),
                                      # These items already in the buffer were not presented
-                                     presented=False)
+                                     being_presented=False)
             for item in self.working_memory_buffer
         }
         # ...plus everything above threshold.
@@ -367,19 +370,21 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         new_buffer_items.update({
             event.item: _BufferSortingData(activation=event.activation,
                                            # We've already worked out whether items are potentially entering the buffer
-                                           presented=event.item in presented_items)
+                                           being_presented=event.item in presented_items)
             for event in activation_events
             if event.activation >= self.buffer_threshold
         })
+
         # Convert to a list of key-value pairs, sorted by activation, descending.
         # We want the order to be by activation, but with ties broken by recency, i.e. items being presented to the
-        # buffer precede those already in the buffer.  Because Python's sorting is stable [0], meaning if we sort by
-        # recency first, and then by activation, we get what we want [1].
-        #     [0]: http://en.wikipedia.org/wiki/Sorting_algorithm#Stability
-        #     [1]: https://wiki.python.org/moin/HowTo/Sorting#Sort_Stability_and_Complex_Sorts
+        # buffer precede those already in the buffer.  Because Python's sorting is stable, meaning if we sort by
+        # recency first, and then by activation, we get what we want [0].
+        #
         # So first we sort by recency (i.e. whether they were presented), descending
         # (i.e. .presented==1 comes before .presented==0)
-        new_buffer_items = sorted(new_buffer_items.items(), key=lambda kv: kv[1].presented, reverse=True)
+        #
+        #     [0]: https://wiki.python.org/moin/HowTo/Sorting#Sort_Stability_and_Complex_Sorts
+        new_buffer_items = sorted(new_buffer_items.items(), key=lambda kv: kv[1].being_presented, reverse=True)
         # Then we sort by activation, descending (larger activation first)
         # Also new_buffer_items is now a list of kv pairs, not a dictionary, so we don't need to use .items()
         new_buffer_items = sorted(new_buffer_items, key=lambda kv: kv[1].activation, reverse=True)
@@ -412,8 +417,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         # Add extra events if necessary
         if whole_buffer_replaced:
             upgraded_events.append(BufferFloodEvent(time=self.clock))
-        if displaced_items:
-            upgraded_events.extend([ItemLeftBufferEvent(time=self.clock, item=i) for i in displaced_items])
+        upgraded_events.extend([ItemLeftBufferEvent(time=self.clock, item=i) for i in displaced_items])
 
         return upgraded_events
 
