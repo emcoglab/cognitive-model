@@ -252,6 +252,8 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         return decay_events + activation_events + other_events
 
     def _presynaptic_modulation(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
+        # If accumulated activation is over the cap, apply the cap
+        activation = min(activation, self.activation_cap)
         # Attenuate the incoming activations to a concept based on a statistic of the concept
         activation *= self._attenuation_statistic[idx]
         # When AS is full, MP is 1, and activation is killed.
