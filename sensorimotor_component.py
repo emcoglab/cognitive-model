@@ -255,7 +255,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         # Attenuate the incoming activations to a concept based on a statistic of the concept
         activation *= self._attenuation_statistic[idx]
         # When AS is full, MP is 1, and activation is killed.
-        # When AS us empty, MP is 0, and activation is unaffected.
+        # When AS is empty, MP is 0, and activation is unaffected.
         activation *= 1 - self.memory_pressure
         return activation
 
