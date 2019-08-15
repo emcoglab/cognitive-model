@@ -192,13 +192,14 @@ class GraphPropagation(metaclass=ABCMeta):
             # This is an item-keyed dict of activation ready to arrive
             scheduled_activations: DefaultDict = self._scheduled_activations.pop(self.clock)
 
+            # TODO optimisation: sort into numpy.array and apply presynaptic modulation in a vectorised manner
             if len(scheduled_activations) > 0:
                 for destination_item, activation in scheduled_activations.items():
                     # Because self._scheduled_activations is a defaultdict, it's possible that checking for a
                     # non-existent destination at some time will produce a scheduled 0 activation at that time.
                     # This should not happen in ordinary operation, but can happen during debugging etc.
                     # These should not affect the model's behaviour, so we manually skip them here.
-                    if activation < self.impulse_pruning_threshold:
+                    if (activation < self.impulse_pruning_threshold) or (activation == 0):
                         continue
                     activation_event = self.__apply_activation_to_item_with_idx(destination_item, activation)
                     if activation_event:
@@ -217,7 +218,6 @@ class GraphPropagation(metaclass=ABCMeta):
             ItemActivatedEvent if the item did activate.
             None if not.
         """
-        assert idx in self.graph.nodes
 
         current_activation = self.activation_of_item_with_idx(idx)
 
@@ -231,6 +231,9 @@ class GraphPropagation(metaclass=ABCMeta):
         # Apply presynaptic modulation
         activation = self._presynaptic_modulation(idx, activation)
 
+        if (activation < self.impulse_pruning_threshold) or (activation == 0):
+            return None
+
         # Accumulate activation
         new_activation = current_activation + activation
 
@@ -240,42 +243,37 @@ class GraphPropagation(metaclass=ABCMeta):
         # The item activated, so an activation event occurs
         event = ItemActivatedEvent(time=self.clock, item=idx, activation=new_activation, fired=False)
 
-        # Check if the postsynaptic firing guard is passed
-        if self._postsynaptic_guard(idx, new_activation):
-
-            # If we did, not only did this node activated, it fired as well, so we upgrade the event
-            event.fired = True
-
-            # Fire and rebroadcast!
-            source_idx = idx
-
-            # For each incident edge
-            for edge in self.graph.incident_edges(source_idx):
-
-                # Find which node in the edge is the source node and which is the target
-                n1, n2 = edge
-                if source_idx == n1:
-                    target_idx = n2
-                elif source_idx == n2:
-                    target_idx = n1
-                else:
-                    raise ValueError()
-
-                length = self.graph.edge_lengths[edge]
-
-                arrival_activation = self.edge_decay_function(length, new_activation)
-
-                # Skip any impulses which will be too small on arrival
-                if arrival_activation < self.impulse_pruning_threshold:
-                    continue
-
-                # Accumulate activation at target node at time when it's due to arrive
-                self.schedule_activation_of_item_with_idx(idx=target_idx,
-                                                          activation=arrival_activation,
-                                                          arrival_time=self.clock + length)
-
         # Record the activation
         self._activation_records[idx] = ActivationRecord(new_activation, self.clock)
+
+        # Check if the postsynaptic firing guard is passed
+        if not self._postsynaptic_guard(idx, new_activation):
+            # If not, stop here
+            return event
+
+        # If we did, not only did this node activated, it fired as well, so we upgrade the event
+        event.fired = True
+
+        # Fire and rebroadcast!
+        source_idx = idx
+
+        # For each incident edge
+        for edge in self.graph.incident_edges(source_idx):
+
+            # Find which node in the edge is the source node and which is the target
+            n1, n2 = edge
+            target_idx = n2 if source_idx == n1 else n1
+
+            length = self.graph.edge_lengths[edge]
+
+            arrival_activation = self.edge_decay_function(length, new_activation)
+
+            # Skip any impulses which will be too small on arrival
+            if arrival_activation < self.impulse_pruning_threshold:
+                continue
+
+            # Accumulate activation at target node at time when it's due to arrive
+            self.schedule_activation_of_item_with_idx(idx=target_idx, activation=arrival_activation, arrival_time=self.clock + length)
 
         return event
 
@@ -347,8 +345,9 @@ class GraphPropagation(metaclass=ABCMeta):
 
     def _presynaptic_modulation(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
         """
-        Modulates the incoming activations to items.
-        (E.g. scaling incoming activation by some property of the item).
+        Modulates the incoming activations to items. E.g. by scaling incoming activation by some property of the item.
+        Applies to the sum total of all converging activation, not to each individual incoming activation (this isn't
+        the same unless the modulation is linear).
         :param idx:
             The item receiving the activation.
         :param activation:
