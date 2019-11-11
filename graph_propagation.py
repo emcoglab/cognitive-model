@@ -22,6 +22,7 @@ from typing import Dict, DefaultDict, Optional, List, Callable
 
 import yaml
 
+from model.version import VERSION, GIT_HASH
 from model.basic_types import ActivationValue, ItemIdx, ItemLabel
 from model.events import ModelEvent, ItemActivatedEvent
 from model.graph import Graph
@@ -416,6 +417,8 @@ class GraphPropagation(metaclass=ABCMeta):
         """
         Save the model spec to the `response_dir`.
         """
+        spec["version"] = VERSION
+        spec["commit"] = GIT_HASH
         with open(path.join(response_dir, " model_spec.yaml"), mode="w", encoding="utf-8") as spec_file:
             yaml.dump(spec, spec_file, yaml.SafeDumper)
 
