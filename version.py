@@ -6,6 +6,6 @@ from git import Repo
 #   rev:   will change output of model
 #
 # output within the same version should be considered compatible
-VERSION = "0.6.0"
+VERSION = "0.6.1"
 
 GIT_HASH = Repo(search_parent_directories=True).head.object.hexsha
