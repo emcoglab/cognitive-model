@@ -148,6 +148,20 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         # region Set once
         # These fields are set on first init and then don't need to change even if .reset() is used.
 
+        self._model_spec.update({
+            "Distance type": distance_type.name,
+            "Length factor": length_factor,
+            "Max sphere radius": max_sphere_radius,
+            "Log-normal median": lognormal_median,
+            "Log-normal sigma": lognormal_sigma,
+            "Buffer capacity": buffer_capacity,
+            "Buffer threshold": buffer_threshold,
+            "Norm attenuation statistic": norm_attenuation_statistic.name,
+            "Activation cap": activation_cap,
+            "Activation threshold": accessible_set_threshold,
+            "Accessible set capacity": accessible_set_capacity,
+        })
+
         # Thresholds
 
         # Use >= and < to test for above/below

@@ -85,6 +85,12 @@ class GraphPropagation(metaclass=ABCMeta):
         # region Set once
         # These fields are set on first init and then don't need to change even if .reset() is used.
 
+        # Written to model output; update in overriding classes
+        self._model_spec = {
+            "Version": VERSION,
+            "Commit": GIT_HASH
+        }
+
         # Don't reset
         self.idx2label: Dict[ItemIdx, ItemLabel] = idx2label
         self.label2idx: Dict[ItemLabel, ItemIdx] = {v: k for k, v in idx2label.items()}
@@ -410,15 +416,16 @@ class GraphPropagation(metaclass=ABCMeta):
             string_builder += f"\t{self.idx2label[node]}: {self.activation_of_item_with_idx(node)}\n"
         return string_builder
 
-    # TODO: It's weird that the spec dict is built outside the class.
-    # TODO: There must be a more sensible way to do this.
-    @classmethod
-    def save_model_spec(cls, spec, response_dir):
+    def save_model_spec(self, response_dir, additional_fields: Optional[Dict] = None):
         """
         Save the model spec to the `response_dir`.
+        :param response_dir:
+        :param additional_fields:
+            If provided and not None, add these fields to the spec.
         """
-        spec["version"] = VERSION
-        spec["commit"] = GIT_HASH
+        spec = self._model_spec.copy()
+        if additional_fields:
+            spec.update(additional_fields)
         with open(path.join(response_dir, " model_spec.yaml"), mode="w", encoding="utf-8") as spec_file:
             yaml.dump(spec, spec_file, yaml.SafeDumper)
 

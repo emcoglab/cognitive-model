@@ -87,13 +87,11 @@ class LinguisticComponent(TemporalSpreadingActivation):
             importance value).
             Use None to not prune, and ignore `edge_pruning`.
         """
-        freq_dist = FreqDist.load(distributional_model.corpus_meta.freq_dist_path)
-        node_labelling_dictionary = load_labels_from_corpus(distributional_model.corpus_meta, n_words)
 
         super(LinguisticComponent, self).__init__(
             graph=_load_graph(n_words, length_factor, distributional_model,
                               distance_type, edge_pruning_type, edge_pruning),
-            idx2label=node_labelling_dictionary,
+            idx2label=load_labels_from_corpus(distributional_model.corpus_meta, n_words),
             impulse_pruning_threshold=impulse_pruning_threshold,
             firing_threshold=firing_threshold,
             node_decay_function=make_decay_function_exponential_with_decay_factor(
@@ -105,11 +103,22 @@ class LinguisticComponent(TemporalSpreadingActivation):
         # region Set once
         # These fields are set on first init and then don't need to change even if .reset() is used.
 
+        self._model_spec.update({
+            "Words": n_words,
+            "Model name": distributional_model.name,
+            "Length factor": length_factor,
+            "Impulse pruning threshold": impulse_pruning_threshold,
+            "SD factor": edge_decay_sd_factor,
+            "Node decay": node_decay_factor,
+            "Firing threshold": firing_threshold,
+        })
+
         # Cap on a node's total activation after receiving incoming.
         self.activation_cap = activation_cap
         if self.activation_cap < self.firing_threshold:
             raise ValueError(f"activation cap {self.activation_cap} cannot be less than the firing threshold {self.firing_threshold}")
 
+        freq_dist = FreqDist.load(distributional_model.corpus_meta.freq_dist_path)
         self.available_words: Set[ItemLabel] = set(freq_dist.most_common_tokens(n_words))
 
         # endregion
