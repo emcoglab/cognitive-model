@@ -1,5 +1,3 @@
-from git import Repo
-
 # Version number is semantic, but relates to OUTPUT, not API.
 #
 # publish.major.minor
@@ -12,4 +10,12 @@ VERSION = "0.6.1"
 
 # Any code change which doesn't change the output of the model will still alter the Git commit hash, so this can be used
 # for tracking changes in output and bug-finding.
-GIT_HASH = Repo(search_parent_directories=True).head.object.hexsha
+try:
+    from git import Repo
+    GIT_HASH = Repo(search_parent_directories=True).head.object.hexsha
+except ModuleNotFoundError:
+    try:
+        import subprocess
+        GIT_HASH = subprocess.check_output(['git', 'rev-parse', 'HEAD']).strip()
+    except Exception:
+        GIT_HASH = ""
