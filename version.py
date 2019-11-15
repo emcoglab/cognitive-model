@@ -17,5 +17,5 @@ except ModuleNotFoundError:
     try:
         import subprocess
         GIT_HASH = subprocess.check_output(['git', 'rev-parse', 'HEAD']).strip()
-    except Exception:
-        GIT_HASH = ""
+    except OSError:
+        GIT_HASH = "Unknown"
