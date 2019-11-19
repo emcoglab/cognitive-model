@@ -96,9 +96,10 @@ class SensorimotorNaïveModel(NaïveModel):
         super().__init__(length_factor=length_factor,
                          words=list(self._sensorimotor_norms.iter_words()), idx2label=load_labels_from_sensorimotor())
 
+    @property
     def _graph_filename(self) -> str:
         # Copied from SensorimotorComponent
-        return f"sensorimotor for testing only {self.distance_type.name} distance length {self.length_factor}.edgelist"
+        return f"sensorimotor {self.distance_type.name} distance length {self.length_factor}.edgelist"
 
     def distance_between(self, word_1, word_2) -> float:
         return distance(
