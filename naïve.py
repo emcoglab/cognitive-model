@@ -16,7 +16,9 @@ caiwingfield.net
 """
 from abc import ABC, abstractmethod
 from collections import defaultdict
+from logging import getLogger
 from os import path
+from pathlib import Path
 from typing import List, Dict
 
 from numpy import median
@@ -34,16 +36,19 @@ from preferences import Preferences
 from sensorimotor_norms.sensorimotor_norms import SensorimotorNorms
 
 
+logger = getLogger(__name__)
+
+
 class NaïveModel(ABC):
     def __init__(self,
                  length_factor: int,
                  words: List[ItemLabel],
-                 idx2label: Dict[ItemIdx, ItemLabel],
-                 ):
+                 idx2label: Dict[ItemIdx, ItemLabel]):
         self.length_factor: int = length_factor
         self.words: List[ItemLabel] = words
         self._n_words: int = len(words)
         self.idx2label: Dict[ItemIdx, ItemLabel] = idx2label
+        self.label2idx: Dict[ItemLabel, ItemIdx] = {v: k for k, v in idx2label.items()}
         self.median_distances: Dict[ItemLabel, Length] = self.__median_distances_from_words(words)
 
     @property
@@ -52,12 +57,45 @@ class NaïveModel(ABC):
         """The name of the file in which the graph is stored. (Not the full path.)"""
         raise NotImplementedError()
 
-    def __median_distances_from_words(self, words: List[ItemLabel]) -> Dict[ItemLabel, Length]:
+    @property
+    @abstractmethod
+    def _distributions_filename(self) -> str:
+        """The name of the file in which to store the edge length distributions. (Not the full path.)"""
+        raise NotImplementedError()
+
+    @property
+    def _distributions_path(self) -> Path:
+        return Path(Preferences.graphs_dir, self._distributions_filename)
+
+    def __load_distance_distributions(self) -> Dict[ItemLabel, List[Length]]:
         distributions: Dict[ItemLabel, List[Length]] = defaultdict(list)
-        for edge, length in iter_edges_from_edgelist(path.join(Preferences.graphs_dir, self._graph_filename)):
-            for i in words:
-                if i in edge:
-                    distributions[i].append(length)
+        with self._distributions_path.open(mode="r", encoding="utf-8") as distributions_file:
+            for line in distributions_file:
+                label, ds = line.split(":")
+                distributions[label].extend([int(d) for d in ds.split(",")])
+        return distributions
+
+    def __save_distance_distributions(self, distributions: Dict[ItemLabel, List[Length]]):
+        with self._distributions_path.open(mode="r", encoding="utf-8") as distributions_file:
+            for l, ds in distributions.items():
+                line = f"{l}:"
+                line += ",".join([str(d) for d in ds])
+                line += "\n"
+
+    def __median_distances_from_words(self, words: List[ItemLabel]) -> Dict[ItemLabel, Length]:
+        if self._distributions_path.exists():
+            logger.info("Loading median distances")
+            distributions: Dict[ItemLabel, List[Length]] = self.__load_distance_distributions()
+        else:
+            logger.info("Computing median distances")
+            distributions: Dict[ItemLabel, List[Length]] = defaultdict(list)
+            for i, (edge, length) in enumerate(iter_edges_from_edgelist(path.join(Preferences.graphs_dir, self._graph_filename)), start=1):
+                for word in words:
+                    if self.label2idx[word] in edge:
+                        distributions[word].append(length)
+                if i % 1000 == 0:
+                    logger.info(f"Done {i:,} edges.")
+            self.__save_distance_distributions(distributions)
         return {
             label: Length(median(lengths))
             for label, lengths in distributions.items()
@@ -101,6 +139,10 @@ class SensorimotorNaïveModel(NaïveModel):
         # Copied from SensorimotorComponent
         return f"sensorimotor {self.distance_type.name} distance length {self.length_factor}.edgelist"
 
+    @property
+    def _distributions_filename(self) -> str:
+        return f"sensorimotor {self.distance_type.name} distance length {self.length_factor}.distributions"
+
     def distance_between(self, word_1, word_2) -> float:
         return distance(
             self._sensorimotor_norms.vector_for_word(word_1),
@@ -139,6 +181,10 @@ class LinguisticVectorNaïveModel(LinguisticNaïveModel):
         # Copied from LinguisticComponent
         return f"{self.distributional_model.name} {self.distance_type.name} {self._n_words} words length {self.length_factor}.edgelist"
 
+    @property
+    def _distributions_filename(self) -> str:
+        return f"{self.distributional_model.name} {self.distance_type.name} {self._n_words} words length {self.length_factor}.distributions"
+
 
 class LinguisticNgramNaïveModel(LinguisticNaïveModel):
 
@@ -166,3 +212,7 @@ class LinguisticNgramNaïveModel(LinguisticNaïveModel):
     def _graph_filename(self) -> str:
         # Copied from LinguisticComponent
         return f"{self.distributional_model.name} {self._n_words} words length {self.length_factor}.edgelist"
+
+    @property
+    def _distributions_filename(self) -> str:
+        return f"{self.distributional_model.name} {self._n_words} words length {self.length_factor}.distributions"
