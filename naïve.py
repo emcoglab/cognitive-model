@@ -42,6 +42,7 @@ class NaïveModel(ABC):
                  ):
         self.length_factor: int = length_factor
         self.words: List[ItemLabel] = words
+        self._n_words: int = len(words)
         self.idx2label: Dict[ItemIdx, ItemLabel] = idx2label
         self.median_distances: Dict[ItemLabel, Length] = self.__median_distances_from_words(words)
 
@@ -70,6 +71,10 @@ class NaïveModel(ABC):
         :return:
         :raises LookupError
         """
+        if source not in self.words:
+            raise LookupError(source)
+        if target not in self.words:
+            raise LookupError(target)
         return self.distance_between(source, target) < self.median_distances[source]
 
     @abstractmethod
@@ -104,22 +109,24 @@ class SensorimotorNaïveModel(NaïveModel):
 
 class LinguisticNaïveModel(NaïveModel, ABC):
 
-    def __init__(self, length_factor: int,
-                 n_words: int, distributional_model: DistributionalSemanticModel):
-        words: List[ItemLabel] = FreqDist.load(distributional_model.corpus_meta.freq_dist_path).most_common_tokens(
-            n_words)
+    def __init__(self, length_factor: int, n_words: int,
+                 distributional_model: DistributionalSemanticModel):
+        words: List[ItemLabel] = FreqDist.load(distributional_model.corpus_meta.freq_dist_path)\
+            .most_common_tokens(n_words)
         self.distributional_model: DistributionalSemanticModel = distributional_model
-        self.n_words: int = n_words
         super().__init__(length_factor=length_factor, words=words,
                          idx2label=load_labels_from_corpus(distributional_model.corpus_meta, n_words))
 
 
 class LinguisticVectorNaïveModel(LinguisticNaïveModel):
 
-    def __init__(self, distance_type: DistanceType, length_factor: int,
-                 n_words: int, distributional_model: VectorSemanticModel):
+    def __init__(self,
+                 n_words: int,
+                 distance_type: DistanceType,
+                 length_factor: int,
+                 distributional_model: VectorSemanticModel):
         self.distance_type: DistanceType = distance_type
-        super().__init__(length_factor=length_factor, n_words=n_words, distributional_model=distributional_model)
+        super().__init__(length_factor=length_factor, distributional_model=distributional_model, n_words=n_words)
 
     def distance_between(self, word_1, word_2) -> float:
         self.distributional_model.train(memory_map=True)
@@ -129,17 +136,19 @@ class LinguisticVectorNaïveModel(LinguisticNaïveModel):
     @property
     def _graph_filename(self) -> str:
         # Copied from LinguisticComponent
-        return f"{self.distributional_model.name} {self.distance_type.name} {self.n_words} words length {self.length_factor}.edgelist"
+        return f"{self.distributional_model.name} {self.distance_type.name} {self._n_words} words length {self.length_factor}.edgelist"
 
 
 class LinguisticNgramNaïveModel(LinguisticNaïveModel):
 
-    def __init__(self, length_factor: int, n_words: int, distributional_model: NgramModel):
-        super().__init__(length_factor=length_factor, n_words=n_words, distributional_model=distributional_model)
+    def __init__(self, n_words: int, length_factor: int, distributional_model: NgramModel):
+        super().__init__(length_factor=length_factor, distributional_model=distributional_model, n_words=n_words)
         # Set the max value for later turning associations into distances.
         # We will rarely need the whole model in memory, so we load it once for computing the max, then unload it.
         self.distributional_model.train(memory_map=True)
         assert isinstance(self.distributional_model, NgramModel)
+        # This is the same calculation as is used in save_edgelist_from_similarity
+        # (i.e. without filtering the matrix first).
         self._max_value = self.distributional_model.underlying_count_model.matrix.data.max()
         self._min_value = self.distributional_model.underlying_count_model.matrix.data.min()
         assert self._min_value > 0  # make sure zeros were eliminated
@@ -150,10 +159,9 @@ class LinguisticNgramNaïveModel(LinguisticNaïveModel):
         assert isinstance(self.distributional_model, NgramModel)
         return distance_from_similarity(
             self.distributional_model.association_between(word_1, word_2),
-            self._max_value,
-            self._min_value)
+            self._max_value, self._min_value)
 
     @property
     def _graph_filename(self) -> str:
         # Copied from LinguisticComponent
-        return f"{self.distributional_model.name} {self.n_words} words length {self.length_factor}.edgelist"
+        return f"{self.distributional_model.name} {self._n_words} words length {self.length_factor}.edgelist"
