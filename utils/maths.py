@@ -202,3 +202,25 @@ def t_confidence_interval(sd: float, n: float, alpha: float) -> float:
     """
     sem = sd/sqrt(n)
     return sem * student_t.ppf((1 + alpha) / 2, df=n - 1)
+
+
+def distance_from_similarity(similarity, max_similarity: float, min_similarity: float):
+    """
+    Converts similarities to distances.
+
+    :param similarity:
+        The similarity to convert.
+    :param max_similarity:
+        The maximum possible similarity.
+    :param min_similarity:
+        The minimum possible similarity.
+    :return:
+        The distance.
+    """
+    return (
+        # Convert similarities to lengths by subtracting from the max value
+        max_similarity - similarity
+        # Add the minimum value to make sure we don't get zero-length edges
+        # Use the absolute value in case the minimum is negative (e.g. with PMI).
+        + abs(min_similarity)
+    )

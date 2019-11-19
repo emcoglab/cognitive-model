@@ -16,7 +16,6 @@ caiwingfield.net
 """
 
 import logging
-from enum import Enum, auto
 from os import path
 from typing import Set, Dict
 
@@ -28,7 +27,7 @@ from ldm.corpus.indexing import FreqDist
 from ldm.model.base import DistributionalSemanticModel
 from ldm.utils.maths import DistanceType
 from model.basic_types import ActivationValue, ItemIdx, ItemLabel
-from model.graph import Graph
+from model.graph import Graph, EdgePruningType
 from model.graph_propagation import _load_labels
 from model.temporal_spreading_activation import TemporalSpreadingActivation
 from model.utils.maths import make_decay_function_exponential_with_decay_factor, make_decay_function_gaussian_with_sd
@@ -37,12 +36,6 @@ from preferences import Preferences
 logger = logging.getLogger()
 logger_format = '%(asctime)s | %(levelname)s | %(module)s | %(message)s'
 logger_dateformat = "%Y-%m-%d %H:%M:%S"
-
-
-class EdgePruningType(Enum):
-    Length     = auto()
-    Percent    = auto()
-    Importance = auto()
 
 
 class LinguisticComponent(TemporalSpreadingActivation):

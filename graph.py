@@ -20,6 +20,7 @@ from __future__ import annotations
 import logging
 import os
 from collections import defaultdict
+from enum import Enum, auto
 from numbers import Real
 from typing import Dict, Set, Tuple, Iterator, DefaultDict, List
 
@@ -30,7 +31,7 @@ from scipy.stats import percentileofscore
 from sortedcontainers import SortedSet
 
 from model.basic_types import Node, Length
-from model.utils.maths import mean, nearest_value_at_quantile
+from model.utils.maths import mean, nearest_value_at_quantile, distance_from_similarity
 from ldm.utils.logging import print_progress
 
 logger = logging.getLogger()
@@ -578,12 +579,7 @@ def save_edgelist_from_similarity_matrix(file_path: str,
             # only want half of the symmetric matrix, and no diagonal
             if j <= i:
                 continue
-            length = Length(ceil((
-                # Convert similarities to lengths by subtracting from the max value
-                max_value - v
-                # Add the minimum value to make sure we don't get zero-length edges
-                # Use the absolute value in case the minimum is negative (e.g. with PMI).
-                + abs(min_value)) * length_factor))
+            length = Length(ceil(length_factor * distance_from_similarity(v, max_value, min_value)))
             assert length > 0
             # Write edge to file
             temp_file.write(f"{i} {j} {length}\n")
@@ -629,3 +625,9 @@ def log_graph_topology(graph) -> Tuple[bool, bool]:
     else:
         logger.info("Graph is not connected")
     return connected, orphans
+
+
+class EdgePruningType(Enum):
+    Length     = auto()
+    Percent    = auto()
+    Importance = auto()
