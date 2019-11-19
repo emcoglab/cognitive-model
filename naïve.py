@@ -45,9 +45,10 @@ class NaïveModel(ABC):
         self.idx2label: Dict[ItemIdx, ItemLabel] = idx2label
         self.median_distances: Dict[ItemLabel, Length] = self.__median_distances_from_words(words)
 
-    @abstractmethod
     @property
+    @abstractmethod
     def _graph_filename(self) -> str:
+        """The name of the file in which the graph is stored. (Not the full path.)"""
         raise NotImplementedError()
 
     def __median_distances_from_words(self, words: List[ItemLabel]) -> Dict[ItemLabel, Length]:
@@ -62,11 +63,24 @@ class NaïveModel(ABC):
         }
 
     def is_hit(self, source, target) -> bool:
-        """Hit when target is < median of distances from source"""
+        """
+        Hit when target is < median of distances from source
+        :param source:
+        :param target:
+        :return:
+        :raises LookupError
+        """
         return self.distance_between(source, target) < self.median_distances[source]
 
     @abstractmethod
     def distance_between(self, word_1, word_2) -> float:
+        """
+        Compute distance between two words.
+        :param word_1:
+        :param word_2:
+        :return:
+        :raises LookupError
+        """
         raise NotImplementedError()
 
 
@@ -94,10 +108,10 @@ class LinguisticNaïveModel(NaïveModel, ABC):
                  n_words: int, distributional_model: DistributionalSemanticModel):
         words: List[ItemLabel] = FreqDist.load(distributional_model.corpus_meta.freq_dist_path).most_common_tokens(
             n_words)
-        super().__init__(length_factor=length_factor, words=words,
-                         idx2label=load_labels_from_corpus(distributional_model.corpus_meta, n_words))
         self.distributional_model: DistributionalSemanticModel = distributional_model
         self.n_words: int = n_words
+        super().__init__(length_factor=length_factor, words=words,
+                         idx2label=load_labels_from_corpus(distributional_model.corpus_meta, n_words))
 
 
 class LinguisticVectorNaïveModel(LinguisticNaïveModel):
