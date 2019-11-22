@@ -142,7 +142,7 @@ class LinguisticNgramNaïveModel(LinguisticNaïveModelComponent):
         # (i.e. without filtering the matrix first).
         self._max_value = self._distributional_model.underlying_count_model.matrix.data.max()
         self._min_value = self._distributional_model.underlying_count_model.matrix.data.min()
-        assert self._min_value > 0  # make sure zeros were eliminated
+        assert self._min_value != 0  # make sure zeros were eliminated
         self._distributional_model.untrain()
 
     def distance_between(self, word_1, word_2) -> float:
