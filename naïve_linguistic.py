@@ -15,138 +15,127 @@ caiwingfield.net
 ---------------------------
 """
 from abc import ABC, abstractmethod
-from collections import defaultdict
-from os import path
-from pathlib import Path
-from typing import List, Dict
+from typing import Dict
+from logging import getLogger
 
-from numpy import median
+from numpy import array, percentile
+from scipy.sparse import issparse
+from scipy.spatial import distance_matrix as minkowski_distance_matrix
+from scipy.spatial.distance import cdist as distance_matrix
 
 from ldm.corpus.indexing import FreqDist
 from ldm.model.base import DistributionalSemanticModel, VectorSemanticModel
 from ldm.model.ngram import NgramModel
+from ldm.utils.lists import chunks
 from ldm.utils.maths import DistanceType
 from model.basic_types import ItemLabel
-from model.graph import iter_edges_from_edgelist
 from model.linguistic_component import load_labels_from_corpus
-from model.naïve import NaïveModelComponent, logger
+from model.naïve import NaïveModelComponent
 from model.utils.maths import distance_from_similarity
-from preferences import Preferences
+
+logger = getLogger(__name__)
+
+
+SPARSE_BATCH_SIZE = 1_000
 
 
 class LinguisticNaïveModelComponent(NaïveModelComponent, ABC):
 
-    def __init__(self, length_factor: int, n_words: int,
-                 distributional_model: DistributionalSemanticModel):
-        words: List[ItemLabel] = FreqDist.load(distributional_model.corpus_meta.freq_dist_path)\
-            .most_common_tokens(n_words)
-        self.distributional_model: DistributionalSemanticModel = distributional_model
-        super().__init__(length_factor=length_factor, words=words,
-                         idx2label=load_labels_from_corpus(distributional_model.corpus_meta, n_words))
 
-    @property
+    def __init__(self, n_words: int, distributional_model: DistributionalSemanticModel):
+        self._distributional_model: DistributionalSemanticModel = distributional_model
+
+        # cache for median distances
+        self.__median_distances: Dict[ItemLabel, float] = dict()
+
+        super().__init__(
+            words=FreqDist.load(distributional_model.corpus_meta.freq_dist_path).most_common_tokens(n_words),
+            idx2label=load_labels_from_corpus(distributional_model.corpus_meta, n_words))
+
+    def median_distance_from(self, word: ItemLabel) -> float:
+        if word not in self.__median_distances:
+            self.__median_distances[word] = self._compute_median_distance_from(word)
+        return self.__median_distances[word]
+
     @abstractmethod
-    def _graph_filename(self) -> str:
-        """The name of the file in which the graph is stored. (Not the full path.)"""
+    def _compute_median_distance_from(self, word: ItemLabel) -> float:
         raise NotImplementedError()
-
-    @property
-    @abstractmethod
-    def _distributions_filename(self) -> str:
-        """The name of the file in which to store the edge length distributions. (Not the full path.)"""
-        raise NotImplementedError()
-
-    @property
-    def _distributions_path(self) -> Path:
-        return Path(Preferences.graphs_dir, self._distributions_filename)
-
-    def __load_distance_distributions(self) -> Dict[ItemLabel, List[Length]]:
-        distributions: Dict[ItemLabel, List[Length]] = defaultdict(list)
-        with self._distributions_path.open(mode="r", encoding="utf-8") as distributions_file:
-            for line in distributions_file:
-                label, ds = line.split(":")
-                distributions[label].extend([int(d) for d in ds.split(",")])
-        return distributions
-
-    def __save_distance_distributions(self, distributions: Dict[ItemLabel, List[Length]]):
-        with self._distributions_path.open(mode="r", encoding="utf-8") as distributions_file:
-            for l, ds in distributions.items():
-                line = f"{l}:"
-                line += ",".join([str(d) for d in ds])
-                line += "\n"
-
-    def __median_distances_from_words(self, words: List[ItemLabel]) -> Dict[ItemLabel, Length]:
-        if self._distributions_path.exists():
-            logger.info("Loading median distances")
-            distributions: Dict[ItemLabel, List[Length]] = self.__load_distance_distributions()
-        else:
-            logger.info("Computing median distances")
-            distributions: Dict[ItemLabel, List[Length]] = defaultdict(list)
-            for i, (edge, length) in enumerate(iter_edges_from_edgelist(path.join(Preferences.graphs_dir, self._graph_filename)), start=1):
-                for word in words:
-                    if self.label2idx[word] in edge:
-                        distributions[word].append(length)
-                if i % 1000 == 0:
-                    logger.info(f"Done {i:,} edges.")
-            self.__save_distance_distributions(distributions)
-        return {
-            label: Length(median(lengths))
-            for label, lengths in distributions.items()
-        }
 
 
 class LinguisticVectorNaïveModel(LinguisticNaïveModelComponent):
 
-    def __init__(self,
-                 n_words: int,
-                 distance_type: DistanceType,
-                 length_factor: int,
-                 distributional_model: VectorSemanticModel):
+    def __init__(self, n_words: int, distributional_model: VectorSemanticModel,
+                 distance_type: DistanceType):
         self.distance_type: DistanceType = distance_type
-        super().__init__(length_factor=length_factor, distributional_model=distributional_model, n_words=n_words)
+        super().__init__(distributional_model=distributional_model, n_words=n_words)
 
     def distance_between(self, word_1, word_2) -> float:
-        self.distributional_model.train(memory_map=True)
-        assert isinstance(self.distributional_model, VectorSemanticModel)
-        return self.distributional_model.distance_between(word_1, word_2, self.distance_type)
+        self._distributional_model.train(memory_map=True)
+        assert isinstance(self._distributional_model, VectorSemanticModel)
+        return self._distributional_model.distance_between(word_1, word_2, self.distance_type)
 
-    @property
-    def _graph_filename(self) -> str:
-        # Copied from LinguisticComponent
-        return f"{self.distributional_model.name} {self.distance_type.name} {self._n_words} words length {self.length_factor}.edgelist"
+    def _compute_median_distance_from(self, word: ItemLabel) -> float:
+        assert isinstance(self._distributional_model, VectorSemanticModel)
+        self._distributional_model.train(memory_map=True)
+        word_vector: array = self._distributional_model.vector_for_word(word)
+        word_vector: array = word_vector.reshape(1, len(word_vector))
 
-    @property
-    def _distributions_filename(self) -> str:
-        return f"{self.distributional_model.name} {self.distance_type.name} {self._n_words} words length {self.length_factor}.distributions"
+        distances: array
+        if issparse(self._distributional_model._model):
+            # can't do pdists for sparse matrices
+            # can't convert self.model to dense as it's BIG (up to 50k x 10M)
+            # so chunk self.model up and convert each chunk to dense
+            ds = []
+            for chunk in chunks(range(self._distributional_model._model.shape[0]), SPARSE_BATCH_SIZE):
+                model_chunk = self._distributional_model._model[chunk, :].todense()
+                if self.distance_type in [DistanceType.cosine, DistanceType.Euclidean, DistanceType.correlation]:
+                    distance_chunk = distance_matrix(word_vector, model_chunk, metric=self.distance_type.name)
+                elif self.distance_type == DistanceType.Minkowski3:
+                    distance_chunk = minkowski_distance_matrix(word_vector, model_chunk, 3)
+                else:
+                    raise NotImplementedError()
+
+                ds.extend(distance_chunk.squeeze().tolist())
+            distances = array(ds)
+
+        else:
+            # Can just do regular pdists
+            if self.distance_type in [DistanceType.cosine, DistanceType.Euclidean, DistanceType.correlation]:
+                distances = distance_matrix(word_vector, self._distributional_model._model, metric=self.distance_type.name)
+            elif self.distance_type == DistanceType.Minkowski3:
+                distances = minkowski_distance_matrix(word_vector, self._distributional_model._model, 3)
+            else:
+                raise NotImplementedError()
+
+        return percentile(distances, 50)
 
 
 class LinguisticNgramNaïveModel(LinguisticNaïveModelComponent):
 
-    def __init__(self, n_words: int, length_factor: int, distributional_model: NgramModel):
-        super().__init__(length_factor=length_factor, distributional_model=distributional_model, n_words=n_words)
+    def __init__(self, n_words: int, distributional_model: NgramModel):
+        super().__init__(distributional_model=distributional_model, n_words=n_words)
+        logger.info("Finding minimum and maximum values")
         # Set the max value for later turning associations into distances.
         # We will rarely need the whole model in memory, so we load it once for computing the max, then unload it.
-        self.distributional_model.train(memory_map=True)
-        assert isinstance(self.distributional_model, NgramModel)
+        self._distributional_model.train(memory_map=True)
+        assert isinstance(self._distributional_model, NgramModel)
         # This is the same calculation as is used in save_edgelist_from_similarity
         # (i.e. without filtering the matrix first).
-        self._max_value = self.distributional_model.underlying_count_model.matrix.data.max()
-        self._min_value = self.distributional_model.underlying_count_model.matrix.data.min()
+        self._max_value = self._distributional_model.underlying_count_model.matrix.data.max()
+        self._min_value = self._distributional_model.underlying_count_model.matrix.data.min()
         assert self._min_value > 0  # make sure zeros were eliminated
-        self.distributional_model.untrain()
+        self._distributional_model.untrain()
 
     def distance_between(self, word_1, word_2) -> float:
-        self.distributional_model.train(memory_map=True)
-        assert isinstance(self.distributional_model, NgramModel)
+        self._distributional_model.train(memory_map=True)
+        assert isinstance(self._distributional_model, NgramModel)
         return distance_from_similarity(
-            self.distributional_model.association_between(word_1, word_2),
+            self._distributional_model.association_between(word_1, word_2),
             self._max_value, self._min_value)
 
-    @property
-    def _graph_filename(self) -> str:
-        # Copied from LinguisticComponent
-        return f"{self.distributional_model.name} {self._n_words} words length {self.length_factor}.edgelist"
-
-    @property
-    def _distributions_filename(self) -> str:
-        return f"{self.distributional_model.name} {self._n_words} words length {self.length_factor}.distributions"
+    def _compute_median_distance_from(self, word: ItemLabel) -> float:
+        assert isinstance(self._distributional_model, NgramModel)
+        similarities: array = self._distributional_model.underlying_count_model.vector_for_word(word)
+        distances: array = distance_from_similarity(similarities,
+                                                    min_similarity=self._min_value, max_similarity=self._max_value)
+        return percentile(distances, 50)
