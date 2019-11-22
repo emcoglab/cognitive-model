@@ -26,6 +26,7 @@ from scipy.spatial.distance import cdist as distance_matrix
 from ldm.corpus.indexing import FreqDist
 from ldm.model.base import DistributionalSemanticModel, VectorSemanticModel
 from ldm.model.ngram import NgramModel
+from ldm.utils.exceptions import WordNotFoundError
 from ldm.utils.lists import chunks
 from ldm.utils.maths import DistanceType
 from model.basic_types import ItemLabel
@@ -41,7 +42,6 @@ SPARSE_BATCH_SIZE = 1_000
 
 class LinguisticNaïveModelComponent(NaïveModelComponent, ABC):
 
-
     def __init__(self, n_words: int, distributional_model: DistributionalSemanticModel):
         self._distributional_model: DistributionalSemanticModel = distributional_model
 
@@ -53,6 +53,9 @@ class LinguisticNaïveModelComponent(NaïveModelComponent, ABC):
             idx2label=load_labels_from_corpus(distributional_model.corpus_meta, n_words))
 
     def median_distance_from(self, word: ItemLabel) -> float:
+        """:raises WordNotFoundError"""
+        if word not in self.words:
+            raise WordNotFoundError(word)
         if word not in self.__median_distances:
             self.__median_distances[word] = self._compute_median_distance_from(word)
         return self.__median_distances[word]
@@ -70,11 +73,19 @@ class LinguisticVectorNaïveModel(LinguisticNaïveModelComponent):
         super().__init__(distributional_model=distributional_model, n_words=n_words)
 
     def distance_between(self, word_1, word_2) -> float:
+        """:raises WordNotFoundError"""
+        if word_1 not in self.words:
+            raise WordNotFoundError(word_1)
+        if word_2 not in self.words:
+            raise WordNotFoundError(word_2)
         self._distributional_model.train(memory_map=True)
         assert isinstance(self._distributional_model, VectorSemanticModel)
         return self._distributional_model.distance_between(word_1, word_2, self.distance_type)
 
     def _compute_median_distance_from(self, word: ItemLabel) -> float:
+        """:raises WordNotFoundError"""
+        if word not in self.words:
+            raise WordNotFoundError(word)
         assert isinstance(self._distributional_model, VectorSemanticModel)
         self._distributional_model.train(memory_map=True)
         word_vector: array = self._distributional_model.vector_for_word(word)
@@ -86,7 +97,8 @@ class LinguisticVectorNaïveModel(LinguisticNaïveModelComponent):
             # can't convert self.model to dense as it's BIG (up to 50k x 10M)
             # so chunk self.model up and convert each chunk to dense
             ds = []
-            for chunk in chunks(range(self._distributional_model._model.shape[0]), SPARSE_BATCH_SIZE):
+            # Only need to take chunks up to the number of words being considered
+            for chunk in chunks(range(self._n_words), SPARSE_BATCH_SIZE):
                 model_chunk = self._distributional_model._model[chunk, :].todense()
                 if self.distance_type in [DistanceType.cosine, DistanceType.Euclidean, DistanceType.correlation]:
                     distance_chunk = distance_matrix(word_vector, model_chunk, metric=self.distance_type.name)
@@ -94,16 +106,23 @@ class LinguisticVectorNaïveModel(LinguisticNaïveModelComponent):
                     distance_chunk = minkowski_distance_matrix(word_vector, model_chunk, 3)
                 else:
                     raise NotImplementedError()
-
                 ds.extend(distance_chunk.squeeze().tolist())
             distances = array(ds)
 
         else:
             # Can just do regular pdists
             if self.distance_type in [DistanceType.cosine, DistanceType.Euclidean, DistanceType.correlation]:
-                distances = distance_matrix(word_vector, self._distributional_model._model, metric=self.distance_type.name)
+                distances = distance_matrix(
+                    word_vector,
+                    # Only consider matrix up to n_words
+                    self._distributional_model._model[:self._n_words, :],
+                    metric=self.distance_type.name)
             elif self.distance_type == DistanceType.Minkowski3:
-                distances = minkowski_distance_matrix(word_vector, self._distributional_model._model, 3)
+                distances = minkowski_distance_matrix(
+                    word_vector,
+                    # Only consider matrix up to n_words
+                    self._distributional_model._model[:self._n_words, :],
+                    3)
             else:
                 raise NotImplementedError()
 
@@ -127,6 +146,11 @@ class LinguisticNgramNaïveModel(LinguisticNaïveModelComponent):
         self._distributional_model.untrain()
 
     def distance_between(self, word_1, word_2) -> float:
+        """:raises WordNotFoundError"""
+        if word_1 not in self.words:
+            raise WordNotFoundError(word_1)
+        if word_2 not in self.words:
+            raise WordNotFoundError(word_2)
         self._distributional_model.train(memory_map=True)
         assert isinstance(self._distributional_model, NgramModel)
         return distance_from_similarity(
@@ -134,6 +158,9 @@ class LinguisticNgramNaïveModel(LinguisticNaïveModelComponent):
             self._max_value, self._min_value)
 
     def _compute_median_distance_from(self, word: ItemLabel) -> float:
+        """:raises WordNotFoundError"""
+        if word not in self.words:
+            raise WordNotFoundError(word)
         assert isinstance(self._distributional_model, NgramModel)
         similarities: array = self._distributional_model.underlying_count_model.vector_for_word(word)
         distances: array = distance_from_similarity(similarities,
