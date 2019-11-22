@@ -78,7 +78,8 @@ class LinguisticVectorNaïveModel(LinguisticNaïveModelComponent):
             raise WordNotFoundError(word_1)
         if word_2 not in self.words:
             raise WordNotFoundError(word_2)
-        self._distributional_model.train(memory_map=True)
+        if not self._distributional_model.is_trained:
+            self._distributional_model.train(memory_map=True)
         assert isinstance(self._distributional_model, VectorSemanticModel)
         return self._distributional_model.distance_between(word_1, word_2, self.distance_type)
 
@@ -86,8 +87,9 @@ class LinguisticVectorNaïveModel(LinguisticNaïveModelComponent):
         """:raises WordNotFoundError"""
         if word not in self.words:
             raise WordNotFoundError(word)
+        if not self._distributional_model.is_trained:
+            self._distributional_model.train(memory_map=True)
         assert isinstance(self._distributional_model, VectorSemanticModel)
-        self._distributional_model.train(memory_map=True)
         word_vector: array = self._distributional_model.vector_for_word(word)
         word_vector: array = word_vector.reshape(1, len(word_vector))
 
@@ -151,7 +153,8 @@ class LinguisticNgramNaïveModel(LinguisticNaïveModelComponent):
             raise WordNotFoundError(word_1)
         if word_2 not in self.words:
             raise WordNotFoundError(word_2)
-        self._distributional_model.train(memory_map=True)
+        if not self._distributional_model.is_trained:
+            self._distributional_model.train(memory_map=True)
         assert isinstance(self._distributional_model, NgramModel)
         return distance_from_similarity(
             self._distributional_model.association_between(word_1, word_2),
