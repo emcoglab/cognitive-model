@@ -119,18 +119,18 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         assert (lognormal_median > 0)
         assert (lognormal_sigma > 0)
         # zero-size buffer size limit is degenerate: the buffer is always empty.
-        assert (buffer_capacity > 0) or (buffer_capacity is None)
+        assert (buffer_capacity is None) or (buffer_capacity > 0)
         # zero-size accessible set size limit is degenerate: the set is always empty.
-        assert (accessible_set_capacity > 0) or (accessible_set_capacity is None)
+        assert (accessible_set_capacity is None) or (accessible_set_capacity > 0)
         assert (activation_cap
                 # If activation_cap == buffer_threshold, items will only enter the buffer when fully activated.
                 >= buffer_threshold
-                # If buffer_pruning_threshold == accessible_set_threshold then the only things in the accessible set with be
-                # those items which were displaced from the buffer before being pruned. We probably won't use this but
-                # it's not invalid or degenerate.
+                # If buffer_pruning_threshold == accessible_set_threshold then the only things in the accessible set
+                # will be those items which were displaced from the buffer before being pruned. We probably won't use
+                # this but it's not invalid or degenerate.
                 >= accessible_set_threshold
-                # accessible_set_threshold must be strictly positive, else no item can ever be reactivated (since membership
-                # to the accessible set is a guard to reactivation).
+                # accessible_set_threshold must be strictly positive, else no item can ever be reactivated (since
+                # membership to the accessible set is a guard to reactivation).
                 > 0)
 
         # endregion
