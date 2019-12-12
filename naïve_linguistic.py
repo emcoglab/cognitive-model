@@ -86,35 +86,36 @@ class LinguisticOneHopComponent(LinguisticComponent):
 
 class LinguisticDistanceOnlyModelComponent(DistanceOnlyModelComponent, ABC):
 
-    def __init__(self, n_words: int, distributional_model: DistributionalSemanticModel):
+    def __init__(self, quantile: float, n_words: int, distributional_model: DistributionalSemanticModel):
         self._distributional_model: DistributionalSemanticModel = distributional_model
 
-        # cache for median distances
-        self.__median_distances: Dict[ItemLabel, float] = dict()
+        # cache for quantile distances
+        self.__quantile_distances: Dict[ItemLabel, float] = dict()
 
         super().__init__(
+            quantile=quantile,
             words=FreqDist.load(distributional_model.corpus_meta.freq_dist_path).most_common_tokens(n_words),
             idx2label=load_labels_from_corpus(distributional_model.corpus_meta, n_words))
 
-    def median_distance_from(self, word: ItemLabel) -> float:
+    def quantile_distance_from(self, word: ItemLabel) -> float:
         """:raises WordNotFoundError"""
         if word not in self.words:
             raise WordNotFoundError(word)
-        if word not in self.__median_distances:
-            self.__median_distances[word] = self._compute_median_distance_from(word)
-        return self.__median_distances[word]
+        if word not in self.__quantile_distances:
+            self.__quantile_distances[word] = self._compute_quantile_distance_from(word)
+        return self.__quantile_distances[word]
 
     @abstractmethod
-    def _compute_median_distance_from(self, word: ItemLabel) -> float:
+    def _compute_quantile_distance_from(self, word: ItemLabel) -> float:
         raise NotImplementedError()
 
 
 class LinguisticVectorDistanceOnlyModel(LinguisticDistanceOnlyModelComponent):
 
-    def __init__(self, n_words: int, distributional_model: VectorSemanticModel,
+    def __init__(self, quantile: float, n_words: int, distributional_model: VectorSemanticModel,
                  distance_type: DistanceType):
         self.distance_type: DistanceType = distance_type
-        super().__init__(distributional_model=distributional_model, n_words=n_words)
+        super().__init__(quantile=quantile, distributional_model=distributional_model, n_words=n_words)
 
     def distance_between(self, word_1, word_2) -> float:
         """:raises WordNotFoundError"""
@@ -127,7 +128,7 @@ class LinguisticVectorDistanceOnlyModel(LinguisticDistanceOnlyModelComponent):
         assert isinstance(self._distributional_model, VectorSemanticModel)
         return self._distributional_model.distance_between(word_1, word_2, self.distance_type)
 
-    def _compute_median_distance_from(self, word: ItemLabel) -> float:
+    def _compute_quantile_distance_from(self, word: ItemLabel) -> float:
         """:raises WordNotFoundError"""
         if word not in self.words:
             raise WordNotFoundError(word)
@@ -172,13 +173,13 @@ class LinguisticVectorDistanceOnlyModel(LinguisticDistanceOnlyModelComponent):
             else:
                 raise NotImplementedError()
 
-        return percentile(distances, 50)
+        return percentile(distances, self.quantile * 100)
 
 
 class LinguisticNgramDistanceOnlyModel(LinguisticDistanceOnlyModelComponent):
 
-    def __init__(self, n_words: int, distributional_model: NgramModel):
-        super().__init__(distributional_model=distributional_model, n_words=n_words)
+    def __init__(self, quantile: float, n_words: int, distributional_model: NgramModel):
+        super().__init__(quantile=quantile, distributional_model=distributional_model, n_words=n_words)
         logger.info("Finding minimum and maximum values")
         # Set the max value for later turning associations into distances.
         # We will rarely need the whole model in memory, so we load it once for computing the max, then unload it.
@@ -204,7 +205,7 @@ class LinguisticNgramDistanceOnlyModel(LinguisticDistanceOnlyModelComponent):
             self._distributional_model.association_between(word_1, word_2),
             self._max_value, self._min_value)
 
-    def _compute_median_distance_from(self, word: ItemLabel) -> float:
+    def _compute_quantile_distance_from(self, word: ItemLabel) -> float:
         """:raises WordNotFoundError"""
         if word not in self.words:
             raise WordNotFoundError(word)
@@ -212,4 +213,4 @@ class LinguisticNgramDistanceOnlyModel(LinguisticDistanceOnlyModelComponent):
         similarities: array = self._distributional_model.underlying_count_model.vector_for_word(word)
         distances: array = distance_from_similarity(similarities,
                                                     min_similarity=self._min_value, max_similarity=self._max_value)
-        return percentile(distances, 50)
+        return percentile(distances, self.quantile * 100)

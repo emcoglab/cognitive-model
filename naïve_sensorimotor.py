@@ -74,14 +74,15 @@ class SensorimotorOneHopComponent(SensorimotorComponent):
 
 
 class SensorimotorDistanceOnlyModelComponent(DistanceOnlyModelComponent):
-    def __init__(self, distance_type: DistanceType):
+    def __init__(self, quantile: float, distance_type: DistanceType):
         self._sensorimotor_norms: SensorimotorNorms = SensorimotorNorms()
         self.distance_type: DistanceType = distance_type
 
-        # cache for median distances
-        self.__median_distances: Dict[ItemLabel, float] = dict()
+        # cache for quantile distances
+        self.__quantile_distances: Dict[ItemLabel, float] = dict()
 
-        super().__init__(words=list(self._sensorimotor_norms.iter_words()),
+        super().__init__(quantile=quantile,
+                         words=list(self._sensorimotor_norms.iter_words()),
                          idx2label=load_labels_from_sensorimotor())
 
     def distance_between(self, word_1: ItemLabel, word_2: ItemLabel) -> float:
@@ -90,12 +91,12 @@ class SensorimotorDistanceOnlyModelComponent(DistanceOnlyModelComponent):
             self._sensorimotor_norms.vector_for_word(word_2),
             self.distance_type)
 
-    def median_distance_from(self, word: ItemLabel) -> float:
-        if word not in self.__median_distances:
-            self.__median_distances[word] = self._compute_median_distance_from(word)
-        return self.__median_distances[word]
+    def quantile_distance_from(self, word: ItemLabel) -> float:
+        if word not in self.__quantile_distances:
+            self.__quantile_distances[word] = self._compute_quantile_distance_from(word)
+        return self.__quantile_distances[word]
 
-    def _compute_median_distance_from(self, word: ItemLabel) -> float:
+    def _compute_quantile_distance_from(self, word: ItemLabel) -> float:
         """
         :raises WordNotInNormsError
         """
@@ -110,4 +111,4 @@ class SensorimotorDistanceOnlyModelComponent(DistanceOnlyModelComponent):
         else:
             raise NotImplementedError()
 
-        return percentile(distances, 50)
+        return percentile(distances, self.quantile * 100)

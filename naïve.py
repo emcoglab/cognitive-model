@@ -25,8 +25,11 @@ logger = getLogger(__name__)
 
 class DistanceOnlyModelComponent(ABC):
     def __init__(self,
+                 quantile: float,
                  words: List[ItemLabel],
                  idx2label: Dict[ItemIdx, ItemLabel]):
+        assert (0 <= quantile <= 1)
+        self.quantile = quantile
         self.words: List[ItemLabel] = words
         self._n_words: int = len(words)
         self.idx2label: Dict[ItemIdx, ItemLabel] = idx2label
@@ -42,10 +45,10 @@ class DistanceOnlyModelComponent(ABC):
             raise LookupError(source)
         if target not in self.words:
             raise LookupError(target)
-        return self.distance_between(source, target) < self.median_distance_from(source)
+        return self.distance_between(source, target) < self.quantile_distance_from(source)
 
     @abstractmethod
-    def median_distance_from(self, word: ItemLabel) -> float:
+    def quantile_distance_from(self, word: ItemLabel) -> float:
         """
         :raises LookupError
         """
