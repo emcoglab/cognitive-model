@@ -15,10 +15,10 @@ caiwingfield.net
 ---------------------------
 """
 from abc import ABC, abstractmethod
-from typing import Dict
+from typing import Dict, List
 from logging import getLogger
 
-from numpy import array, percentile
+from numpy import array, percentile, Infinity
 from scipy.sparse import issparse
 from scipy.spatial import distance_matrix as minkowski_distance_matrix
 from scipy.spatial.distance import cdist as distance_matrix
@@ -29,9 +29,10 @@ from ldm.model.ngram import NgramModel
 from ldm.utils.exceptions import WordNotFoundError
 from ldm.utils.lists import chunks
 from ldm.utils.maths import DistanceType
-from model.basic_types import ItemLabel
-from model.linguistic_component import load_labels_from_corpus
-from model.naïve import NaïveModelComponent
+from model.basic_types import ItemLabel, ActivationValue, ItemIdx
+from model.graph import EdgePruningType
+from model.linguistic_component import load_labels_from_corpus, LinguisticComponent
+from model.naïve import DistanceOnlyModelComponent
 from model.utils.maths import distance_from_similarity
 
 logger = getLogger(__name__)
@@ -40,7 +41,50 @@ logger = getLogger(__name__)
 SPARSE_BATCH_SIZE = 1_000
 
 
-class LinguisticNaïveModelComponent(NaïveModelComponent, ABC):
+class LinguisticOneHopComponent(LinguisticComponent):
+    """A LinguisticComponent which allows only hops from the initial nodes."""
+    def __init__(self, n_words: int, distributional_model: DistributionalSemanticModel, length_factor: int,
+                 node_decay_factor: float, edge_decay_sd_factor: float, impulse_pruning_threshold: ActivationValue,
+                 firing_threshold: ActivationValue, activation_cap: ActivationValue = Infinity,
+                 distance_type: DistanceType = None, edge_pruning=None, edge_pruning_type: EdgePruningType = None):
+        super().__init__(n_words, distributional_model, length_factor, node_decay_factor, edge_decay_sd_factor,
+                         impulse_pruning_threshold, firing_threshold, activation_cap, distance_type, edge_pruning,
+                         edge_pruning_type)
+
+        # region Resettable
+
+        # Prevent additional impulses being created
+        self._block_new_impulses: bool = False
+
+        # endregion
+
+    def reset(self):
+        super().reset()
+        self._block_new_impulses = False
+
+    def schedule_activation_of_item_with_idx(self, idx: ItemIdx, activation: ActivationValue, arrival_time: int):
+        if self._block_new_impulses:
+            return
+        else:
+            super().schedule_activation_of_item_with_idx(idx, activation, arrival_time)
+
+    def scheduled_activation_count(self) -> int:
+        return sum([1
+                    for tick, schedule_activation in self._scheduled_activations.items()
+                    for idx, activation in schedule_activation.items()
+                    if activation > 0])
+
+    def activate_item_with_idx(self, idx: ItemIdx, activation: ActivationValue):
+        super().activate_item_with_idx(idx, activation)
+        self._block_new_impulses = True
+
+    def activate_items_with_idxs(self, idxs: List[ItemIdx], activation: ActivationValue):
+        for idx in idxs:
+            super().activate_item_with_idx(idx, activation)
+        self._block_new_impulses = True
+
+
+class LinguisticDistanceOnlyModelComponent(DistanceOnlyModelComponent, ABC):
 
     def __init__(self, n_words: int, distributional_model: DistributionalSemanticModel):
         self._distributional_model: DistributionalSemanticModel = distributional_model
@@ -65,7 +109,7 @@ class LinguisticNaïveModelComponent(NaïveModelComponent, ABC):
         raise NotImplementedError()
 
 
-class LinguisticVectorNaïveModel(LinguisticNaïveModelComponent):
+class LinguisticVectorDistanceOnlyModel(LinguisticDistanceOnlyModelComponent):
 
     def __init__(self, n_words: int, distributional_model: VectorSemanticModel,
                  distance_type: DistanceType):
@@ -131,7 +175,7 @@ class LinguisticVectorNaïveModel(LinguisticNaïveModelComponent):
         return percentile(distances, 50)
 
 
-class LinguisticNgramNaïveModel(LinguisticNaïveModelComponent):
+class LinguisticNgramDistanceOnlyModel(LinguisticDistanceOnlyModelComponent):
 
     def __init__(self, n_words: int, distributional_model: NgramModel):
         super().__init__(distributional_model=distributional_model, n_words=n_words)

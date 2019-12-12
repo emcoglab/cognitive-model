@@ -23,7 +23,7 @@ from model.basic_types import ItemLabel, ItemIdx
 logger = getLogger(__name__)
 
 
-class NaïveModelComponent(ABC):
+class DistanceOnlyModelComponent(ABC):
     def __init__(self,
                  words: List[ItemLabel],
                  idx2label: Dict[ItemIdx, ItemLabel]):

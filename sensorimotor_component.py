@@ -19,7 +19,7 @@ import logging
 from dataclasses import dataclass
 from enum import Enum, auto
 from os import path
-from typing import Set, List, Dict
+from typing import Set, List, Dict, Optional
 
 from ldm.utils.maths import DistanceType, clamp01
 
@@ -77,8 +77,8 @@ class SensorimotorComponent(TemporalSpatialPropagation):
                  max_sphere_radius: int,
                  lognormal_median: float,
                  lognormal_sigma: float,
-                 buffer_capacity: int,
-                 accessible_set_capacity: int,
+                 buffer_capacity: Optional[int],
+                 accessible_set_capacity: Optional[int],
                  buffer_threshold: ActivationValue,
                  accessible_set_threshold: ActivationValue,
                  activation_cap: ActivationValue,
@@ -119,9 +119,9 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         assert (lognormal_median > 0)
         assert (lognormal_sigma > 0)
         # zero-size buffer size limit is degenerate: the buffer is always empty.
-        assert (buffer_capacity > 0)
+        assert (buffer_capacity > 0) or (buffer_capacity is None)
         # zero-size accessible set size limit is degenerate: the set is always empty.
-        assert (accessible_set_capacity > 0)
+        assert (accessible_set_capacity > 0) or (accessible_set_capacity is None)
         assert (activation_cap
                 # If activation_cap == buffer_threshold, items will only enter the buffer when fully activated.
                 >= buffer_threshold
@@ -172,8 +172,8 @@ class SensorimotorComponent(TemporalSpatialPropagation):
 
         # Data
 
-        self.buffer_capacity = buffer_capacity
-        self.accessible_set_capacity = accessible_set_capacity
+        self.buffer_capacity: Optional[int] = buffer_capacity
+        self.accessible_set_capacity: Optional[int] = accessible_set_capacity
 
         # A local copy of the sensorimotor norms data
         self._sensorimotor_norms: SensorimotorNorms = SensorimotorNorms()
@@ -197,6 +197,11 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         # This is updated each .tick() based on items which fired (a prerequisite for entering the buffer)
         self.working_memory_buffer: Set[ItemIdx] = set()
 
+        # Bounded between 0 and 1 inclusive
+        # 0 when accessible set is empty, 1 when full.
+        # 0 when there is no bounded capacity.
+        self.__memory_pressure: float = 0
+
         # The set of items which are "accessible to conscious awareness" even if they are not in the working memory
         # buffer
         self.accessible_set: Set[ItemIdx] = set()
@@ -211,7 +216,10 @@ class SensorimotorComponent(TemporalSpatialPropagation):
     def accessible_set(self, value):
         # Update memory pressure whenever we alter the accessible set
         self.__accessible_set = value
-        self.__memory_pressure = clamp01(len(self.__accessible_set) / self.accessible_set_capacity)
+        if self.accessible_set_capacity is not None:
+            self.__memory_pressure = clamp01(len(self.__accessible_set) / self.accessible_set_capacity)
+        else:
+            self.__memory_pressure = 0
 
     @property
     def memory_pressure(self) -> float:
@@ -245,7 +253,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         decay_events = self.__prune_decayed_items_in_buffer()
         self.__prune_decayed_items_in_accessible_set()
 
-        logger.info(f"\tAS: {len(self.accessible_set)}/{self.accessible_set_capacity} "
+        logger.info(f"\tAS: {len(self.accessible_set)}/{self.accessible_set_capacity if self.accessible_set_capacity is not None else '∞'} "
                     f"(MP: {self.memory_pressure})")
 
         # Proceed with ._evolve_model() and record what became activated
@@ -404,7 +412,8 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         new_buffer_items = sorted(new_buffer_items, key=lambda kv: kv[1].activation, reverse=True)
 
         # Trim down to size if necessary
-        new_buffer_items = new_buffer_items[:self.buffer_capacity]
+        if self.buffer_capacity is not None:
+            new_buffer_items = new_buffer_items[:self.buffer_capacity]
 
         # endregion
 

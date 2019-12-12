@@ -14,7 +14,7 @@ caiwingfield.net
 2019
 ---------------------------
 """
-from typing import Dict
+from typing import Dict, List, Optional
 
 from numpy import array, percentile
 from scipy.spatial import distance_matrix as minkowski_distance_matrix
@@ -23,12 +23,57 @@ from scipy.spatial.distance import cdist as distance_matrix
 from ldm.utils.maths import DistanceType, distance
 from sensorimotor_norms.sensorimotor_norms import SensorimotorNorms
 
-from model.basic_types import ItemLabel
-from model.naïve import NaïveModelComponent
-from model.sensorimotor_component import load_labels_from_sensorimotor
+from model.basic_types import ItemLabel, ItemIdx, ActivationValue
+from model.naïve import DistanceOnlyModelComponent
+from model.sensorimotor_component import load_labels_from_sensorimotor, SensorimotorComponent, NormAttenuationStatistic
 
 
-class SensorimotorNaïveModelComponent(NaïveModelComponent):
+class SensorimotorOneHopComponent(SensorimotorComponent):
+    """A SensorimotorComponent which allows only hops from the initial nodes."""
+    def __init__(self, distance_type: DistanceType, length_factor: int, max_sphere_radius: int, lognormal_median: float,
+                 lognormal_sigma: float, buffer_capacity: Optional[int], accessible_set_capacity: Optional[int],
+                 buffer_threshold: ActivationValue, accessible_set_threshold: ActivationValue,
+                 activation_cap: ActivationValue, norm_attenuation_statistic: NormAttenuationStatistic,
+                 use_prepruned: bool):
+
+        super().__init__(distance_type, length_factor, max_sphere_radius, lognormal_median, lognormal_sigma,
+                         buffer_capacity, accessible_set_capacity, buffer_threshold, accessible_set_threshold,
+                         activation_cap, norm_attenuation_statistic, use_prepruned)
+
+        # region Resettable
+
+        # Prevent additional impulses being created
+        self._block_new_impulses: bool = False
+
+        # endregion
+
+    def reset(self):
+        super().reset()
+        self._block_new_impulses = False
+
+    def schedule_activation_of_item_with_idx(self, idx: ItemIdx, activation: ActivationValue, arrival_time: int):
+        if self._block_new_impulses:
+            return
+        else:
+            super().schedule_activation_of_item_with_idx(idx, activation, arrival_time)
+
+    def scheduled_activation_count(self) -> int:
+        return sum([1
+                    for tick, schedule_activation in self._scheduled_activations.items()
+                    for idx, activation in schedule_activation.items()
+                    if activation > 0])
+
+    def activate_item_with_idx(self, idx: ItemIdx, activation: ActivationValue):
+        super().activate_item_with_idx(idx, activation)
+        self._block_new_impulses = True
+
+    def activate_items_with_idxs(self, idxs: List[ItemIdx], activation: ActivationValue):
+        for idx in idxs:
+            super().activate_item_with_idx(idx, activation)
+        self._block_new_impulses = True
+
+
+class SensorimotorDistanceOnlyModelComponent(DistanceOnlyModelComponent):
     def __init__(self, distance_type: DistanceType):
         self._sensorimotor_norms: SensorimotorNorms = SensorimotorNorms()
         self.distance_type: DistanceType = distance_type
