@@ -100,8 +100,28 @@ class Job(ABC):
 
     @property
     @abstractmethod
+    def _ram_requirement_g(self) -> float:
+        raise NotImplementedError
+
+    @property
     def qsub_command(self) -> str:
+        cmd = f"qsub"
+        # qsub args
+        cmd += f" -N {self.name}"
+        cmd += f" -l h_vmem={self._ram_requirement_g}G"
+        # script
+        cmd += f" {self._shim} "
+        cmd += self.command
+        return cmd
+
+    @property
+    @abstractmethod
+    def command(self) -> str:
         raise NotImplementedError()
+
+    def run_locally(self):
+        print(self.command)
+        subprocess.run(f"python {self.command}", shell=True)
 
     def submit(self):
         print(self.qsub_command)
