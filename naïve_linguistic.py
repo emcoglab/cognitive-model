@@ -30,6 +30,7 @@ from ldm.utils.exceptions import WordNotFoundError
 from ldm.utils.lists import chunks
 from ldm.utils.maths import DistanceType
 from model.basic_types import ItemLabel, ActivationValue, ItemIdx
+from model.events import ModelEvent
 from model.graph import EdgePruningType
 from model.linguistic_component import load_labels_from_corpus, LinguisticComponent
 from model.naïve import DistanceOnlyModelComponent
@@ -74,14 +75,10 @@ class LinguisticOneHopComponent(LinguisticComponent):
                     for idx, activation in schedule_activation.items()
                     if activation > 0])
 
-    def activate_item_with_idx(self, idx: ItemIdx, activation: ActivationValue):
-        super().activate_item_with_idx(idx, activation)
+    def _evolve_model(self) -> List[ModelEvent]:
+        model_events = super()._evolve_model()
         self._block_new_impulses = True
-
-    def activate_items_with_idxs(self, idxs: List[ItemIdx], activation: ActivationValue):
-        for idx in idxs:
-            super().activate_item_with_idx(idx, activation)
-        self._block_new_impulses = True
+        return model_events
 
 
 class LinguisticDistanceOnlyModelComponent(DistanceOnlyModelComponent, ABC):

@@ -21,6 +21,7 @@ from scipy.spatial import distance_matrix as minkowski_distance_matrix
 from scipy.spatial.distance import cdist as distance_matrix
 
 from ldm.utils.maths import DistanceType, distance
+from model.events import ModelEvent
 from sensorimotor_norms.sensorimotor_norms import SensorimotorNorms
 
 from model.basic_types import ItemLabel, ItemIdx, ActivationValue
@@ -63,14 +64,10 @@ class SensorimotorOneHopComponent(SensorimotorComponent):
                     for idx, activation in schedule_activation.items()
                     if activation > 0])
 
-    def activate_item_with_idx(self, idx: ItemIdx, activation: ActivationValue):
-        super().activate_item_with_idx(idx, activation)
+    def _evolve_model(self) -> List[ModelEvent]:
+        model_events = super()._evolve_model()
         self._block_new_impulses = True
-
-    def activate_items_with_idxs(self, idxs: List[ItemIdx], activation: ActivationValue):
-        for idx in idxs:
-            super().activate_item_with_idx(idx, activation)
-        self._block_new_impulses = True
+        return model_events
 
 
 class SensorimotorDistanceOnlyModelComponent(DistanceOnlyModelComponent):
