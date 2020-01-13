@@ -75,8 +75,8 @@ class SensorimotorComponent(TemporalSpatialPropagation):
                  distance_type: DistanceType,
                  length_factor: int,
                  max_sphere_radius: int,
-                 lognormal_median: float,
-                 lognormal_sigma: float,
+                 node_decay_lognormal_median: float,
+                 node_decay_lognormal_sigma: float,
                  buffer_capacity: Optional[int],
                  accessible_set_capacity: Optional[int],
                  buffer_threshold: ActivationValue,
@@ -92,10 +92,10 @@ class SensorimotorComponent(TemporalSpatialPropagation):
             How distances are scaled into connection lengths.
         :param max_sphere_radius:
             What is the maximum radius of a sphere
-        :param lognormal_median:
-            The median of the lognormal decay.
-        :param lognormal_sigma:
-            The sigma parameter for the lognormal decay.
+        :param node_decay_lognormal_median:
+            The node_decay_median of the lognormal decay.
+        :param node_decay_lognormal_sigma:
+            The node_decay_sigma parameter for the lognormal decay.
         :param buffer_capacity:
             The maximum size of the buffer. After this, qualifying items will displace existing items rather than just
             being added.
@@ -114,10 +114,10 @@ class SensorimotorComponent(TemporalSpatialPropagation):
 
         # max_sphere_radius == 0 would be degenerate: no item can ever activate any other item.
         assert (max_sphere_radius > 0)
-        # lognormal_sigma or lognormal_median == 0 will probably cause a division-by-zero error, and anyway is
+        # node_decay_lognormal_sigma or node_decay_lognormal_median == 0 will probably cause a division-by-zero error, and anyway is
         # degenerate: it causes everything to decay to 0 activation in a single tick.
-        assert (lognormal_median > 0)
-        assert (lognormal_sigma > 0)
+        assert (node_decay_lognormal_median > 0)
+        assert (node_decay_lognormal_sigma > 0)
         # zero-size buffer size limit is degenerate: the buffer is always empty.
         assert (buffer_capacity is None) or (buffer_capacity > 0)
         # zero-size accessible set size limit is degenerate: the set is always empty.
@@ -142,7 +142,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
             underlying_graph=_load_graph(distance_type, length_factor, max_sphere_radius,
                                          use_prepruned, idx2label),
             idx2label=idx2label,
-            node_decay_function=make_decay_function_lognormal(median=lognormal_median, sigma=lognormal_sigma),
+            node_decay_function=make_decay_function_lognormal(median=node_decay_lognormal_median, sigma=node_decay_lognormal_sigma),
         )
 
         # region Set once
@@ -152,8 +152,8 @@ class SensorimotorComponent(TemporalSpatialPropagation):
             "Distance type": distance_type.name,
             "Length factor": length_factor,
             "Max sphere radius": max_sphere_radius,
-            "Log-normal median": lognormal_median,
-            "Log-normal sigma": lognormal_sigma,
+            "Log-normal median": node_decay_lognormal_median,
+            "Log-normal sigma": node_decay_lognormal_sigma,
             "Buffer capacity": buffer_capacity,
             "Buffer threshold": buffer_threshold,
             "Norm attenuation statistic": norm_attenuation_statistic.name,

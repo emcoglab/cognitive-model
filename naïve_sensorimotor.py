@@ -31,13 +31,13 @@ from model.sensorimotor_component import load_labels_from_sensorimotor, Sensorim
 
 class SensorimotorOneHopComponent(SensorimotorComponent):
     """A SensorimotorComponent which allows only hops from the initial nodes."""
-    def __init__(self, distance_type: DistanceType, length_factor: int, max_sphere_radius: int, lognormal_median: float,
-                 lognormal_sigma: float, buffer_capacity: Optional[int], accessible_set_capacity: Optional[int],
+    def __init__(self, distance_type: DistanceType, length_factor: int, max_sphere_radius: int, node_decay_lognormal_median: float,
+                 node_decay_lognormal_sigma: float, buffer_capacity: Optional[int], accessible_set_capacity: Optional[int],
                  buffer_threshold: ActivationValue, accessible_set_threshold: ActivationValue,
                  activation_cap: ActivationValue, norm_attenuation_statistic: NormAttenuationStatistic,
                  use_prepruned: bool):
 
-        super().__init__(distance_type, length_factor, max_sphere_radius, lognormal_median, lognormal_sigma,
+        super().__init__(distance_type, length_factor, max_sphere_radius, node_decay_lognormal_median, node_decay_lognormal_sigma,
                          buffer_capacity, accessible_set_capacity, buffer_threshold, accessible_set_threshold,
                          activation_cap, norm_attenuation_statistic, use_prepruned)
 

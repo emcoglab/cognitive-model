@@ -39,8 +39,8 @@ class SASpec(Spec, ABC):
 @dataclass
 class SensorimotorSASpec(SASpec):
     max_radius: int
-    sigma: float
-    median: int
+    node_decay_sigma: float
+    node_decay_median: int
     buffer_threshold: float
     accessible_set_threshold: float
     distance_type: DistanceType
@@ -51,8 +51,8 @@ class SensorimotorSASpec(SASpec):
     def shorthand(self) -> str:
         return f"sm_" \
                f"r{self.max_radius}_" \
-               f"m{self.median}_" \
-               f"s{self.sigma}_" \
+               f"m{self.node_decay_median}_" \
+               f"s{self.node_decay_sigma}_" \
                f"a{self.accessible_set_threshold}_" \
                f"ac{self.accessible_set_capacity if self.accessible_set_capacity is not None else '-'}_" \
                f"b{self.buffer_threshold}"
