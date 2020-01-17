@@ -14,6 +14,7 @@ caiwingfield.net
 2019
 ---------------------------
 """
+from __future__ import annotations
 import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -78,6 +79,21 @@ class LinguisticSASpec(SASpec):
                f"s{self.edge_decay_sd}_" \
                f"{self.model_name}_" \
                f"pr{self.pruning}"
+
+
+@dataclass
+class CombinedSpec(Spec, ABC):
+    linguistic_spec: LinguisticSASpec
+    sensorimotor_spec: SensorimotorSASpec
+
+
+@dataclass
+class NoninteractiveCombinedSpec(CombinedSpec):
+
+    @property
+    @abstractmethod
+    def shorthand(self) -> str:
+        return f"ni_{self.linguistic_spec.shorthand}_{self.sensorimotor_spec.shorthand}"
 
 
 class Job(ABC):
