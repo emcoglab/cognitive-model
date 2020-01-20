@@ -41,7 +41,7 @@ class SASpec(Spec, ABC):
 class SensorimotorSASpec(SASpec):
     max_radius: int
     node_decay_sigma: float
-    node_decay_median: int
+    node_decay_median: float
     buffer_threshold: float
     accessible_set_threshold: float
     distance_type: DistanceType
@@ -89,9 +89,7 @@ class CombinedSpec(Spec, ABC):
 
 @dataclass
 class NoninteractiveCombinedSpec(CombinedSpec):
-
     @property
-    @abstractmethod
     def shorthand(self) -> str:
         return f"ni_{self.linguistic_spec.shorthand}_{self.sensorimotor_spec.shorthand}"
 
