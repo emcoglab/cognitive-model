@@ -110,7 +110,7 @@ class Job(ABC):
 
     @property
     def name(self) -> str:
-        return f"{self.short_name}{self.spec.shorthand}"
+        return f"{self.short_name}_{self.spec.shorthand}"
 
     @property
     @abstractmethod
