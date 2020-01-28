@@ -17,13 +17,12 @@ caiwingfield.net
 
 import logging
 from os import path
-from typing import Set, Dict
+from typing import Dict
 
 from numpy import Infinity
 from pandas import DataFrame
 
 from ldm.corpus.corpus import CorpusMetadata
-from ldm.corpus.indexing import FreqDist
 from ldm.model.base import DistributionalSemanticModel
 from ldm.utils.maths import DistanceType
 from model.basic_types import ActivationValue, ItemIdx, ItemLabel
@@ -110,9 +109,6 @@ class LinguisticComponent(TemporalSpreadingActivation):
         self.activation_cap = activation_cap
         if self.activation_cap < self.firing_threshold:
             raise ValueError(f"activation cap {self.activation_cap} cannot be less than the firing threshold {self.firing_threshold}")
-
-        freq_dist = FreqDist.load(distributional_model.corpus_meta.freq_dist_path)
-        self.available_words: Set[ItemLabel] = set(freq_dist.most_common_tokens(n_words))
 
         # endregion
 
