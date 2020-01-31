@@ -224,3 +224,7 @@ def distance_from_similarity(similarity, max_similarity: float, min_similarity: 
         # Use the absolute value in case the minimum is negative (e.g. with PMI).
         + abs(min_similarity)
     )
+
+
+def cm_to_inches(cm: float) -> float:
+    return cm * 0.3937008
