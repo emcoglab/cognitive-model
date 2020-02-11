@@ -14,19 +14,12 @@ caiwingfield.net
 2019
 ---------------------------
 """
-from typing import Dict, List, Optional
+from typing import List, Optional
 
-from numpy import array, percentile
-from scipy.spatial import distance_matrix as minkowski_distance_matrix
-from scipy.spatial.distance import cdist as distance_matrix
-
-from ldm.utils.maths import DistanceType, distance
+from ldm.utils.maths import DistanceType
+from model.basic_types import ItemIdx, ActivationValue
 from model.events import ModelEvent
-from sensorimotor_norms.sensorimotor_norms import SensorimotorNorms
-
-from model.basic_types import ItemLabel, ItemIdx, ActivationValue
-from model.naïve import DistanceOnlyModelComponent
-from model.sensorimotor_component import load_labels_from_sensorimotor, SensorimotorComponent, NormAttenuationStatistic
+from model.sensorimotor_component import SensorimotorComponent, NormAttenuationStatistic
 
 
 class SensorimotorOneHopComponent(SensorimotorComponent):
@@ -68,44 +61,3 @@ class SensorimotorOneHopComponent(SensorimotorComponent):
                     for tick, schedule_activation in self._scheduled_activations.items()
                     for idx, activation in schedule_activation.items()
                     if activation > 0])
-
-
-class SensorimotorDistanceOnlyModelComponent(DistanceOnlyModelComponent):
-    def __init__(self, quantile: float, distance_type: DistanceType):
-        self._sensorimotor_norms: SensorimotorNorms = SensorimotorNorms()
-        self.distance_type: DistanceType = distance_type
-
-        # cache for quantile distances
-        self.__quantile_distances: Dict[ItemLabel, float] = dict()
-
-        super().__init__(quantile=quantile,
-                         words=list(self._sensorimotor_norms.iter_words()),
-                         idx2label=load_labels_from_sensorimotor())
-
-    def distance_between(self, word_1: ItemLabel, word_2: ItemLabel) -> float:
-        return distance(
-            self._sensorimotor_norms.vector_for_word(word_1),
-            self._sensorimotor_norms.vector_for_word(word_2),
-            self.distance_type)
-
-    def quantile_distance_from(self, word: ItemLabel) -> float:
-        if word not in self.__quantile_distances:
-            self.__quantile_distances[word] = self._compute_quantile_distance_from(word)
-        return self.__quantile_distances[word]
-
-    def _compute_quantile_distance_from(self, word: ItemLabel) -> float:
-        """
-        :raises WordNotInNormsError
-        """
-        word_vector: array = array(self._sensorimotor_norms.vector_for_word(word)).reshape(1, 11)
-
-        distances: array
-        if self.distance_type in [DistanceType.cosine, DistanceType.correlation, DistanceType.Euclidean]:
-            distances = distance_matrix(word_vector, array(self._sensorimotor_norms.matrix()),
-                                        metric=self.distance_type.name)
-        elif self.distance_type == DistanceType.Minkowski3:
-            distances = minkowski_distance_matrix(word_vector, array(self._sensorimotor_norms.matrix()), 3)
-        else:
-            raise NotImplementedError()
-
-        return percentile(distances, self.quantile * 100)
