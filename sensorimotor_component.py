@@ -20,9 +20,9 @@ from enum import Enum, auto
 from os import path
 from typing import Set, List, Dict, Optional
 
-from ldm.utils.maths import DistanceType, clamp01
+from ldm.utils.maths import DistanceType
 from model.basic_types import ActivationValue, ItemIdx, ItemLabel, Node
-from model.buffer import WorkingMemoryBuffer
+from model.buffer import WorkingMemoryBuffer, AccessibleSet
 from model.events import ModelEvent, ItemActivatedEvent
 from model.graph import Graph
 from model.graph_propagation import _load_labels
@@ -155,13 +155,10 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         # Thresholds
 
         # Use >= and < to test for above/below
-        self.accessible_set_threshold: ActivationValue = accessible_set_threshold
         # Cap on a node's total activation after receiving incoming.
         self.activation_cap: ActivationValue = activation_cap
 
         # Data
-
-        self.accessible_set_capacity: Optional[int] = accessible_set_capacity
 
         # A local copy of the sensorimotor norms data
         self._sensorimotor_norms: SensorimotorNorms = SensorimotorNorms()
@@ -185,33 +182,11 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         # This is updated each .tick() based on items which fired (a prerequisite for entering the buffer)
         self.working_memory_buffer: WorkingMemoryBuffer = WorkingMemoryBuffer(buffer_threshold, buffer_capacity)
 
-        # Bounded between 0 and 1 inclusive
-        # 0 when accessible set is empty, 1 when full.
-        # 0 when there is no bounded capacity.
-        self.__memory_pressure: float = 0
-
         # The set of items which are "accessible to conscious awareness" even if they are not in the working memory
         # buffer
-        self.accessible_set: Set[ItemIdx] = set()
+        self.accessible_set: AccessibleSet = AccessibleSet(threshold=accessible_set_threshold, capacity=accessible_set_capacity)
 
         # endregion
-
-    @property
-    def accessible_set(self):
-        return self.__accessible_set
-
-    @accessible_set.setter
-    def accessible_set(self, value):
-        # Update memory pressure whenever we alter the accessible set
-        self.__accessible_set = value
-        if self.accessible_set_capacity is not None:
-            self.__memory_pressure = clamp01(len(self.__accessible_set) / self.accessible_set_capacity)
-        else:
-            self.__memory_pressure = 0
-
-    @property
-    def memory_pressure(self) -> float:
-        return self.__memory_pressure
 
     def _get_statistic_for_item(self, idx: ItemIdx):
         """Gets the correct statistic for an item."""
@@ -241,10 +216,11 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         decay_events = self.working_memory_buffer.prune_decayed_items(
             activation_lookup=self.activation_of_item_with_idx,
             time=self.clock)
-        self.__prune_decayed_items_in_accessible_set()
+        self.accessible_set.prune_decayed_items(activation_lookup=self.activation_of_item_with_idx,
+                                                time=self.clock)
 
-        logger.info(f"\tAS: {len(self.accessible_set)}/{self.accessible_set_capacity if self.accessible_set_capacity is not None else '∞'} "
-                    f"(MP: {self.memory_pressure})")
+        logger.info(f"\tAS: {len(self.accessible_set.items)}/{self.accessible_set.capacity if self.accessible_set.capacity is not None else '∞'} "
+                    f"(MP: {self.accessible_set.pressure})")
 
         # Proceed with ._evolve_model() and record what became activated
         # Activation and firing may be affected by the size of or membership to the accessible set and the buffer, but
@@ -255,7 +231,9 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         assert len(activation_events) == len(set(e.item for e in activation_events))
 
         # Update accessible set
-        self.__present_items_to_accessible_set(activation_events)
+        self.accessible_set.present_items(activation_events=activation_events,
+                                          activation_lookup=self.activation_of_item_with_idx,
+                                          time=self.clock)
         # Update buffer
         # Some events will get updated commensurately.
         # `activation_events` may now contain some non-activation events.
@@ -270,7 +248,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         activation *= self._attenuation_statistic[idx]
         # When AS is full, MP is 1, and activation is killed.
         # When AS is empty, MP is 0, and activation is unaffected.
-        activation *= 1 - self.memory_pressure
+        activation *= 1 - self.accessible_set.pressure
         return activation
 
     def _postsynaptic_modulation(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
@@ -281,44 +259,6 @@ class SensorimotorComponent(TemporalSpatialPropagation):
     def _postsynaptic_guard(self, idx: ItemIdx, activation: ActivationValue) -> bool:
         # Node will only fire if it's not in the accessible set
         return idx not in self.accessible_set
-
-    def __prune_decayed_items_in_accessible_set(self):
-        """
-        Removes items from the accessible set which have dropped below threshold.
-
-        Cardinality of accessible set is used to dampen activation, but does not affect the accessible set threshold, so
-        we can safely prune things here without worrying about that.
-
-        :side effects:
-            Mutates self.accessible_set.
-            Mutates self.memory_pressure.
-        """
-        self.accessible_set -= {
-            item
-            for item in self.accessible_set
-            if self.activation_of_item_with_idx(item) < self.accessible_set_threshold
-        }
-
-    def __present_items_to_accessible_set(self, activation_events: List[ItemActivatedEvent]):
-        """
-        Presents a list of item actiavtions to the accessible set.
-        :param activation_events:
-            All activatino events
-        :side effects:
-            Mutates self.accessible_set.
-            Mutates self.memory_pressure.
-        """
-        if len(activation_events) == 0:
-            return
-
-        # unlike the buffer, we're not returning any events, and there is no size limit, so we don't need to be so
-        # careful about confirming what's already in there and what's getting replaced, etc.
-
-        self.accessible_set |= {
-            e.item
-            for e in activation_events
-            if e.activation >= self.accessible_set_threshold
-        }
 
     # endregion
 

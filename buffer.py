@@ -1,6 +1,6 @@
 """
 ===========================
-Working memory buffer.
+Working memory buffer and accessible set.
 ===========================
 
 Dr. Cai Wingfield
@@ -14,15 +14,16 @@ caiwingfield.net
 2020
 ---------------------------
 """
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional, Set, Dict, List, Callable
 
+from ldm.utils.maths import clamp01
 from model.basic_types import ActivationValue, ItemIdx
 from model.events import ItemLeftBufferEvent, ItemActivatedEvent, ModelEvent, ItemEnteredBufferEvent, BufferFloodEvent
 
 
-class WorkingMemoryBuffer:
-
+class LimitedCapacityItemSet(ABC):
     def __init__(self, threshold: ActivationValue, capacity: Optional[int], items: Set[ItemIdx] = None):
         # Use >= and < to test for above/below
         self.threshold: ActivationValue = threshold
@@ -40,6 +41,33 @@ class WorkingMemoryBuffer:
     def clear(self):
         """Empties the buffer."""
         self.replace_contents(set())
+
+    @abstractmethod
+    def prune_decayed_items(self, activation_lookup: Callable[[ItemIdx], ActivationValue], time: int):
+        """
+        Removes items from the distinguished set which have dropped below threshold.
+        :return:
+            Events for items which left the buffer by decaying out.
+        """
+        pass
+
+    @abstractmethod
+    def present_items(self, activation_events: List[ItemActivatedEvent],
+                      activation_lookup: Callable[[ItemIdx], ActivationValue],
+                      time: int):
+        """
+        Present a list of item activations to the set, and upgrades those which entered.
+        :param activation_events:
+            All activation events.
+        :param activation_lookup:
+            Function mapping items to their current activation.
+        :param time:
+            The current time on the clock. Will be used in events.
+        """
+        pass
+
+
+class WorkingMemoryBuffer(LimitedCapacityItemSet):
 
     def prune_decayed_items(self, activation_lookup: Callable[[ItemIdx], ActivationValue], time: int) -> List[ItemLeftBufferEvent]:
         """
@@ -64,12 +92,6 @@ class WorkingMemoryBuffer:
                       time: int) -> List[ModelEvent]:
         """
         Present a list of item activations to the buffer, and upgrades those which entered the buffer.
-        :param activation_events:
-            All activation events.
-        :param activation_lookup:
-            Function mapping items to their current activation.
-        :param time:
-            The current time on the clock. Will be used in events.
         :return:
             The same events, with some upgraded to buffer entry events.
             Plus events for items which left the buffer through displacement.
@@ -163,3 +185,49 @@ class WorkingMemoryBuffer:
         """
         activation: ActivationValue
         being_presented: bool
+
+
+class AccessibleSet(LimitedCapacityItemSet):
+
+    @property
+    def items(self):
+        return self.__items
+
+    @items.setter
+    def items(self, value):
+        # Update memory pressure whenever we alter the accessible set
+        self.__items = value
+        if self.capacity is not None:
+            self.__pressure = clamp01(len(self.__items) / self.capacity)
+        else:
+            self.__pressure = 0
+
+    @property
+    def pressure(self) -> float:
+        """
+        Bounded between 0 and 1 inclusive
+        0 when accessible set is empty, 1 when full.
+        0 when there is no bounded capacity.
+        """
+        return self.__pressure
+
+    def present_items(self, activation_events: List[ItemActivatedEvent],
+                      activation_lookup: Callable[[ItemIdx], ActivationValue], time: int):
+        if len(activation_events) == 0:
+            return
+
+        # unlike the buffer, we're not returning any events, and there is no size limit, so we don't need to be so
+        # careful about confirming what's already in there and what's getting replaced, etc.
+
+        self.items |= {
+            e.item
+            for e in activation_events
+            if e.activation >= self.threshold
+        }
+
+    def prune_decayed_items(self, activation_lookup: Callable[[ItemIdx], ActivationValue], time: int):
+        self.items -= {
+            item
+            for item in self.items
+            if activation_lookup(item) < self.threshold
+        }
