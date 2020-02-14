@@ -56,22 +56,41 @@ class NormAttenuationStatistic(Enum):
 
 class WorkingMemoryBuffer:
 
-    def __init__(self, capacity: Optional[int], items: Set[ItemIdx] = None):
-        self._capacity: Optional[int] = capacity
+    def __init__(self, threshold: ActivationValue, capacity: Optional[int], items: Set[ItemIdx] = None):
+        # Use >= and < to test for above/below
+        self.threshold: ActivationValue = threshold
+        assert self.threshold >= 0
+        self.capacity: Optional[int] = capacity
         self.items: Set[ItemIdx] = set() if items is None else items
         if self.capacity is not None:
             assert len(self.items) <= self.capacity
 
-    @property
-    def capacity(self) -> Optional[int]:
-        return self._capacity
-
     def replace_contents(self, new_items: Set[ItemIdx]):
+        """Replaces the items in the buffer with a new set of items."""
         assert len(new_items) <= self.capacity
         self.items = new_items
 
     def clear(self):
+        """Empties the buffer."""
         self.replace_contents(set())
+
+    def prune_decayed_items(self, activation_lookup: Dict[ItemIdx, ActivationValue], time: int) -> List[ItemLeftBufferEvent]:
+        """
+        Removes items from the buffer which have dropped below threshold.
+        :return:
+            Events for items which left the buffer by decaying out.
+        """
+        new_buffer_items = {
+            item
+            for item in self.items
+            if activation_lookup[item] >= self.threshold
+        }
+        decayed_out = self.items - new_buffer_items
+        self.replace_contents(new_buffer_items)
+        return [
+            ItemLeftBufferEvent(time=time, item=item)
+            for item in decayed_out
+        ]
 
     @dataclass
     class _SortingData:
@@ -184,7 +203,6 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         # Thresholds
 
         # Use >= and < to test for above/below
-        self.buffer_threshold: ActivationValue = buffer_threshold
         self.accessible_set_threshold: ActivationValue = accessible_set_threshold
         # Cap on a node's total activation after receiving incoming.
         self.activation_cap: ActivationValue = activation_cap
@@ -213,7 +231,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         # decay sufficiently (self.buffer_pruning_threshold) or are displaced.
         #
         # This is updated each .tick() based on items which fired (a prerequisite for entering the buffer)
-        self.working_memory_buffer: WorkingMemoryBuffer = WorkingMemoryBuffer(buffer_capacity)
+        self.working_memory_buffer: WorkingMemoryBuffer = WorkingMemoryBuffer(buffer_threshold, buffer_capacity)
 
         # Bounded between 0 and 1 inclusive
         # 0 when accessible set is empty, 1 when full.
@@ -268,7 +286,12 @@ class SensorimotorComponent(TemporalSpatialPropagation):
 
         # Decay events before activating anything new
         # (in case buffer or accessible set membership is used to modulate or guard anything)
-        decay_events = self.__prune_decayed_items_in_buffer()
+        decay_events = self.working_memory_buffer.prune_decayed_items(
+            activation_lookup={
+                item: self.activation_of_item_with_idx(item)
+                for item in self.working_memory_buffer.items
+            },
+            time=self.clock)
         self.__prune_decayed_items_in_accessible_set()
 
         logger.info(f"\tAS: {len(self.accessible_set)}/{self.accessible_set_capacity if self.accessible_set_capacity is not None else '∞'} "
@@ -326,27 +349,6 @@ class SensorimotorComponent(TemporalSpatialPropagation):
             for item in self.accessible_set
             if self.activation_of_item_with_idx(item) < self.accessible_set_threshold
         }
-
-    def __prune_decayed_items_in_buffer(self) -> List[ItemLeftBufferEvent]:
-        """
-        Removes items from the buffer which have dropped below threshold.
-        :return:
-            Events for items which left the buffer by decaying out.
-        :side effects:
-            Mutates self.working_memory_buffer.
-        """
-
-        new_buffer_items = {
-            item
-            for item in self.working_memory_buffer.items
-            if self.activation_of_item_with_idx(item) >= self.buffer_threshold
-        }
-        decayed_out = self.working_memory_buffer.items - new_buffer_items
-        self.working_memory_buffer.replace_contents(new_buffer_items)
-        return [
-            ItemLeftBufferEvent(time=self.clock, item=item)
-            for item in decayed_out
-        ]
 
     def __present_items_to_accessible_set(self, activation_events: List[ItemActivatedEvent]):
         """
@@ -412,7 +414,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
                                            # We've already worked out whether items are potentially entering the buffer
                                            being_presented=event.item in presented_items)
             for event in activation_events
-            if event.activation >= self.buffer_threshold
+            if event.activation >= self.working_memory_buffer.threshold
         })
 
         # Convert to a list of key-value pairs, sorted by activation, descending.
