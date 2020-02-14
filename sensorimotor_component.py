@@ -21,10 +21,9 @@ from os import path
 from typing import Set, List, Dict, Optional
 
 from ldm.utils.maths import DistanceType, clamp01
-
 from model.basic_types import ActivationValue, ItemIdx, ItemLabel, Node
 from model.buffer import WorkingMemoryBuffer
-from model.events import ModelEvent, ItemActivatedEvent, ItemEnteredBufferEvent, BufferFloodEvent, ItemLeftBufferEvent
+from model.events import ModelEvent, ItemActivatedEvent
 from model.graph import Graph
 from model.graph_propagation import _load_labels
 from model.temporal_spatial_propagation import TemporalSpatialPropagation
@@ -240,10 +239,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         # Decay events before activating anything new
         # (in case buffer or accessible set membership is used to modulate or guard anything)
         decay_events = self.working_memory_buffer.prune_decayed_items(
-            activation_lookup={
-                item: self.activation_of_item_with_idx(item)
-                for item in self.working_memory_buffer.items
-            },
+            activation_lookup=self.activation_of_item_with_idx,
             time=self.clock)
         self.__prune_decayed_items_in_accessible_set()
 
@@ -263,7 +259,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         # Update buffer
         # Some events will get updated commensurately.
         # `activation_events` may now contain some non-activation events.
-        activation_events = self.__present_items_to_buffer(activation_events)
+        activation_events = self.working_memory_buffer.present_items(activation_events, activation_lookup=self.activation_of_item_with_idx, time=self.clock)
 
         return decay_events + activation_events + other_events
 
@@ -323,99 +319,6 @@ class SensorimotorComponent(TemporalSpatialPropagation):
             for e in activation_events
             if e.activation >= self.accessible_set_threshold
         }
-
-    def __present_items_to_buffer(self, activation_events: List[ItemActivatedEvent]) -> List[ModelEvent]:
-        """
-        Present a list of item activations to the buffer, and upgrades those which entered the buffer.
-        :param activation_events:
-            All activation events.
-        :return:
-            The same events, with some upgraded to buffer entry events.
-            Plus events for items which left the buffer through displacement.
-            May also return a BufferFlood event if that is detected.
-        :side effects:
-            Mutates self.working_memory_buffer.
-        """
-
-        if len(activation_events) == 0:
-            return []
-
-        # At this point self.working_memory_buffer is still the old buffer (after decayed items have been removed)
-        presented_items = set(e.item for e in activation_events)
-
-        # Don't present items already in the buffer
-        items_already_in_buffer = self.working_memory_buffer.items & presented_items
-        presented_items -= items_already_in_buffer
-
-        # region New buffer items list of (item, activation)s
-
-        # First build a new buffer out of everything which *could* end up in the buffer, then cut out things which don't
-        # belong there
-
-        # We will sort items in the buffer based on various bits of data.
-        # The new buffer is everything in the current working_memory_buffer...
-        new_buffer_items: Dict[ItemIdx: WorkingMemoryBuffer._SortingData] = {
-            item: WorkingMemoryBuffer._SortingData(activation=self.activation_of_item_with_idx(item),
-                                                   # These items already in the buffer were not presented
-                                                   being_presented=False)
-            for item in self.working_memory_buffer.items
-        }
-        # ...plus everything above threshold.
-        # We use a dictionary with .update() here to overwrite the activation of anything already in the buffer.
-        new_buffer_items.update({
-            event.item: WorkingMemoryBuffer._SortingData(activation=event.activation,
-                                                         # We've already worked out whether items are potentially entering the buffer
-                                                         being_presented=event.item in presented_items)
-            for event in activation_events
-            if event.activation >= self.working_memory_buffer.threshold
-        })
-
-        # Convert to a list of key-value pairs, sorted by activation, descending.
-        # We want the order to be by activation, but with ties broken by recency, i.e. items being presented to the
-        # buffer precede those already in the buffer.  Because Python's sorting is stable, meaning if we sort by
-        # recency first, and then by activation, we get what we want [0].
-        #
-        # So first we sort by recency (i.e. whether they were presented), descending
-        # (i.e. .presented==1 comes before .presented==0)
-        #
-        #     [0]: https://wiki.python.org/moin/HowTo/Sorting#Sort_Stability_and_Complex_Sorts
-        new_buffer_items = sorted(new_buffer_items.items(), key=lambda kv: kv[1].being_presented, reverse=True)
-        # Then we sort by activation, descending (larger activation first)
-        # Also new_buffer_items is now a list of kv pairs, not a dictionary, so we don't need to use .items()
-        new_buffer_items = sorted(new_buffer_items, key=lambda kv: kv[1].activation, reverse=True)
-
-        # Trim down to size if necessary
-        if self.working_memory_buffer.capacity is not None:
-            new_buffer_items = new_buffer_items[:self.working_memory_buffer.capacity]
-
-        # endregion
-
-        new_buffer = set(kv[0] for kv in new_buffer_items)
-
-        # For returning additional BufferEvents
-        whole_buffer_replaced = len(new_buffer - self.working_memory_buffer.items) == self.working_memory_buffer.capacity
-        displaced_items = self.working_memory_buffer.items - new_buffer
-
-        # Update buffer: Get the keys (i.e. item idxs) from the sorted list
-        self.working_memory_buffer.replace_contents(new_buffer)
-
-        # Upgrade events
-        upgraded_events = [
-            # Upgrade only those events which newly entered the buffer
-            (
-                ItemEnteredBufferEvent.from_activation_event(e)
-                if e.item in self.working_memory_buffer.items - items_already_in_buffer
-                else e
-            )
-            for e in activation_events
-        ]
-
-        # Add extra events if necessary
-        if whole_buffer_replaced:
-            upgraded_events.append(BufferFloodEvent(time=self.clock))
-        upgraded_events.extend([ItemLeftBufferEvent(time=self.clock, item=i) for i in displaced_items])
-
-        return upgraded_events
 
     # endregion
 
