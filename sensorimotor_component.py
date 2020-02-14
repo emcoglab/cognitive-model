@@ -16,7 +16,6 @@ caiwingfield.net
 """
 
 import logging
-from dataclasses import dataclass
 from enum import Enum, auto
 from os import path
 from typing import Set, List, Dict, Optional
@@ -24,6 +23,7 @@ from typing import Set, List, Dict, Optional
 from ldm.utils.maths import DistanceType, clamp01
 
 from model.basic_types import ActivationValue, ItemIdx, ItemLabel, Node
+from model.buffer import WorkingMemoryBuffer
 from model.events import ModelEvent, ItemActivatedEvent, ItemEnteredBufferEvent, BufferFloodEvent, ItemLeftBufferEvent
 from model.graph import Graph
 from model.graph_propagation import _load_labels
@@ -52,53 +52,6 @@ class NormAttenuationStatistic(Enum):
             return "Prevalence"
         else:
             raise NotImplementedError()
-
-
-class WorkingMemoryBuffer:
-
-    def __init__(self, threshold: ActivationValue, capacity: Optional[int], items: Set[ItemIdx] = None):
-        # Use >= and < to test for above/below
-        self.threshold: ActivationValue = threshold
-        assert self.threshold >= 0
-        self.capacity: Optional[int] = capacity
-        self.items: Set[ItemIdx] = set() if items is None else items
-        if self.capacity is not None:
-            assert len(self.items) <= self.capacity
-
-    def replace_contents(self, new_items: Set[ItemIdx]):
-        """Replaces the items in the buffer with a new set of items."""
-        assert len(new_items) <= self.capacity
-        self.items = new_items
-
-    def clear(self):
-        """Empties the buffer."""
-        self.replace_contents(set())
-
-    def prune_decayed_items(self, activation_lookup: Dict[ItemIdx, ActivationValue], time: int) -> List[ItemLeftBufferEvent]:
-        """
-        Removes items from the buffer which have dropped below threshold.
-        :return:
-            Events for items which left the buffer by decaying out.
-        """
-        new_buffer_items = {
-            item
-            for item in self.items
-            if activation_lookup[item] >= self.threshold
-        }
-        decayed_out = self.items - new_buffer_items
-        self.replace_contents(new_buffer_items)
-        return [
-            ItemLeftBufferEvent(time=time, item=item)
-            for item in decayed_out
-        ]
-
-    @dataclass
-    class _SortingData:
-        """
-        For sorting items before entry to the buffer.
-        """
-        activation: ActivationValue
-        being_presented: bool
 
 
 class SensorimotorComponent(TemporalSpatialPropagation):
@@ -403,16 +356,16 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         # The new buffer is everything in the current working_memory_buffer...
         new_buffer_items: Dict[ItemIdx: WorkingMemoryBuffer._SortingData] = {
             item: WorkingMemoryBuffer._SortingData(activation=self.activation_of_item_with_idx(item),
-                                     # These items already in the buffer were not presented
-                                     being_presented=False)
+                                                   # These items already in the buffer were not presented
+                                                   being_presented=False)
             for item in self.working_memory_buffer.items
         }
         # ...plus everything above threshold.
         # We use a dictionary with .update() here to overwrite the activation of anything already in the buffer.
         new_buffer_items.update({
             event.item: WorkingMemoryBuffer._SortingData(activation=event.activation,
-                                           # We've already worked out whether items are potentially entering the buffer
-                                           being_presented=event.item in presented_items)
+                                                         # We've already worked out whether items are potentially entering the buffer
+                                                         being_presented=event.item in presented_items)
             for event in activation_events
             if event.activation >= self.working_memory_buffer.threshold
         })
