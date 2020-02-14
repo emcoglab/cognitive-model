@@ -54,13 +54,32 @@ class NormAttenuationStatistic(Enum):
             raise NotImplementedError()
 
 
-@dataclass
-class _BufferSortingData:
-    """
-    For sorting items before entry to the buffer.
-    """
-    activation: ActivationValue
-    being_presented: bool
+class WorkingMemoryBuffer:
+
+    def __init__(self, capacity: Optional[int], items: Set[ItemIdx] = None):
+        self._capacity: Optional[int] = capacity
+        self.items: Set[ItemIdx] = set() if items is None else items
+        if self.capacity is not None:
+            assert len(self.items) <= self.capacity
+
+    @property
+    def capacity(self) -> Optional[int]:
+        return self._capacity
+
+    def replace_contents(self, new_items: Set[ItemIdx]):
+        assert len(new_items) <= self.capacity
+        self.items = new_items
+
+    def clear(self):
+        self.replace_contents(set())
+
+    @dataclass
+    class _SortingData:
+        """
+        For sorting items before entry to the buffer.
+        """
+        activation: ActivationValue
+        being_presented: bool
 
 
 class SensorimotorComponent(TemporalSpatialPropagation):
@@ -172,7 +191,6 @@ class SensorimotorComponent(TemporalSpatialPropagation):
 
         # Data
 
-        self.buffer_capacity: Optional[int] = buffer_capacity
         self.accessible_set_capacity: Optional[int] = accessible_set_capacity
 
         # A local copy of the sensorimotor norms data
@@ -195,7 +213,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         # decay sufficiently (self.buffer_pruning_threshold) or are displaced.
         #
         # This is updated each .tick() based on items which fired (a prerequisite for entering the buffer)
-        self.working_memory_buffer: Set[ItemIdx] = set()
+        self.working_memory_buffer: WorkingMemoryBuffer = WorkingMemoryBuffer(buffer_capacity)
 
         # Bounded between 0 and 1 inclusive
         # 0 when accessible set is empty, 1 when full.
@@ -241,7 +259,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
 
     def reset(self):
         super(SensorimotorComponent, self).reset()
-        self.working_memory_buffer = set()
+        self.working_memory_buffer.clear()
         self.accessible_set = set()
 
     # region tick()
@@ -318,13 +336,13 @@ class SensorimotorComponent(TemporalSpatialPropagation):
             Mutates self.working_memory_buffer.
         """
 
-        new_buffer = {
+        new_buffer_items = {
             item
-            for item in self.working_memory_buffer
+            for item in self.working_memory_buffer.items
             if self.activation_of_item_with_idx(item) >= self.buffer_threshold
         }
-        decayed_out = self.working_memory_buffer - new_buffer
-        self.working_memory_buffer = new_buffer
+        decayed_out = self.working_memory_buffer.items - new_buffer_items
+        self.working_memory_buffer.replace_contents(new_buffer_items)
         return [
             ItemLeftBufferEvent(time=self.clock, item=item)
             for item in decayed_out
@@ -371,7 +389,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         presented_items = set(e.item for e in activation_events)
 
         # Don't present items already in the buffer
-        items_already_in_buffer = self.working_memory_buffer & presented_items
+        items_already_in_buffer = self.working_memory_buffer.items & presented_items
         presented_items -= items_already_in_buffer
 
         # region New buffer items list of (item, activation)s
@@ -381,16 +399,16 @@ class SensorimotorComponent(TemporalSpatialPropagation):
 
         # We will sort items in the buffer based on various bits of data.
         # The new buffer is everything in the current working_memory_buffer...
-        new_buffer_items: Dict[ItemIdx: _BufferSortingData] = {
-            item: _BufferSortingData(activation=self.activation_of_item_with_idx(item),
+        new_buffer_items: Dict[ItemIdx: WorkingMemoryBuffer._SortingData] = {
+            item: WorkingMemoryBuffer._SortingData(activation=self.activation_of_item_with_idx(item),
                                      # These items already in the buffer were not presented
                                      being_presented=False)
-            for item in self.working_memory_buffer
+            for item in self.working_memory_buffer.items
         }
         # ...plus everything above threshold.
         # We use a dictionary with .update() here to overwrite the activation of anything already in the buffer.
         new_buffer_items.update({
-            event.item: _BufferSortingData(activation=event.activation,
+            event.item: WorkingMemoryBuffer._SortingData(activation=event.activation,
                                            # We've already worked out whether items are potentially entering the buffer
                                            being_presented=event.item in presented_items)
             for event in activation_events
@@ -412,26 +430,26 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         new_buffer_items = sorted(new_buffer_items, key=lambda kv: kv[1].activation, reverse=True)
 
         # Trim down to size if necessary
-        if self.buffer_capacity is not None:
-            new_buffer_items = new_buffer_items[:self.buffer_capacity]
+        if self.working_memory_buffer.capacity is not None:
+            new_buffer_items = new_buffer_items[:self.working_memory_buffer.capacity]
 
         # endregion
 
         new_buffer = set(kv[0] for kv in new_buffer_items)
 
         # For returning additional BufferEvents
-        whole_buffer_replaced = len(new_buffer - self.working_memory_buffer) == self.buffer_capacity
-        displaced_items = self.working_memory_buffer - new_buffer
+        whole_buffer_replaced = len(new_buffer - self.working_memory_buffer.items) == self.working_memory_buffer.capacity
+        displaced_items = self.working_memory_buffer.items - new_buffer
 
         # Update buffer: Get the keys (i.e. item idxs) from the sorted list
-        self.working_memory_buffer = new_buffer
+        self.working_memory_buffer.replace_contents(new_buffer)
 
         # Upgrade events
         upgraded_events = [
             # Upgrade only those events which newly entered the buffer
             (
                 ItemEnteredBufferEvent.from_activation_event(e)
-                if e.item in self.working_memory_buffer - items_already_in_buffer
+                if e.item in self.working_memory_buffer.items - items_already_in_buffer
                 else e
             )
             for e in activation_events
