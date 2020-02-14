@@ -28,31 +28,40 @@ class LimitedCapacityItemSet(ABC):
         # Use >= and < to test for above/below
         self.threshold: ActivationValue = threshold
         assert self.threshold >= 0
-        self.capacity: Optional[int] = capacity
+
         self.items: Set[ItemIdx] = set() if items is None else items
+        # zero-size limit is degenerate: the set is always empty.
+        assert (self.capacity is None) or (self.capacity > 0)
+
+        self.capacity: Optional[int] = capacity
         if self.capacity is not None:
             assert len(self.items) <= self.capacity
 
     def replace_contents(self, new_items: Set[ItemIdx]):
-        """Replaces the items in the buffer with a new set of items."""
+        """Replaces the items with a new set."""
         assert len(new_items) <= self.capacity
         self.items = new_items
 
     def clear(self):
-        """Empties the buffer."""
+        """Empties the set."""
         self.replace_contents(set())
 
     @abstractmethod
-    def prune_decayed_items(self, activation_lookup: Callable[[ItemIdx], ActivationValue], time: int):
+    def prune_decayed_items(self,
+                            activation_lookup: Callable[[ItemIdx], ActivationValue],
+                            time: int):
         """
         Removes items from the distinguished set which have dropped below threshold.
-        :return:
-            Events for items which left the buffer by decaying out.
+        :param activation_lookup:
+            Function mapping items to their current activation.
+        :param time:
+            The current time on the clock. Will be used in events.
         """
         pass
 
     @abstractmethod
-    def present_items(self, activation_events: List[ItemActivatedEvent],
+    def present_items(self,
+                      activation_events: List[ItemActivatedEvent],
                       activation_lookup: Callable[[ItemIdx], ActivationValue],
                       time: int):
         """
@@ -69,7 +78,9 @@ class LimitedCapacityItemSet(ABC):
 
 class WorkingMemoryBuffer(LimitedCapacityItemSet):
 
-    def prune_decayed_items(self, activation_lookup: Callable[[ItemIdx], ActivationValue], time: int) -> List[ItemLeftBufferEvent]:
+    def prune_decayed_items(self,
+                            activation_lookup: Callable[[ItemIdx], ActivationValue],
+                            time: int) -> List[ItemLeftBufferEvent]:
         """
         Removes items from the buffer which have dropped below threshold.
         :return:
@@ -87,7 +98,8 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
             for item in decayed_out
         ]
 
-    def present_items(self, activation_events: List[ItemActivatedEvent],
+    def present_items(self,
+                      activation_events: List[ItemActivatedEvent],
                       activation_lookup: Callable[[ItemIdx], ActivationValue],
                       time: int) -> List[ModelEvent]:
         """
@@ -211,8 +223,10 @@ class AccessibleSet(LimitedCapacityItemSet):
         """
         return self.__pressure
 
-    def present_items(self, activation_events: List[ItemActivatedEvent],
-                      activation_lookup: Callable[[ItemIdx], ActivationValue], time: int):
+    def present_items(self,
+                      activation_events: List[ItemActivatedEvent],
+                      activation_lookup: Callable[[ItemIdx], ActivationValue],
+                      time: int):
         if len(activation_events) == 0:
             return
 
@@ -225,7 +239,9 @@ class AccessibleSet(LimitedCapacityItemSet):
             if e.activation >= self.threshold
         }
 
-    def prune_decayed_items(self, activation_lookup: Callable[[ItemIdx], ActivationValue], time: int):
+    def prune_decayed_items(self,
+                            activation_lookup: Callable[[ItemIdx], ActivationValue],
+                            time: int):
         self.items -= {
             item
             for item in self.items

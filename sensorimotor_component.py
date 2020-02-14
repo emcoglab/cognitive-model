@@ -108,10 +108,6 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         # degenerate: it causes everything to decay to 0 activation in a single tick.
         assert (node_decay_lognormal_median > 0)
         assert (node_decay_lognormal_sigma > 0)
-        # zero-size buffer size limit is degenerate: the buffer is always empty.
-        assert (buffer_capacity is None) or (buffer_capacity > 0)
-        # zero-size accessible set size limit is degenerate: the set is always empty.
-        assert (accessible_set_capacity is None) or (accessible_set_capacity > 0)
         assert (activation_cap
                 # If activation_cap == buffer_threshold, items will only enter the buffer when fully activated.
                 >= buffer_threshold
