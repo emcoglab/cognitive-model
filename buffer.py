@@ -29,8 +29,8 @@ class LimitedCapacityItemSet(ABC):
         self.threshold: ActivationValue = threshold
         assert self.threshold >= 0
 
-        self.items: Set[ItemIdx] = set() if items is None else items
         self.capacity: Optional[int] = capacity
+        self.items: Set[ItemIdx] = set() if items is None else items
 
         # zero-size limit is degenerate: the set is always empty.
         assert (self.capacity is None) or (self.capacity > 0)
