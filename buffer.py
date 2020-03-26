@@ -46,6 +46,9 @@ class LimitedCapacityItemSet(ABC):
         """Empties the set."""
         self.replace_contents(set())
 
+    def __len__(self):
+        return len(self.items)
+
     @abstractmethod
     def prune_decayed_items(self,
                             activation_lookup: Callable[[ItemIdx], ActivationValue],
