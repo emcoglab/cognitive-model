@@ -50,6 +50,9 @@ class LimitedCapacityItemSet(ABC):
     def __len__(self):
         return len(self.items)
 
+    def __contains__(self, item):
+        return item in self.items
+
     @abstractmethod
     def prune_decayed_items(self,
                             activation_lookup: Callable[[ItemIdx], ActivationValue],

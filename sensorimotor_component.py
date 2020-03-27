@@ -215,7 +215,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
         self.accessible_set.prune_decayed_items(activation_lookup=self.activation_of_item_with_idx,
                                                 time=self.clock)
 
-        logger.info(f"\tAS: {len(self.accessible_set.items)}/{self.accessible_set.capacity if self.accessible_set.capacity is not None else '∞'} "
+        logger.info(f"\tAS: {len(self.accessible_set)}/{self.accessible_set.capacity if self.accessible_set.capacity is not None else '∞'} "
                     f"(MP: {self.accessible_set.pressure})")
 
         # Proceed with ._evolve_model() and record what became activated
