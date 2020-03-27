@@ -201,7 +201,7 @@ class SensorimotorComponent(TemporalSpatialPropagation):
     def reset(self):
         super(SensorimotorComponent, self).reset()
         self.working_memory_buffer.clear()
-        self.accessible_set = set()
+        self.accessible_set.clear()
 
     # region tick()
 
