@@ -296,7 +296,7 @@ class Graph:
                              ignore_edges_longer_than: Length = None,
                              keep_at_least_n_edges: int = 0) -> Graph:
         """
-        Produces a Graph of the correct format to underlie a TemporalSpreadingActivation.
+        Produces a Graph of the correct format to underlie a GraphPropagator.
 
         Nodes will be numbered according to the row/column indices of weight_matrix (and so can
         be relabelled accordingly).
@@ -502,7 +502,7 @@ def save_edgelist_from_distance_matrix(file_path: str,
                                        distance_matrix: ndarray,
                                        length_factor: int):
     """
-    Saves a graph of the correct form to underlie a TemporalSpreadingActivation.
+    Saves a graph of the correct form to underlie a GraphPropagator.
     Saved as a networkx-compatible edgelist format.
 
     This can be loaded using `load_graph`.
@@ -538,7 +538,7 @@ def save_edgelist_from_similarity_matrix(file_path: str,
                                          filtered_node_ids: List[int],
                                          length_factor: int):
     """
-    Saves a graph of the correct form to underlie a TemporalSpreadingActivation.
+    Saves a graph of the correct form to underlie a GraphPropagator.
     Saved as a networkx-compatible edgelist format.
 
     This can be loaded using `load_graph`.

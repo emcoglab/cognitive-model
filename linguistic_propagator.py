@@ -1,28 +1,11 @@
-"""
-===========================
-Temporal spreading activation.
-===========================
+from typing import Dict, Set
 
-Dr. Cai Wingfield
----------------------------
-Embodied Cognition Lab
-Department of Psychology
-University of Lancaster
-c.wingfield@lancaster.ac.uk
-caiwingfield.net
----------------------------
-2018
----------------------------
-"""
-
-from typing import Set, Dict
-
-from model.graph_propagation import GraphPropagation
 from model.basic_types import ActivationValue, ItemIdx
 from model.graph import Graph
+from model.graph_propagator import GraphPropagator
 
 
-class TemporalSpreadingActivation(GraphPropagation):
+class LinguisticPropagator(GraphPropagator):
     """
     Spreading activation on a graph over time.
     Nodes have a firing threshold and an activation cap.
@@ -41,7 +24,7 @@ class TemporalSpreadingActivation(GraphPropagation):
             A node will fire on receiving activation if its activation crosses this threshold.
         """
 
-        super(TemporalSpreadingActivation, self).__init__(
+        super(LinguisticPropagator, self).__init__(
             graph=graph,
             idx2label=idx2label,
             impulse_pruning_threshold=impulse_pruning_threshold,
@@ -69,18 +52,6 @@ class TemporalSpreadingActivation(GraphPropagation):
             for n in self.graph.nodes
             if self.activation_of_item_with_idx(n) >= self.firing_threshold
         )
-
-    def impulses_headed_for(self, n: ItemIdx) -> Dict[int, float]:
-        """A time-keyed dict of cumulative activation due to arrive at a node."""
-        return {
-            t: activation_arriving_at_time_t[n]
-            for t, activation_arriving_at_time_t in self._scheduled_activations.items()
-            if (n in activation_arriving_at_time_t.keys())
-            # Because self._scheduled_activations is a defaultdict, it's possible that checking for a non-existent
-            # destination at some time will produce a scheduled 0 activation at that time. We don't want to report
-            # these.
-            and (activation_arriving_at_time_t[n] > self.impulse_pruning_threshold)
-        }
 
     def _postsynaptic_guard(self, idx: ItemIdx, activation: ActivationValue) -> bool:
         # Activation must exceed a firing threshold to cause further propagation.

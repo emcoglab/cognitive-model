@@ -20,18 +20,18 @@ from typing import Set, DefaultDict, List
 from model.basic_types import ActivationValue, ItemIdx
 from model.events import ItemActivatedEvent
 from model.linguistic_component import LinguisticComponent
-from model.sensorimotor_component import SensorimotorComponent
+from model.sensorimotor_propagator import SensorimotorPropagator
 
 
 class TandemCognitiveModel:
     def __init__(self,
                  linguistic_component: LinguisticComponent,
-                 sensorimotor_component: SensorimotorComponent,
+                 sensorimotor_component: SensorimotorPropagator,
                  lc_to_smc_delay: int,
                  smc_to_lc_delay: int):
 
         self.linguistic_component: LinguisticComponent = linguistic_component
-        self.sensorimotor_component: SensorimotorComponent = sensorimotor_component
+        self.sensorimotor_component: SensorimotorPropagator = sensorimotor_component
         self.lc_to_smc_delay: int = lc_to_smc_delay
         self.smc_to_lc_delay: int = smc_to_lc_delay
 

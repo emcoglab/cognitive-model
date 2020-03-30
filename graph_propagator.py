@@ -15,7 +15,7 @@ caiwingfield.net
 ---------------------------
 """
 import json
-from abc import ABCMeta
+from abc import ABC
 from collections import namedtuple, defaultdict
 from os import path
 from typing import Dict, DefaultDict, Optional, List, Callable
@@ -28,9 +28,12 @@ from model.events import ModelEvent, ItemActivatedEvent
 from model.graph import Graph
 from model.utils.maths import make_decay_function_constant
 
+Modulation = Callable[[ItemIdx, ActivationValue], ActivationValue]
+Guard = Callable[[ItemIdx, ActivationValue], bool]
+DecayFunction = Callable[[int, ActivationValue], ActivationValue]
 
-class ActivationRecord(namedtuple('ActivationRecord', ['activation',
-                                                       'time_activated'])):
+
+class ActivationRecord(namedtuple('ActivationRecord', ['activation', 'time_activated'])):
     """
     ActivationRecord stores a historical node activation.
 
@@ -50,14 +53,14 @@ def blank_node_activation_record() -> ActivationRecord:
     return ActivationRecord(activation=0, time_activated=-1)
 
 
-class GraphPropagation(metaclass=ABCMeta):
+class GraphPropagator(ABC):
 
     def __init__(self,
                  graph: Graph,
                  idx2label: Dict[ItemIdx, ItemLabel],
                  impulse_pruning_threshold: ActivationValue,
-                 node_decay_function: Callable[[int, ActivationValue], ActivationValue] = None,
-                 edge_decay_function: Callable[[int, ActivationValue], ActivationValue] = None,
+                 node_decay_function: Optional[DecayFunction],
+                 edge_decay_function: Optional[DecayFunction],
                  ):
         """
         Underlying shared code between model components which operate via spreading activation on a graph.
@@ -106,8 +109,87 @@ class GraphPropagation(metaclass=ABCMeta):
         # activation.
         # Each should be of the form (age, initial_activation) ↦ current_activation
         # Use a constant function by default
-        self.node_decay_function: Callable[[int, ActivationValue], ActivationValue] = node_decay_function if node_decay_function is not None else make_decay_function_constant()
-        self.edge_decay_function: Callable[[int, ActivationValue], ActivationValue] = edge_decay_function if edge_decay_function is not None else make_decay_function_constant()
+        self.node_decay_function: DecayFunction = node_decay_function if node_decay_function is not None else make_decay_function_constant()
+        self.edge_decay_function: DecayFunction = edge_decay_function if edge_decay_function is not None else make_decay_function_constant()
+
+        # Modulations and guards are applied in sequence
+        # The output of one modulation is the input to the next; the output of the final is the result.  If there are
+        # none, no modulation is applied.
+        # If any guard in the sequence returns False, the sequence terminates with False; else we get True.
+
+        # TODO: review and consolidate this documentation
+        # presynaptic_modulations:
+        #     Modulates the incoming activations to items. E.g. by scaling incoming activation by some property of the item.
+        #     Applies to the sum total of all converging activation, not to each individual incoming activation (this isn't
+        #     the same unless the modulation is linear).
+        #     See "Modulators" below for signature.
+        #     If None is supplied, no modulation.
+        # """
+        # Modulates the incoming activations to items. E.g. by scaling incoming activation by some property of the item.
+        # Applies to the sum total of all converging activation, not to each individual incoming activation (this isn't
+        # the same unless the modulation is linear).
+        # :param idx:
+        #     The item receiving the activation.
+        # :param activation:
+        #     The unmodified presynaptic activation.
+        # :return:
+        #     The modified presynaptic activation.
+        # """
+        # presynaptic_guards:
+        #     Guards a node's accumulation (and hence also its firing) based on its activation before incoming activation has
+        #     accumulated.  (E.g. making sufficiently-activated nodes into sinks until they decay.)
+        #     See "Guard" below for signature.
+        #     argument `activation` is the activation level of the item BEFORE accumulation.
+        #     If None is supplied, firing is never prevented.
+        # """
+        # Guards a node's accumulation (and hence also its firing) based on its activation before incoming activation has
+        # accumulated.  (E.g. making sufficiently-activated nodes into sinks until they decay.)
+        # :param idx:
+        #     The item receiving the activation.
+        # :param activation:
+        #     The activation level of the item before accumulation.
+        # :return:
+        #     True if the node should be allowed fire, else False.
+        # """
+        # postsynaptic_modulations:
+        #     Modulates the activations of items after accumulation, but before firing.
+        #     (E.g. applying an activation cap).
+        #     See "Modulators" below for signature.
+        #     If None is supplied, no modulation.
+        # """
+        # Modulates the activations of items after accumulation, but before firing.
+        # (E.g. applying an activation cap).
+        # :param idx:
+        #     The item receiving the activation.
+        # :param activation:
+        #     The unmodified presynaptic activation.
+        # :return:
+        #     The modified presynaptic activation.
+        # """
+        # Default implementation: no modification
+        # postsynaptic_guards:
+        #     Guards a node's firing based on its activation after incoming activation has accumulated.
+        #     (E.g. applying a firing threshold.)
+        #     See "Guard" below for signature.
+        #     argument `activation` is the activation level of the item AFTER accumulation
+        #     If None is supplied, firing is never prevented.
+        # """
+        # Guards a node's firing based on its activation after incoming activation has accumulated.
+        # (E.g. applying a firing threshold.)
+        # :param idx:
+        #     The item receiving the activation.
+        # :param activation:
+        #     The activation level of the item after accumulation.
+        # :return:
+        #     True if the node should be allowed to fire, else False.
+        # """
+
+        # pre
+        self.presynaptic_modulations: List[Modulation] = []
+        self.presynaptic_guards: List[Guard] = []
+        # post
+        self.postsynaptic_modulations: List[Modulation] = []
+        self.postsynaptic_guards: List[Guard] = []
 
         # endregion
 
@@ -189,6 +271,10 @@ class GraphPropagation(metaclass=ABCMeta):
         Override this intead of .tick()
         """
         events = self.__apply_activations()
+
+        # There will be at most one event for each item which has an event
+        assert len(events) == len(set(e.item for e in events))
+
         return events
 
     def __apply_activations(self):
@@ -229,14 +315,16 @@ class GraphPropagation(metaclass=ABCMeta):
         current_activation = self.activation_of_item_with_idx(idx)
 
         # Check if something will prevent the activation from occurring
-        if not self._presynaptic_guard(idx, current_activation):
-            # If activation was blocked, node didn't activate or fire
-            return None
+        for guard in self.presynaptic_guards:
+            if not guard(idx, current_activation):
+                # If activation was blocked, node didn't activate or fire
+                return None
 
         # Otherwise, we proceed with the activation:
 
-        # Apply presynaptic modulation
-        activation = self._presynaptic_modulation(idx, activation)
+        # Apply presynaptic modulations
+        for modulation in self.presynaptic_modulations:
+            activation = modulation(idx, activation)
 
         if (activation < self.impulse_pruning_threshold) or (activation == 0):
             return None
@@ -244,8 +332,9 @@ class GraphPropagation(metaclass=ABCMeta):
         # Accumulate activation
         new_activation = current_activation + activation
 
-        # Apply postsynaptic modulation to accumulated value
-        new_activation = self._postsynaptic_modulation(idx, new_activation)
+        # Apply postsynaptic modulations to accumulated value
+        for modulation in self.postsynaptic_modulations:
+            new_activation = modulation(idx, new_activation)
 
         # The item activated, so an activation event occurs
         event = ItemActivatedEvent(time=self.clock, item=idx, activation=new_activation, fired=False)
@@ -254,9 +343,10 @@ class GraphPropagation(metaclass=ABCMeta):
         self._activation_records[idx] = ActivationRecord(new_activation, self.clock)
 
         # Check if the postsynaptic firing guard is passed
-        if not self._postsynaptic_guard(idx, new_activation):
-            # If not, stop here
-            return event
+        for guard in self.postsynaptic_guards:
+            if not guard(idx, new_activation):
+                # If not, stop here
+                return event
 
         # If we did, not only did this node activated, it fired as well, so we upgrade the event
         event.fired = True
@@ -350,63 +440,6 @@ class GraphPropagation(metaclass=ABCMeta):
 
     # endregion
 
-    def _presynaptic_modulation(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
-        """
-        Modulates the incoming activations to items. E.g. by scaling incoming activation by some property of the item.
-        Applies to the sum total of all converging activation, not to each individual incoming activation (this isn't
-        the same unless the modulation is linear).
-        :param idx:
-            The item receiving the activation.
-        :param activation:
-            The unmodified presynaptic activation.
-        :return:
-            The modified presynaptic activation.
-        """
-        # Default implementation: no modification
-        return activation
-
-    def _postsynaptic_modulation(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
-        """
-        Modulates the activations of items after accumulation, but before firing.
-        (E.g. applying an activation cap).
-        :param idx:
-            The item receiving the activation.
-        :param activation:
-            The unmodified presynaptic activation.
-        :return:
-            The modified presynaptic activation.
-        """
-        # Default implementation: no modification
-        return activation
-
-    def _presynaptic_guard(self, idx: ItemIdx, activation: ActivationValue) -> bool:
-        """
-        Guards a node's accumulation (and hence also its firing) based on its activation before incoming activation has
-        accumulated.  (E.g. making sufficiently-activated nodes into sinks until they decay.)
-        :param idx:
-            The item receiving the activation.
-        :param activation:
-            The activation level of the item before accumulation.
-        :return:
-            True if the node should be allowed fire, else False.
-        """
-        # Default implementation: never prevent firing.
-        return True
-
-    def _postsynaptic_guard(self, idx: ItemIdx, activation: ActivationValue) -> bool:
-        """
-        Guards a node's firing based on its activation after incoming activation has accumulated.
-        (E.g. applying a firing threshold.)
-        :param idx:
-            The item receiving the activation.
-        :param activation:
-            The activation level of the item after accumulation.
-        :return:
-            True if the node should be allowed to fire, else False.
-        """
-        # Default implementation: never prevent firing.
-        return True
-
     def __str__(self):
         string_builder = f"CLOCK = {self.clock}\n"
         for node in self.graph.nodes:
@@ -435,8 +468,8 @@ class GraphPropagation(metaclass=ABCMeta):
             return yaml.load(spec_file, yaml.SafeLoader)
 
 
-def _load_labels(nodelabel_path: str) -> Dict[ItemIdx, ItemLabel]:
-    with open(nodelabel_path, mode="r", encoding="utf-8") as nrd_file:
+def _load_labels(node_label_path: str) -> Dict[ItemIdx, ItemLabel]:
+    with open(node_label_path, mode="r", encoding="utf-8") as nrd_file:
         node_relabelling_dictionary_json = json.load(nrd_file)
     node_labelling_dictionary = dict()
     for k, v in node_relabelling_dictionary_json.items():
