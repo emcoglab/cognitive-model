@@ -64,7 +64,7 @@ class SensorimotorPropagator(GraphPropagator):
         # endregion
 
         # Load graph
-        idx2label = load_labels_from_sensorimotor()
+        idx2label = _load_labels_from_sensorimotor()
         super().__init__(
             graph=_load_graph(distance_type, length_factor, max_sphere_radius, use_prepruned, idx2label),
             idx2label=idx2label,
@@ -99,7 +99,7 @@ class SensorimotorPropagator(GraphPropagator):
                     if activation > 0])
 
 
-def load_labels_from_sensorimotor() -> Dict[ItemIdx, ItemLabel]:
+def _load_labels_from_sensorimotor() -> Dict[ItemIdx, ItemLabel]:
     return _load_labels(path.join(Preferences.graphs_dir, "sensorimotor words.nodelabels"))
 
 

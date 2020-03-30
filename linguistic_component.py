@@ -38,7 +38,7 @@ logger_format = '%(asctime)s | %(levelname)s | %(module)s | %(message)s'
 logger_dateformat = "%Y-%m-%d %H:%M:%S"
 
 
-class LinguisticComponent(LinguisticPropagator):
+class LinguisticComponent(ModelComponent):
     """
     The linguistic component of the model.
     Uses an exponential decay on nodes and a gaussian decay on edges.
@@ -112,7 +112,6 @@ class LinguisticComponent(LinguisticPropagator):
             raise ValueError(f"activation cap {self.activation_cap} cannot be less than the firing threshold {self.firing_threshold}")
 
         freq_dist = FreqDist.load(distributional_model.corpus_meta.freq_dist_path)
-        self.available_words: Set[ItemLabel] = set(freq_dist.most_common_tokens(n_words))
 
         # endregion
 

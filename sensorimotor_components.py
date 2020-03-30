@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from enum import Enum, auto
 from logging import getLogger
-from typing import Optional, List, Dict, Set
+from typing import Optional, List, Dict
 
-from model.basic_types import ActivationValue, ItemIdx, ItemLabel
+from model.basic_types import ActivationValue, ItemIdx
 from model.buffer import AccessibleSet, WorkingMemoryBuffer
+from model.components import ModelComponent
 from model.events import ModelEvent, ItemActivatedEvent
 from model.sensorimotor_propagator import SensorimotorPropagator
 from model.utils.iterable import partition
@@ -17,7 +18,7 @@ logger_format = '%(asctime)s | %(levelname)s | %(module)s | %(message)s'
 logger_dateformat = "%Y-%m-%d %H:%M:%S"
 
 
-class SensorimotorComponent:
+class SensorimotorComponent(ModelComponent):
 
     def __init__(self,
                  propagator: SensorimotorPropagator,
@@ -26,12 +27,6 @@ class SensorimotorComponent:
                  accessible_set_threshold: ActivationValue,
                  accessible_set_capacity: Optional[int],
                  ):
-        """
-        :param activation_cap:
-            If None is supplied, no cap is used.
-        :param accessible_set_threshold:
-            Used to determine what counts as "activated" and in the accessible set.
-        """
 
         assert (activation_cap
                 # If activation_cap == accessible_set_threshold, items will only enter the accessible set when fully
@@ -74,19 +69,19 @@ class SensorimotorComponent:
         self.accessible_set: AccessibleSet = AccessibleSet(accessible_set_threshold, accessible_set_capacity)
 
         # TODO: really, this should be hidden, and the present class should provide the external interface
-        self.propagator: SensorimotorPropagator = propagator
+        super().__init__(propagator)
+        assert isinstance(self.propagator, SensorimotorPropagator)
 
         # region modulations and guards
 
         # No presynaptic guards
-        self.propagator.presynaptic_guards.extend([])
         self.propagator.presynaptic_modulations.extend([
-            self._apply_activation_cap,
+            self._apply_activation_cap(activation_cap),
             self._attenuate_by_statistic,
             self._apply_memory_pressure,
         ])
         self.propagator.postsynaptic_modulations.extend([
-            self._apply_activation_cap
+            self._apply_activation_cap(activation_cap)
         ])
         self.propagator.postsynaptic_guards.extend([
             self._not_in_accessible_set
@@ -94,13 +89,7 @@ class SensorimotorComponent:
 
         # endregion
 
-    # TODO: not sure this is the best place for these to live
-    def _apply_activation_cap(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
-        """If accumulated activation is over the cap, apply the cap."""
-        # The activation cap, if used, MUST be greater than the firing threshold (this is checked in __init__, so
-        # applying the cap does not effect whether the node will fire or not)
-        return min(activation, self.activation_cap)
-
+    # todo: make static modulation-producers
     def _attenuate_by_statistic(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
         # Attenuate the incoming activations to a concept based on a statistic of the concept
         return activation * self._attenuation_statistic[idx]
@@ -115,7 +104,7 @@ class SensorimotorComponent:
         return idx not in self.accessible_set
 
     def reset(self):
-        self.propagator.reset()
+        super().reset()
         self.accessible_set.clear()
 
     def tick(self) -> List[ModelEvent]:
@@ -124,14 +113,14 @@ class SensorimotorComponent:
         self.accessible_set.prune_decayed_items(activation_lookup=self.propagator.activation_of_item_with_idx,
                                                 time=self.propagator.clock)
 
-        logger.info(
-            f"\tAS: {len(self.accessible_set)}/{self.accessible_set.capacity if self.accessible_set.capacity is not None else '∞'} "
-            f"(MP: {self.accessible_set.pressure})")
+        logger.info(f"\tAS: {len(self.accessible_set)}"
+                    f"/{self.accessible_set.capacity if self.accessible_set.capacity is not None else '∞'} "
+                    f"(MP: {self.accessible_set.pressure})")
 
-        # Proceed with ._evolve_model() and record what became activated
+        # Proceed with .tick() and record what became activated
         # Activation and firing may be affected by the size of or membership to the accessible set and the buffer, but
         # nothing will ENTER it until later, and everything that will LEAVE this tick already has done so.
-        tick_events = self.propagator.tick()
+        tick_events = super().tick()
         activation_events, other_events = partition(tick_events, lambda e: isinstance(e, ItemActivatedEvent))
 
         # Update accessible set
@@ -140,11 +129,6 @@ class SensorimotorComponent:
                                           time=self.propagator.clock)
 
         return activation_events + other_events
-
-    @property
-    def concept_labels(self) -> Set[ItemLabel]:
-        """Labels of concepts"""
-        return set(w for i, w in self.propagator.idx2label.items())
 
 
 class BufferedSensorimotorComponent(SensorimotorComponent):
