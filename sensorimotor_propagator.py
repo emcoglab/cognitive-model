@@ -8,15 +8,13 @@ from ldm.utils.maths import DistanceType
 from model.basic_types import ItemIdx, ItemLabel, Node, ActivationValue
 from model.events import ModelEvent
 from model.graph import Graph
-from model.graph_propagator import GraphPropagator, _load_labels
+from model.graph_propagator import GraphPropagator, _load_labels, IMPULSE_PRUNING_THRESHOLD
 from model.utils.maths import make_decay_function_lognormal
 from preferences import Preferences
 
 logger = getLogger()
 logger_format = '%(asctime)s | %(levelname)s | %(module)s | %(message)s'
 logger_dateformat = "%Y-%m-%d %H:%M:%S"
-
-IMPULSE_PRUNING_THRESHOLD = 0.05
 
 
 class SensorimotorPropagator(GraphPropagator):
@@ -29,8 +27,8 @@ class SensorimotorPropagator(GraphPropagator):
     # region __init__
 
     def __init__(self,
-                 distance_type: DistanceType,
                  length_factor: int,
+                 distance_type: DistanceType,
                  max_sphere_radius: int,
                  node_decay_lognormal_median: float,
                  node_decay_lognormal_sigma: float,
@@ -91,12 +89,6 @@ class SensorimotorPropagator(GraphPropagator):
         })
 
     # endregion
-
-    def scheduled_activation_count(self) -> int:
-        return sum([1
-                    for tick, schedule_activation in self._scheduled_activations.items()
-                    for idx, activation in schedule_activation.items()
-                    if activation > 0])
 
 
 def _load_labels_from_sensorimotor() -> Dict[ItemIdx, ItemLabel]:

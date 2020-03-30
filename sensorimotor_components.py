@@ -74,13 +74,15 @@ class SensorimotorComponent(ModelComponent):
 
         # region modulations and guards
 
-        # No presynaptic guards
+        # No pre-synaptic guards
         self.propagator.presynaptic_modulations.extend([
+            # Apply cap before attenuations
             self._apply_activation_cap(activation_cap),
             self._attenuate_by_statistic,
             self._apply_memory_pressure,
         ])
         self.propagator.postsynaptic_modulations.extend([
+            # Cap on a node's total activation after receiving incoming
             self._apply_activation_cap(activation_cap)
         ])
         self.propagator.postsynaptic_guards.extend([

@@ -27,11 +27,13 @@ class ModelComponent(ABC):
 
     def __init__(self, propagator: GraphPropagator):
         self.propagator: GraphPropagator = propagator
+        # This won't change so we set it once
+        self._available_labels: Set[ItemLabel] = set(w for i, w in self.propagator.idx2label.items())
 
     @property
     def available_labels(self) -> Set[ItemLabel]:
         """Labels of concepts in the model component."""
-        return set(w for i, w in self.propagator.idx2label.items())
+        return self._available_labels
 
     def reset(self):
         self.propagator.reset()

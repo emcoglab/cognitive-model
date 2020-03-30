@@ -467,6 +467,12 @@ class GraphPropagator(ABC):
         with open(path.join(response_dir, " model_spec.yaml"), mode="r", encoding="utf-8") as spec_file:
             return yaml.load(spec_file, yaml.SafeLoader)
 
+    def scheduled_activation_count(self) -> int:
+        return sum([1
+                    for tick, schedule_activation in self._scheduled_activations.items()
+                    for idx, activation in schedule_activation.items()
+                    if activation > 0])
+
 
 def _load_labels(node_label_path: str) -> Dict[ItemIdx, ItemLabel]:
     with open(node_label_path, mode="r", encoding="utf-8") as nrd_file:
@@ -475,3 +481,6 @@ def _load_labels(node_label_path: str) -> Dict[ItemIdx, ItemLabel]:
     for k, v in node_relabelling_dictionary_json.items():
         node_labelling_dictionary[ItemIdx(k)] = v
     return node_labelling_dictionary
+
+
+IMPULSE_PRUNING_THRESHOLD = 0.05
