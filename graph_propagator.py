@@ -119,63 +119,45 @@ class GraphPropagator(ABC):
         # none, no modulation is applied.
         # If any guard in the sequence returns False, the sequence terminates with False; else we get True.
 
-        # TODO: review and consolidate this documentation
         # presynaptic_modulations:
         #     Modulates the incoming activations to items. E.g. by scaling incoming activation by some property of the item.
         #     Applies to the sum total of all converging activation, not to each individual incoming activation (this isn't
         #     the same unless the modulation is linear).
-        #     See "Modulators" below for signature.
-        #     If None is supplied, no modulation.
-        # """
-        # Modulates the incoming activations to items. E.g. by scaling incoming activation by some property of the item.
-        # Applies to the sum total of all converging activation, not to each individual incoming activation (this isn't
-        # the same unless the modulation is linear).
         # :param idx:
         #     The item receiving the activation.
         # :param activation:
         #     The unmodified presynaptic activation.
         # :return:
         #     The modified presynaptic activation.
-        # """
+        self.presynaptic_modulations: List[Modulation] = []
         # presynaptic_guards:
         #     Guards a node's accumulation (and hence also its firing) based on its activation before incoming activation has
         #     accumulated.  (E.g. making sufficiently-activated nodes into sinks until they decay.)
         #     See "Guard" below for signature.
         #     argument `activation` is the activation level of the item BEFORE accumulation.
-        #     If None is supplied, firing is never prevented.
-        # """
-        # Guards a node's accumulation (and hence also its firing) based on its activation before incoming activation has
-        # accumulated.  (E.g. making sufficiently-activated nodes into sinks until they decay.)
         # :param idx:
         #     The item receiving the activation.
         # :param activation:
         #     The activation level of the item before accumulation.
         # :return:
         #     True if the node should be allowed fire, else False.
-        # """
+        self.presynaptic_guards: List[Guard] = []
         # postsynaptic_modulations:
         #     Modulates the activations of items after accumulation, but before firing.
         #     (E.g. applying an activation cap).
-        #     See "Modulators" below for signature.
-        #     If None is supplied, no modulation.
-        # """
         # Modulates the activations of items after accumulation, but before firing.
         # (E.g. applying an activation cap).
         # :param idx:
         #     The item receiving the activation.
         # :param activation:
-        #     The unmodified presynaptic activation.
+        #     The unmodified postsynaptic activation.
         # :return:
-        #     The modified presynaptic activation.
-        # """
-        # Default implementation: no modification
+        #     The modified postsynaptic activation.
+        self.postsynaptic_modulations: List[Modulation] = []
         # postsynaptic_guards:
         #     Guards a node's firing based on its activation after incoming activation has accumulated.
         #     (E.g. applying a firing threshold.)
-        #     See "Guard" below for signature.
         #     argument `activation` is the activation level of the item AFTER accumulation
-        #     If None is supplied, firing is never prevented.
-        # """
         # Guards a node's firing based on its activation after incoming activation has accumulated.
         # (E.g. applying a firing threshold.)
         # :param idx:
@@ -184,13 +166,6 @@ class GraphPropagator(ABC):
         #     The activation level of the item after accumulation.
         # :return:
         #     True if the node should be allowed to fire, else False.
-        # """
-
-        # pre
-        self.presynaptic_modulations: List[Modulation] = []
-        self.presynaptic_guards: List[Guard] = []
-        # post
-        self.postsynaptic_modulations: List[Modulation] = []
         self.postsynaptic_guards: List[Guard] = []
 
         # endregion
