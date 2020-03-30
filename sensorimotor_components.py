@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from enum import Enum, auto
-from logging import getLogger
 from typing import Optional, List, Dict
 
+from model.utils.logging import logger
 from model.basic_types import ActivationValue, ItemIdx
 from model.buffer import AccessibleSet, WorkingMemoryBuffer
 from model.components import ModelComponent
@@ -12,10 +12,6 @@ from model.sensorimotor_propagator import SensorimotorPropagator
 from model.utils.iterable import partition
 from model.utils.maths import prevalence_from_fraction_known, scale_prevalence_01
 from sensorimotor_norms.sensorimotor_norms import SensorimotorNorms
-
-logger = getLogger()
-logger_format = '%(asctime)s | %(levelname)s | %(module)s | %(message)s'
-logger_dateformat = "%Y-%m-%d %H:%M:%S"
 
 
 class SensorimotorComponent(ModelComponent):

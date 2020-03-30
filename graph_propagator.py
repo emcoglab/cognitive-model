@@ -32,6 +32,8 @@ Modulation = Callable[[ItemIdx, ActivationValue], ActivationValue]
 Guard = Callable[[ItemIdx, ActivationValue], bool]
 DecayFunction = Callable[[int, ActivationValue], ActivationValue]
 
+IMPULSE_PRUNING_THRESHOLD = 0.05
+
 
 class ActivationRecord(namedtuple('ActivationRecord', ['activation', 'time_activated'])):
     """
@@ -63,7 +65,7 @@ class GraphPropagator(ABC):
                  edge_decay_function: Optional[DecayFunction],
                  ):
         """
-        Underlying shared code between model components which operate via spreading activation on a graph.
+        Underlying shared code between model components which operate via propagation of activation on a graph.
         :param graph:
             `graph` should be an undirected, weighted graph with the following data:
                 On Edges:
@@ -481,6 +483,3 @@ def _load_labels(node_label_path: str) -> Dict[ItemIdx, ItemLabel]:
     for k, v in node_relabelling_dictionary_json.items():
         node_labelling_dictionary[ItemIdx(k)] = v
     return node_labelling_dictionary
-
-
-IMPULSE_PRUNING_THRESHOLD = 0.05

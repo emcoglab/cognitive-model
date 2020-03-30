@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from logging import getLogger
 from os import path
 from typing import Dict, List
 
@@ -9,12 +8,9 @@ from model.basic_types import ItemIdx, ItemLabel, Node, ActivationValue
 from model.events import ModelEvent
 from model.graph import Graph
 from model.graph_propagator import GraphPropagator, _load_labels, IMPULSE_PRUNING_THRESHOLD
+from model.utils.logging import logger
 from model.utils.maths import make_decay_function_lognormal
 from preferences import Preferences
-
-logger = getLogger()
-logger_format = '%(asctime)s | %(levelname)s | %(module)s | %(message)s'
-logger_dateformat = "%Y-%m-%d %H:%M:%S"
 
 
 class SensorimotorPropagator(GraphPropagator):

@@ -1,4 +1,3 @@
-from logging import getLogger
 from os import path
 from typing import Dict, Optional, List
 
@@ -7,16 +6,14 @@ from pandas import DataFrame
 from ldm.corpus.corpus import CorpusMetadata
 from ldm.model.base import DistributionalSemanticModel
 from ldm.utils.maths import DistanceType
-from model.basic_types import ActivationValue, ItemIdx, ItemLabel, Length
+from model.basic_types import Length, ItemIdx, ItemLabel, ActivationValue
+
+from model.utils.logging import logger
 from model.events import ModelEvent
 from model.graph import Graph, EdgePruningType
 from model.graph_propagator import GraphPropagator, _load_labels, IMPULSE_PRUNING_THRESHOLD
 from model.utils.maths import make_decay_function_exponential_with_decay_factor, make_decay_function_gaussian_with_sd
 from preferences import Preferences
-
-logger = getLogger()
-logger_format = '%(asctime)s | %(levelname)s | %(module)s | %(message)s'
-logger_dateformat = "%Y-%m-%d %H:%M:%S"
 
 
 class LinguisticPropagator(GraphPropagator):

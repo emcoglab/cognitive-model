@@ -15,7 +15,8 @@ caiwingfield.net
 ---------------------------
 """
 from __future__ import annotations
-import subprocess
+
+from subprocess import run
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional
@@ -135,11 +136,11 @@ class Job(ABC):
 
     def run_locally(self):
         print(self.command)
-        subprocess.run(f"python {self.command}", shell=True)
+        run(f"python {self.command}", shell=True)
 
     def submit(self):
         print(self.qsub_command)
-        subprocess.run(self.qsub_command, shell=True)
+        run(self.qsub_command, shell=True)
 
     @classmethod
     def _without_py(cls, script_name: str) -> str:

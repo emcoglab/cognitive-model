@@ -15,12 +15,9 @@ caiwingfield.net
 ---------------------------
 """
 import json
-import logging
 import smtplib
 from typing import Dict
-
-logger = logging.getLogger(__name__)
-
+from .logging import logger
 
 def _log_exception(ex: Exception):
     """Log an exception. Use this when an exception is to be suppressed."""

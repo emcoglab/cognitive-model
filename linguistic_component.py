@@ -15,17 +15,12 @@ caiwingfield.net
 ---------------------------
 """
 
-import logging
 from typing import Set
 
 from model.basic_types import ActivationValue, ItemIdx
 from model.components import ModelComponent
 from model.graph_propagator import Guard
 from model.linguistic_propagator import LinguisticPropagator
-
-logger = logging.getLogger()
-logger_format = '%(asctime)s | %(levelname)s | %(module)s | %(message)s'
-logger_dateformat = "%Y-%m-%d %H:%M:%S"
 
 
 class LinguisticComponent(ModelComponent):
