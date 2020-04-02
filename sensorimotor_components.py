@@ -87,6 +87,13 @@ class SensorimotorComponent(ModelComponent):
 
         # endregion
 
+        self._model_spec.update({
+            "Norm attenuation statistic": norm_attenuation_statistic.name,
+            "Activation cap": activation_cap,
+            "Activation threshold": accessible_set_threshold,
+            "Accessible set capacity": accessible_set_capacity,
+        })
+
     # todo: make static modulation-producers
     def _attenuate_by_statistic(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
         # Attenuate the incoming activations to a concept based on a statistic of the concept
@@ -176,6 +183,11 @@ class BufferedSensorimotorComponent(SensorimotorComponent):
         self.working_memory_buffer: WorkingMemoryBuffer = WorkingMemoryBuffer(buffer_threshold, buffer_capacity)
 
         # endregion
+
+        self._model_spec.update({
+            "Buffer capacity": buffer_capacity,
+            "Buffer threshold": buffer_threshold,
+        })
 
     def tick(self) -> List[ModelEvent]:
         # Decay events before activating anything new

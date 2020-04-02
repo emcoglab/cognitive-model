@@ -76,15 +76,23 @@ class SensorimotorPropagator(GraphPropagator):
         # region Set once
         # These fields are set on first init and then don't need to change even if .reset() is used.
 
-        self._model_spec.update({
+        self._model_spec_additional_fields = {
             "Distance type": distance_type.name,
             "Length factor": length_factor,
             "Max sphere radius": max_sphere_radius,
             "Log-normal median": node_decay_lognormal_median,
             "Log-normal sigma": node_decay_lognormal_sigma,
-        })
+        }
 
     # endregion
+
+    # TODO: having this "additional fields" thing is a bit of a mess, but it works for now.
+    #  Eventually I need to consolidate this, make it resemble Spec, and decide where it should live.
+    @property
+    def _model_spec(self) -> Dict:
+        spec = super()._model_spec
+        spec.update(self._model_spec_additional_fields)
+        return spec
 
 
 def _load_labels_from_sensorimotor() -> Dict[ItemIdx, ItemLabel]:

@@ -17,10 +17,7 @@ caiwingfield.net
 import json
 from abc import ABC
 from collections import namedtuple, defaultdict
-from os import path
 from typing import Dict, DefaultDict, Optional, List, Callable
-
-import yaml
 
 from model.version import VERSION, GIT_HASH
 from model.basic_types import ActivationValue, ItemIdx, ItemLabel
@@ -89,12 +86,6 @@ class GraphPropagator(ABC):
 
         # region Set once
         # These fields are set on first init and then don't need to change even if .reset() is used.
-
-        # Written to model output; update in overriding classes
-        self._model_spec = {
-            "Version": VERSION,
-            "Commit": GIT_HASH
-        }
 
         # Don't reset
         self.idx2label: Dict[ItemIdx, ItemLabel] = idx2label
@@ -198,6 +189,14 @@ class GraphPropagator(ABC):
             ))
 
         # endregion
+
+    @property
+    def _model_spec(self) -> Dict:
+        return {
+            "Version": VERSION,
+            "Commit": GIT_HASH,
+            "Impulse pruning threshold": self.impulse_pruning_threshold,
+        }
 
     def reset(self):
         """Resets the spreading to its initial state without having to reload any data."""
@@ -425,24 +424,6 @@ class GraphPropagator(ABC):
                 continue
             string_builder += f"\t{self.idx2label[node]}: {self.activation_of_item_with_idx(node)}\n"
         return string_builder
-
-    def save_model_spec(self, response_dir, additional_fields: Optional[Dict] = None):
-        """
-        Save the model spec to the `response_dir`.
-        :param response_dir:
-        :param additional_fields:
-            If provided and not None, add these fields to the spec.
-        """
-        spec = self._model_spec.copy()
-        if additional_fields:
-            spec.update(additional_fields)
-        with open(path.join(response_dir, " model_spec.yaml"), mode="w", encoding="utf-8") as spec_file:
-            yaml.dump(spec, spec_file, yaml.SafeDumper)
-
-    @classmethod
-    def load_model_spec(cls, response_dir) -> dict:
-        with open(path.join(response_dir, " model_spec.yaml"), mode="r", encoding="utf-8") as spec_file:
-            return yaml.load(spec_file, yaml.SafeLoader)
 
     def scheduled_activation_count(self) -> int:
         return sum([1

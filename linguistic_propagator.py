@@ -67,6 +67,24 @@ class LinguisticPropagator(GraphPropagator):
                 sd=edge_decay_sd_factor * length_factor),
         )
 
+        self._model_spec_additional_fields = {
+            "Words": n_words,
+            "Model name": distributional_model.name,
+            "Length factor": length_factor,
+            "SD factor": edge_decay_sd_factor,
+            "Node decay": node_decay_factor,
+        }
+
+    # endregion
+
+    # TODO: having this "additional fields" thing is a bit of a mess, but it works for now.
+    #  Eventually I need to consolidate this, make it resemble Spec, and decide where it should live.
+    @property
+    def _model_spec(self) -> Dict:
+        spec = super()._model_spec
+        spec.update(self._model_spec_additional_fields)
+        return spec
+
 
 def _load_labels_from_corpus(corpus: CorpusMetadata, n_words: int) -> Dict[ItemIdx, ItemLabel]:
     return _load_labels(path.join(Preferences.graphs_dir, f"{corpus.name} {n_words} words.nodelabels"))
