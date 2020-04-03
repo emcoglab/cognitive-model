@@ -32,6 +32,17 @@ class SensorimotorComponent(ModelComponent):
                 # membership to the accessible set is a guard to reactivation).
                 > 0)
 
+        # region Resettable
+        # These fields are reinitialised in .reset()
+
+        # The set of items which are "accessible to conscious awareness" even if they are not in the working memory
+        # buffer
+        self.accessible_set: AccessibleSet = AccessibleSet(accessible_set_threshold, accessible_set_capacity)
+
+        # TODO: really, this should be hidden, and the present class should provide the external interface
+        super().__init__(propagator)
+        assert isinstance(self.propagator, SensorimotorPropagator)
+
         # Data
 
         # Use >= and < to test for above/below
@@ -56,17 +67,6 @@ class SensorimotorComponent(ModelComponent):
             idx: get_statistic_for_item(idx)
             for idx in self.propagator.graph.nodes
         }
-
-        # region Resettable
-        # These fields are reinitialised in .reset()
-
-        # The set of items which are "accessible to conscious awareness" even if they are not in the working memory
-        # buffer
-        self.accessible_set: AccessibleSet = AccessibleSet(accessible_set_threshold, accessible_set_capacity)
-
-        # TODO: really, this should be hidden, and the present class should provide the external interface
-        super().__init__(propagator)
-        assert isinstance(self.propagator, SensorimotorPropagator)
 
         # region modulations and guards
 
