@@ -27,21 +27,28 @@ from model.graph import EdgePruningType
 
 
 @dataclass
-class Spec(ABC):
+class JobSpec(ABC):
 
     @property
     @abstractmethod
     def shorthand(self) -> str:
+        """
+        A short name which may not uniquely define the spec, but can be used to
+        disambiguate job names, etc.
+        """
         raise NotImplementedError()
 
     @property
     @abstractmethod
     def cli_args(self) -> List[str]:
+        """
+        List of key-value pairs in `--arg_name val format`.
+        """
         raise NotImplementedError()
 
 
 @dataclass
-class PropagationSpec(Spec, ABC):
+class PropagationJobSpec(JobSpec, ABC):
     length_factor: int
     run_for_ticks: Optional[int]
     bailout: Optional[int]
@@ -60,7 +67,7 @@ class PropagationSpec(Spec, ABC):
 
 
 @dataclass
-class SensorimotorPropagationSpec(PropagationSpec):
+class SensorimotorPropagationJobSpec(PropagationJobSpec):
     max_radius: int
     node_decay_sigma: float
     node_decay_median: float
@@ -97,7 +104,7 @@ class SensorimotorPropagationSpec(PropagationSpec):
 
 
 @dataclass
-class LinguisticPropagationSpec(PropagationSpec):
+class LinguisticPropagationJobSpec(PropagationJobSpec):
     graph_size: int
     firing_threshold: float
     model_name: str
@@ -145,9 +152,9 @@ class LinguisticPropagationSpec(PropagationSpec):
 
 
 @dataclass
-class CombinedSpec(Spec, ABC):
-    linguistic_spec: LinguisticPropagationSpec
-    sensorimotor_spec: SensorimotorPropagationSpec
+class CombinedJobSpec(JobSpec, ABC):
+    linguistic_spec: LinguisticPropagationJobSpec
+    sensorimotor_spec: SensorimotorPropagationJobSpec
 
     @property
     def cli_args(self) -> List[str]:
@@ -156,7 +163,7 @@ class CombinedSpec(Spec, ABC):
 
 
 @dataclass
-class NoninteractiveCombinedSpec(CombinedSpec):
+class NoninteractiveCombinedJobSpec(CombinedJobSpec):
     @property
     def shorthand(self) -> str:
         return f"ni_{self.linguistic_spec.shorthand}_{self.sensorimotor_spec.shorthand}"
@@ -168,7 +175,7 @@ class Job(ABC):
     def __init__(self,
                  script_number: str,
                  script_name: str,
-                 spec: Spec,
+                 spec: JobSpec,
                  ):
         self._number: str = script_number
         self.short_name: str = "j" + script_number.replace("_", "")
@@ -226,7 +233,7 @@ class PropagationJob(Job, ABC):
     def __init__(self,
                  script_number: str,
                  script_name: str,
-                 spec: Spec):
+                 spec: JobSpec):
         super().__init__(
             script_number=script_number,
             script_name=script_name,
@@ -235,11 +242,11 @@ class PropagationJob(Job, ABC):
 
 class SensorimotorPropagationJob(PropagationJob, ABC):
     def __init__(self, *args, **kwargs):
-        self.spec: SensorimotorPropagationSpec
+        self.spec: SensorimotorPropagationJobSpec
         super().__init__(*args, **kwargs)
 
 
 class LinguisticPropagationJob(PropagationJob, ABC):
     def __init__(self, *args, **kwargs):
-        self.spec: LinguisticPropagationSpec
+        self.spec: LinguisticPropagationJobSpec
         super().__init__(*args, **kwargs)
