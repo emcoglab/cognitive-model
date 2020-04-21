@@ -34,12 +34,12 @@ class Spec(ABC):
 
 
 @dataclass
-class SASpec(Spec, ABC):
+class PropagationSpec(Spec, ABC):
     length_factor: int
 
 
 @dataclass
-class SensorimotorSASpec(SASpec):
+class SensorimotorPropagationSpec(PropagationSpec):
     max_radius: int
     node_decay_sigma: float
     node_decay_median: float
@@ -61,7 +61,7 @@ class SensorimotorSASpec(SASpec):
 
 
 @dataclass
-class LinguisticSASpec(SASpec):
+class LinguisticPropagationSpec(PropagationSpec):
     graph_size: int
     firing_threshold: float
     model_name: str
@@ -84,8 +84,8 @@ class LinguisticSASpec(SASpec):
 
 @dataclass
 class CombinedSpec(Spec, ABC):
-    linguistic_spec: LinguisticSASpec
-    sensorimotor_spec: SensorimotorSASpec
+    linguistic_spec: LinguisticPropagationSpec
+    sensorimotor_spec: SensorimotorPropagationSpec
 
 
 @dataclass
@@ -150,7 +150,7 @@ class Job(ABC):
             return script_name
 
 
-class SAJob(Job, ABC):
+class PropagationJob(Job, ABC):
     def __init__(self,
                  script_number: str,
                  script_name: str,
@@ -165,13 +165,13 @@ class SAJob(Job, ABC):
         self.bailout: Optional[int] = bailout
 
 
-class SensorimotorSAJob(SAJob, ABC):
+class SensorimotorPropagationJob(PropagationJob, ABC):
     def __init__(self, *args, **kwargs):
-        self.spec: SensorimotorSASpec
+        self.spec: SensorimotorPropagationSpec
         super().__init__(*args, **kwargs)
 
 
-class LinguisticSAJob(SAJob, ABC):
+class LinguisticPropagationJob(PropagationJob, ABC):
     def __init__(self, *args, **kwargs):
-        self.spec: LinguisticSASpec
+        self.spec: LinguisticPropagationSpec
         super().__init__(*args, **kwargs)
