@@ -77,13 +77,14 @@ class LinguisticPropagator(GraphPropagator):
 
     # endregion
 
-    # TODO: having this "additional fields" thing is a bit of a mess, but it works for now.
-    #  Eventually I need to consolidate this, make it resemble Spec, and decide where it should live.
     @property
     def _model_spec(self) -> Dict:
         spec = super()._model_spec
         spec.update(self._model_spec_additional_fields)
-        return spec
+        return {
+            **super()._model_spec,
+            **self._model_spec_additional_fields
+        }
 
 
 def _load_labels_from_corpus(corpus: CorpusMetadata, n_words: int) -> Dict[ItemIdx, ItemLabel]:

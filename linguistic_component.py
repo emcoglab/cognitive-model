@@ -15,7 +15,7 @@ caiwingfield.net
 ---------------------------
 """
 
-from typing import Set
+from typing import Set, Dict
 
 from model.basic_types import ActivationValue, ItemIdx
 from model.components import ModelComponent
@@ -64,7 +64,12 @@ class LinguisticComponent(ModelComponent):
             self._exceeds_firing_threshold(self.firing_threshold)
         ])
 
-        self._model_spec["Firing threshold"] = self.firing_threshold
+    @property
+    def _model_spec(self) -> Dict:
+        return {
+            **super()._model_spec,
+            "Firing threshold": self.firing_threshold
+        }
 
     @staticmethod
     def _exceeds_firing_threshold(firing_threshold: ActivationValue) -> Guard:

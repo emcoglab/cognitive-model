@@ -34,7 +34,9 @@ class ModelComponent(ABC):
         # This won't change so we set it once
         self._available_labels: Set[ItemLabel] = set(w for i, w in self.propagator.idx2label.items())
 
-        self._model_spec: Dict = self.propagator._model_spec.copy()
+    @property
+    def _model_spec(self) -> Dict:
+        return self.propagator._model_spec
 
     @property
     def available_labels(self) -> Set[ItemLabel]:

@@ -87,12 +87,19 @@ class SensorimotorComponent(ModelComponent):
 
         # endregion
 
-        self._model_spec.update({
+        self._model_spec_additional_fields = {
             "Norm attenuation statistic": norm_attenuation_statistic.name,
-            "Activation cap": activation_cap,
-            "Activation threshold": accessible_set_threshold,
-            "Accessible set capacity": accessible_set_capacity,
-        })
+            "Activation cap": self.activation_cap,
+            "Activation threshold": self.accessible_set.threshold,
+            "Accessible set capacity": self.accessible_set.capacity,
+        }
+
+    @property
+    def _model_spec(self) -> Dict:
+        return {
+            **super()._model_spec,
+            **self._model_spec_additional_fields,
+        }
 
     # todo: make static modulation-producers
     def _attenuate_by_statistic(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
