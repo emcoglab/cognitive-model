@@ -19,9 +19,11 @@ from __future__ import annotations
 from subprocess import run
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, List
 
 from ldm.utils.maths import DistanceType
+from model.basic_types import ActivationValue
+from model.graph import EdgePruningType
 
 
 @dataclass
@@ -32,10 +34,29 @@ class Spec(ABC):
     def shorthand(self) -> str:
         raise NotImplementedError()
 
+    @property
+    @abstractmethod
+    def cli_args(self) -> List[str]:
+        raise NotImplementedError()
+
 
 @dataclass
 class PropagationSpec(Spec, ABC):
     length_factor: int
+    run_for_ticks: Optional[int]
+    bailout: Optional[int]
+
+    @property
+    @abstractmethod
+    def cli_args(self) -> List[str]:
+        args = [
+            f"--length_factor {self.length_factor}",
+        ]
+        if self.run_for_ticks is not None:
+            args.append(f"--run_for_ticks {self.run_for_ticks}")
+        if self.bailout is not None:
+            args.append(f"--bailout {self.bailout}")
+        return args
 
 
 @dataclass
@@ -48,6 +69,21 @@ class SensorimotorPropagationSpec(PropagationSpec):
     distance_type: DistanceType
     buffer_capacity: Optional[int]
     accessible_set_capacity: Optional[int]
+
+    @property
+    def cli_args(self) -> List[str]:
+        args = super().cli_args + [
+            f"--distance_type {self.distance_type.name}",
+            f"--max_sphere_radius {self.max_radius}",
+            f"--accessible_set_capacity {self.accessible_set_capacity}",
+            f"--buffer_capacity {self.buffer_capacity}",
+            f"--buffer_threshold {self.buffer_threshold}",
+            f"--accessible_set_threshold {self.accessible_set_threshold}",
+            f"--length_factor {self.length_factor}",
+            f"--node_decay_median {self.node_decay_median}",
+            f"--node_decay_sigma {self.node_decay_sigma}",
+        ]
+        return args
 
     @property
     def shorthand(self) -> str:
@@ -68,10 +104,36 @@ class LinguisticPropagationSpec(PropagationSpec):
     model_radius: int
     corpus_name: str
     edge_decay_sd: float
-    impulse_pruning_threshold: float
     node_decay_factor: float
+    impulse_pruning_threshold: ActivationValue
+    pruning_type: Optional[EdgePruningType]
     pruning: Optional[int]
     distance_type: Optional[DistanceType] = None
+
+    @property
+    def cli_args(self) -> List[str]:
+        args = super().cli_args + [
+            f"--words {self.graph_size}",
+            f"--firing_threshold {self.firing_threshold}",
+            f"--model_name {self.model_name}",
+            f"--radius {self.model_radius}",
+            f"--corpus_name {self.corpus_name}",
+            f"--edge_decay_sd_factor {self.edge_decay_sd}",
+            f"--node_decay_factor {self.node_decay_factor}",
+            f"--impulse_pruning_threshold {self.impulse_pruning_threshold}",
+        ]
+        if self.pruning is not None:
+            if self.pruning_type == EdgePruningType.Importance:
+                args.append(f"--prune_importance {self.pruning}")
+            elif self.pruning_type == EdgePruningType.Percent:
+                args.append(f"--prune_percent {self.pruning}")
+            elif self.pruning_type == EdgePruningType.Length:
+                args.append(f"--prune_length {self.pruning}")
+            else:
+                raise NotImplementedError()
+        if self.distance_type is not None:
+            args.append(f"--distance_type {self.distance_type.name}")
+        return args
 
     @property
     def shorthand(self):
@@ -86,6 +148,11 @@ class LinguisticPropagationSpec(PropagationSpec):
 class CombinedSpec(Spec, ABC):
     linguistic_spec: LinguisticPropagationSpec
     sensorimotor_spec: SensorimotorPropagationSpec
+
+    @property
+    def cli_args(self) -> List[str]:
+        # TODO: this isn't right
+        return self.linguistic_spec.cli_args + self.sensorimotor_spec.cli_args
 
 
 @dataclass
@@ -135,7 +202,9 @@ class Job(ABC):
     @abstractmethod
     def command(self) -> str:
         """The CLI command to run, complete with arguments, to execute this job."""
-        raise NotImplementedError()
+        cmd = self.script_name
+        cmd += " ".join(self.spec.cli_args)
+        return cmd
 
     def run_locally(self):
         print(self.command)
@@ -157,15 +226,11 @@ class PropagationJob(Job, ABC):
     def __init__(self,
                  script_number: str,
                  script_name: str,
-                 spec: Spec,
-                 run_for_ticks: Optional[int] = None,
-                 bailout: Optional[int] = None):
+                 spec: Spec):
         super().__init__(
             script_number=script_number,
             script_name=script_name,
             spec=spec)
-        self.run_for_ticks: Optional[int] = run_for_ticks
-        self.bailout: Optional[int] = bailout
 
 
 class SensorimotorPropagationJob(PropagationJob, ABC):
