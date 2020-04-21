@@ -118,8 +118,10 @@ class Job(ABC):
     def _ram_requirement_g(self) -> float:
         raise NotImplementedError
 
+    # @final <- TODO: wait for 3.8
     @property
     def qsub_command(self) -> str:
+        """The qsub command to run, complete with arguments, to execute this job."""
         cmd = f"qsub"
         # qsub args
         cmd += f" -N {self.name}"
@@ -132,6 +134,7 @@ class Job(ABC):
     @property
     @abstractmethod
     def command(self) -> str:
+        """The CLI command to run, complete with arguments, to execute this job."""
         raise NotImplementedError()
 
     def run_locally(self):
