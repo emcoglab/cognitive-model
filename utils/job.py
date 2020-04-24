@@ -20,13 +20,17 @@ from pathlib import Path
 from subprocess import run
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, List
+from typing import Optional, List, Dict
+
+import yaml
 
 from ldm.utils.maths import DistanceType
-from model.basic_types import ActivationValue
+from model.basic_types import ActivationValue, Length
 from model.graph import EdgePruningType
 from model.sensorimotor_components import NormAttenuationStatistic
 from model.version import VERSION
+
+_SerialisableDict = Dict[str, str]
 
 
 @dataclass
@@ -50,11 +54,34 @@ class JobSpec(ABC):
         raise NotImplementedError()
 
     @abstractmethod
+    def _to_dict(self) -> _SerialisableDict:
+        return dict()
+
+    @classmethod
+    @abstractmethod
+    def _from_dict(cls, dictionary: _SerialisableDict):
+        raise NotImplementedError()
+
+    @abstractmethod
     def output_location(self, for_version: str = VERSION) -> Path:
         """
         Relative path for a job's output to be saved.
         """
         raise NotImplementedError()
+
+    def save(self, in_location: Optional[Path] = None) -> None:
+        """
+        Save the model spec in a common format.
+        """
+        if in_location is None:
+            in_location = self.output_location()
+        with open(Path(in_location, " model_spec.yaml"), mode="w", encoding="utf-8") as spec_file:
+            yaml.dump(self._to_dict, spec_file, yaml.SafeLoader)
+
+    @classmethod
+    def load(cls, filename: Path):
+        with open(filename, mode="r", encoding="utf-8") as file:
+            return cls._from_dict(yaml.load(file, yaml.SafeLoader))
 
 
 @dataclass
@@ -75,6 +102,21 @@ class PropagationJobSpec(JobSpec, ABC):
             args.append(f"--bailout {self.bailout}")
         return args
 
+    def _to_dict(self) -> _SerialisableDict:
+        d = super()._to_dict()
+        d.update({
+            "Length factor": str(self.length_factor),
+        })
+        if self.run_for_ticks is not None:
+            d.update({
+                "Run for ticks": str(self.run_for_ticks),
+            })
+        if self.bailout is not None:
+            d.update({
+                "Bailout": str(self.bailout),
+            })
+        return d
+
 
 @dataclass
 class SensorimotorPropagationJobSpec(PropagationJobSpec):
@@ -87,6 +129,7 @@ class SensorimotorPropagationJobSpec(PropagationJobSpec):
     buffer_capacity: Optional[int]
     accessible_set_capacity: Optional[int]
     attenuation_statistic: NormAttenuationStatistic
+    activation_cap: ActivationValue
 
     @property
     def cli_args(self) -> List[str]:
@@ -114,7 +157,6 @@ class SensorimotorPropagationJobSpec(PropagationJobSpec):
                f"ac{self.accessible_set_capacity if self.accessible_set_capacity is not None else '-'}_" \
                f"b{self.buffer_threshold}"
 
-    # TODO:
     def output_location(self, for_version: str = VERSION) -> Path:
         return Path(
             f"Sensorimotor {for_version}",
@@ -130,11 +172,46 @@ class SensorimotorPropagationJobSpec(PropagationJobSpec):
             f" bail {self.bailout}",
         )
 
+    def _to_dict(self) -> _SerialisableDict:
+        d = super()._to_dict()
+        d.update({
+            "Buffer capacity": str(self.buffer_capacity),
+            "Buffer threshold": str(self.buffer_threshold),
+            "Distance type": self.distance_type.name,
+            "Length factor": str(self.length_factor),
+            "Max sphere radius": str(self.max_radius),
+            "Log-normal median": str(self.node_decay_median),
+            "Log-normal sigma": str(self.node_decay_sigma),
+            "Accessible set threshold": str(self.accessible_set_threshold),
+            "Accessible set capacity": str(self.accessible_set_capacity),
+            "Attenuation statistic": self.attenuation_statistic.name,
+            "Activation cap": str(self.activation_cap)
+        })
+        return d
+
+    @classmethod
+    def _from_dict(cls, dictionary: _SerialisableDict):
+        return SensorimotorPropagationJobSpec(
+            length_factor=int(dictionary["Length factor"]),
+            run_for_ticks=dictionary["Run for ticks"] if "Run for ticks" in dictionary else None,
+            bailout=dictionary["Bailout"] if "Bailout" in dictionary else None,
+            max_radius=Length(dictionary["Max radius"]),
+            node_decay_sigma=float(dictionary["Log-normal sigma"]),
+            node_decay_median=float(dictionary["Log-normal median"]),
+            buffer_threshold=ActivationValue(dictionary["Buffer threshold"]),
+            accessible_set_threshold=int(dictionary["Buffer capacity"]),
+            distance_type=DistanceType.from_name(dictionary["Distance type"]),
+            buffer_capacity=int(dictionary["Buffer capacity"]),
+            accessible_set_capacity=int(dictionary["Accessible set capacity"]),
+            attenuation_statistic=NormAttenuationStatistic.from_slug(dictionary["Attenuation statistic"]),
+            activation_cap=ActivationValue(dictionary["Activation cap"]),
+        )
+
 
 @dataclass
 class LinguisticPropagationJobSpec(PropagationJobSpec):
     n_words: int
-    firing_threshold: float
+    firing_threshold: ActivationValue
     model_name: str
     model_radius: int
     corpus_name: str
@@ -199,6 +276,46 @@ class LinguisticPropagationJobSpec(PropagationJobSpec):
                f"{self.model_name}_" \
                f"pr{self.pruning}"
 
+    def _to_dict(self) -> _SerialisableDict:
+        d = super()._to_dict()
+        d.update({
+            "Words": str(self.n_words),
+            "Model name": self.model_name,
+            "Model radius": str(self.model_radius),
+            "Corpus name": self.corpus_name,
+            "Distance type": self.distance_type.name,
+            "Length factor": str(self.length_factor),
+            "SD factor": str(self.edge_decay_sd),
+            "Node decay": str(self.node_decay_factor),
+            "Firing threshold": str(self.firing_threshold),
+            "Impulse pruning threshold": str(self.impulse_pruning_threshold),
+        })
+        if self.pruning_type is not None:
+            d.update({
+                "Pruning type": self.pruning_type.name,
+                "Pruning": str(self.pruning),
+            })
+        return d
+
+    @classmethod
+    def _from_dict(cls, dictionary: _SerialisableDict):
+        return LinguisticPropagationJobSpec(
+            length_factor=int(dictionary["Length factor"]),
+            run_for_ticks=dictionary["Run for ticks"] if "Run for ticks" in dictionary else None,
+            bailout=dictionary["Bailout"] if "Bailout" in dictionary else None,
+            distance_type=DistanceType.from_name(dictionary["Distance type"]) if "Distance type" in dictionary else None,
+            n_words=int(dictionary["Words"]),
+            firing_threshold=ActivationValue(dictionary["Firing threshold"]),
+            model_name=str(dictionary["Model name"]),
+            model_radius=int(dictionary["Model radius"]),
+            corpus_name=str(dictionary["Corpus name"]),
+            edge_decay_sd=float(dictionary["SD factor"]),
+            node_decay_factor=float(dictionary["Node decay"]),
+            impulse_pruning_threshold=ActivationValue(dictionary["Impulse pruning threshold"]),
+            pruning_type=EdgePruningType.from_name(dictionary["Pruning type"]) if "Pruning type" in dictionary else None,
+            pruning=int(dictionary["Pruning"]) if "Pruning" in dictionary else None,
+        )
+
 
 class LinguisticOneHopJobSpec(LinguisticPropagationJobSpec):
     def output_location(self, for_version: str = VERSION) -> Path:
@@ -237,6 +354,15 @@ class CombinedJobSpec(JobSpec, ABC):
     def cli_args(self) -> List[str]:
         # TODO: this isn't right
         return self.linguistic_spec.cli_args + self.sensorimotor_spec.cli_args
+
+    def _to_dict(self) -> _SerialisableDict:
+        # Not relevant
+        raise NotImplementedError()
+
+    @classmethod
+    def _from_dict(cls, dictionary: _SerialisableDict):
+        # Not relevant
+        raise NotImplementedError()
 
 
 @dataclass

@@ -73,26 +73,6 @@ class SensorimotorPropagator(GraphPropagator):
             impulse_pruning_threshold=IMPULSE_PRUNING_THRESHOLD,
         )
 
-        # region Set once
-        # These fields are set on first init and then don't need to change even if .reset() is used.
-
-        self._model_spec_additional_fields = {
-            "Distance type": distance_type.name,
-            "Length factor": length_factor,
-            "Max sphere radius": max_sphere_radius,
-            "Log-normal median": node_decay_lognormal_median,
-            "Log-normal sigma": node_decay_lognormal_sigma,
-        }
-
-    # endregion
-
-    @property
-    def _model_spec(self) -> Dict:
-        return {
-            **super()._model_spec,
-            **self._model_spec_additional_fields
-        }
-
 
 def _load_labels_from_sensorimotor() -> Dict[ItemIdx, ItemLabel]:
     return _load_labels(path.join(Preferences.graphs_dir, "sensorimotor words.nodelabels"))
@@ -119,7 +99,7 @@ def _load_graph(distance_type, length_factor, max_sphere_radius, use_prepruned, 
 
         logger.info(f"Loading sensorimotor graph ({edgelist_filename})")
         sensorimotor_graph: Graph = Graph.load_from_edgelist(file_path=edgelist_path,
-                                                      ignore_edges_longer_than=max_sphere_radius)
+                                                             ignore_edges_longer_than=max_sphere_radius)
     return sensorimotor_graph
 
 

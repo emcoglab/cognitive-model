@@ -630,3 +630,21 @@ class EdgePruningType(Enum):
     Length     = auto()
     Percent    = auto()
     Importance = auto()
+
+    @property
+    def name(self) -> str:
+        if self == EdgePruningType.Length:
+            return "Length"
+        elif self == EdgePruningType.Percent:
+            return "Percent"
+        elif self == EdgePruningType.Importance:
+            return "Importance"
+        else:
+            raise NotImplementedError()
+
+    @classmethod
+    def from_name(cls, name: str) -> EdgePruningType:
+        for t in EdgePruningType:
+            if name.lower() == t.name.lower():
+                return t
+        raise NotImplementedError()

@@ -64,13 +64,6 @@ class LinguisticComponent(ModelComponent):
             self._exceeds_firing_threshold(self.firing_threshold)
         ])
 
-    @property
-    def _model_spec(self) -> Dict:
-        return {
-            **super()._model_spec,
-            "Firing threshold": self.firing_threshold
-        }
-
     @staticmethod
     def _exceeds_firing_threshold(firing_threshold: ActivationValue) -> Guard:
         def guard(idx: ItemIdx, activation: ActivationValue) -> bool:

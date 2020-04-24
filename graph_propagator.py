@@ -190,14 +190,6 @@ class GraphPropagator(ABC):
 
         # endregion
 
-    @property
-    def _model_spec(self) -> Dict:
-        return {
-            "Version": VERSION,
-            "Commit": GIT_HASH,
-            "Impulse pruning threshold": self.impulse_pruning_threshold,
-        }
-
     def reset(self):
         """Resets the spreading to its initial state without having to reload any data."""
         self.clock = 0
