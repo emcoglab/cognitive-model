@@ -15,7 +15,7 @@ caiwingfield.net
 ---------------------------
 """
 
-from typing import Set, Dict
+from typing import Set
 
 from model.basic_types import ActivationValue, ItemIdx
 from model.components import ModelComponent
@@ -31,7 +31,6 @@ class LinguisticComponent(ModelComponent):
 
     def __init__(self,
                  propagator: LinguisticPropagator,
-                 activation_cap: ActivationValue,
                  firing_threshold: ActivationValue,
                  ):
         """
@@ -42,8 +41,6 @@ class LinguisticComponent(ModelComponent):
 
         # Thresholds
         # Use >= and < to test for above/below
-        assert (activation_cap >= firing_threshold)
-        self.activation_cap: ActivationValue = activation_cap
         self.firing_threshold: ActivationValue = firing_threshold
 
         super().__init__(propagator)
@@ -55,10 +52,7 @@ class LinguisticComponent(ModelComponent):
             self._under_firing_threshold(self.firing_threshold)
         ])
         # No pre-synaptic modulation
-        self.propagator.postsynaptic_modulations.extend([
-            # Cap on a node's total activation after receiving incoming
-            self._apply_activation_cap(activation_cap)
-        ])
+        # No post-synaptic modulation
         self.propagator.postsynaptic_guards.extend([
             # Activation must exceed a firing threshold to cause further propagation.
             self._exceeds_firing_threshold(self.firing_threshold)
