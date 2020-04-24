@@ -16,6 +16,7 @@ caiwingfield.net
 """
 from __future__ import annotations
 
+from pathlib import Path
 from subprocess import run
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -24,6 +25,8 @@ from typing import Optional, List
 from ldm.utils.maths import DistanceType
 from model.basic_types import ActivationValue
 from model.graph import EdgePruningType
+from model.sensorimotor_components import NormAttenuationStatistic
+from model.version import VERSION
 
 
 @dataclass
@@ -42,7 +45,14 @@ class JobSpec(ABC):
     @abstractmethod
     def cli_args(self) -> List[str]:
         """
-        List of key-value pairs in `--arg_name val format`.
+        List of key-value pairs in `--arg_name val` format.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def output_location(self, for_version: str = VERSION) -> Path:
+        """
+        Relative path for a job's output to be saved.
         """
         raise NotImplementedError()
 
@@ -76,6 +86,7 @@ class SensorimotorPropagationJobSpec(PropagationJobSpec):
     distance_type: DistanceType
     buffer_capacity: Optional[int]
     accessible_set_capacity: Optional[int]
+    attenuation_statistic: NormAttenuationStatistic
 
     @property
     def cli_args(self) -> List[str]:
@@ -89,6 +100,7 @@ class SensorimotorPropagationJobSpec(PropagationJobSpec):
             f"--length_factor {self.length_factor}",
             f"--node_decay_median {self.node_decay_median}",
             f"--node_decay_sigma {self.node_decay_sigma}",
+            f"--attenuation {self.attenuation_statistic.name}",
         ]
         return args
 
@@ -102,10 +114,26 @@ class SensorimotorPropagationJobSpec(PropagationJobSpec):
                f"ac{self.accessible_set_capacity if self.accessible_set_capacity is not None else '-'}_" \
                f"b{self.buffer_threshold}"
 
+    # TODO:
+    def output_location(self, for_version: str = VERSION) -> Path:
+        return Path(
+            f"Sensorimotor {for_version}",
+            f"{self.distance_type.name} length {self.length_factor} attenuate {self.attenuation_statistic.name}",
+            f"max-r {self.max_radius};"
+            f" n-decay-median {self.node_decay_median};"
+            f" n-decay-sigma {self.node_decay_sigma};"
+            f" as-θ {self.accessible_set_threshold};"
+            f" as-cap {self.accessible_set_capacity:,};"
+            f" buff-θ {self.buffer_threshold};"
+            f" buff-cap {self.buffer_capacity};"
+            f" run-for {self.run_for_ticks};"
+            f" bail {self.bailout}",
+        )
+
 
 @dataclass
 class LinguisticPropagationJobSpec(PropagationJobSpec):
-    graph_size: int
+    n_words: int
     firing_threshold: float
     model_name: str
     model_radius: int
@@ -120,7 +148,7 @@ class LinguisticPropagationJobSpec(PropagationJobSpec):
     @property
     def cli_args(self) -> List[str]:
         args = super().cli_args + [
-            f"--words {self.graph_size}",
+            f"--words {self.n_words}",
             f"--firing_threshold {self.firing_threshold}",
             f"--model_name {self.model_name}",
             f"--radius {self.model_radius}",
@@ -142,13 +170,62 @@ class LinguisticPropagationJobSpec(PropagationJobSpec):
             args.append(f"--distance_type {self.distance_type.name}")
         return args
 
+    def output_location(self, for_version: str = VERSION) -> Path:
+        if self.pruning_type is None:
+            pruning_suffix = ""
+        elif self.pruning_type == EdgePruningType.Percent:
+            pruning_suffix = f", longest {self.pruning}% edges removed"
+        elif self.pruning_type == EdgePruningType.Importance:
+            pruning_suffix = f", importance pruning {self.pruning}"
+        else:
+            raise NotImplementedError()
+        return Path(
+            f"Linguistic {for_version}",
+            f"{self.model_name} {self.distance_type.name} {self.n_words:,} words,"
+            f" length {self.length_factor}{pruning_suffix}",
+            f"firing-θ {self.firing_threshold};"
+            f" n-decay-f {self.node_decay_factor};"
+            f" e-decay-sd {self.edge_decay_sd};"
+            f" imp-prune-θ {self.impulse_pruning_threshold};"
+            f" run-for {self.run_for_ticks};"
+            f" bail {self.bailout}",
+        )
+
     @property
     def shorthand(self):
-        return f"{int(self.graph_size / 1000)}k_" \
+        return f"{int(self.n_words / 1000)}k_" \
                f"f{self.firing_threshold}_" \
                f"s{self.edge_decay_sd}_" \
                f"{self.model_name}_" \
                f"pr{self.pruning}"
+
+
+class LinguisticOneHopJobSpec(LinguisticPropagationJobSpec):
+    def output_location(self, for_version: str = VERSION) -> Path:
+        return Path(
+            f"Linguistic one-hop {for_version}",
+            f"{self.model_name}"
+            f" {self.n_words:,} words, length {self.length_factor}",
+            f"firing-θ {self.firing_threshold};"
+            f" n-decay-f {self.node_decay_factor};"
+            f" e-decay-sd {self.edge_decay_sd};"
+            f" imp-prune-θ {self.impulse_pruning_threshold}"
+        )
+
+
+class SensorimotorOneHopJobSpec(SensorimotorPropagationJobSpec):
+    def output_location(self, for_version: str = VERSION) -> Path:
+        return Path(
+            f"Sensorimotor one-hop {for_version}",
+            f"{self.distance_type.name} length {self.length_factor} attenuate {self.attenuation_statistic.name}",
+            f"max-r {self.max_radius};"
+            f" n-decay-median {self.node_decay_median};"
+            f" n-decay-sigma {self.node_decay_sigma};"
+            f" as-θ {self.accessible_set_threshold};"
+            f" as-cap {self.accessible_set_capacity:,};"
+            f" buff-θ {self.buffer_threshold};"
+            f" buff-cap {self.buffer_capacity}"
+        )
 
 
 @dataclass

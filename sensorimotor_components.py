@@ -236,3 +236,11 @@ class NormAttenuationStatistic(Enum):
         else:
             raise NotImplementedError()
 
+    @classmethod
+    def from_slug(cls, slug: str) -> NormAttenuationStatistic:
+        if slug.lower() in ["fraction-known", "fraction", "known", "fractionknown"]:
+            return cls.FractionKnown
+        elif slug.lower() in ["prevalence"]:
+            return cls.Prevalence
+        else:
+            raise NotImplementedError()
