@@ -14,9 +14,6 @@ from model.utils.maths import prevalence_from_fraction_known, scale_prevalence_0
 from sensorimotor_norms.sensorimotor_norms import SensorimotorNorms
 
 
-FULL_ACTIVATION = ActivationValue(1.0)
-
-
 class SensorimotorComponent(ModelComponent):
 
     def __init__(self,

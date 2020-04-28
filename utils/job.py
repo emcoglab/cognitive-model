@@ -138,7 +138,6 @@ class SensorimotorPropagationJobSpec(PropagationJobSpec):
     buffer_capacity: Optional[int]
     accessible_set_capacity: Optional[int]
     attenuation_statistic: NormAttenuationStatistic
-    activation_cap: ActivationValue
 
     @property
     def cli_args(self) -> List[str]:
@@ -194,7 +193,6 @@ class SensorimotorPropagationJobSpec(PropagationJobSpec):
             "Accessible set threshold": str(self.accessible_set_threshold),
             "Accessible set capacity": str(self.accessible_set_capacity),
             "Attenuation statistic": self.attenuation_statistic.name,
-            "Activation cap": str(self.activation_cap)
         })
         return d
 
@@ -213,7 +211,6 @@ class SensorimotorPropagationJobSpec(PropagationJobSpec):
             buffer_capacity=int(dictionary["Buffer capacity"]),
             accessible_set_capacity=int(dictionary["Accessible set capacity"]),
             attenuation_statistic=NormAttenuationStatistic.from_slug(dictionary["Attenuation statistic"]),
-            activation_cap=ActivationValue(dictionary["Activation cap"]),
         )
 
 

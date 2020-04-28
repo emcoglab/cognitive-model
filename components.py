@@ -48,3 +48,6 @@ class ModelComponent(ABC):
             """If accumulated activation is over the cap, apply the cap."""
             return activation if activation <= activation_cap else activation_cap
         return modulation
+
+
+FULL_ACTIVATION = ActivationValue(1.0)
