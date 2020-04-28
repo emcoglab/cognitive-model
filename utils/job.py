@@ -262,10 +262,18 @@ class LinguisticPropagationJobSpec(PropagationJobSpec):
             pruning_suffix = f", importance pruning {self.pruning}"
         else:
             raise NotImplementedError()
+
+        if self.distance_type is not None:
+            model_dir_name = (f"{self.model_name}"
+                              f" {self.distance_type.name}"
+                              f" {self.n_words:,} words, length {self.length_factor}{pruning_suffix}")
+        else:
+            model_dir_name = (f"{self.model_name}"
+                              f" {self.n_words:,} words, length {self.length_factor}{pruning_suffix}")
+
         return Path(
             f"Linguistic {VERSION}",
-            f"{self.model_name} {self.distance_type.name} {self.n_words:,} words,"
-            f" length {self.length_factor}{pruning_suffix}",
+            model_dir_name,
             f"firing-θ {self.firing_threshold};"
             f" n-decay-f {self.node_decay_factor};"
             f" e-decay-sd {self.edge_decay_sd};"
