@@ -300,13 +300,16 @@ class LinguisticPropagationJobSpec(PropagationJobSpec):
             "Model name": self.model_name,
             "Model radius": str(self.model_radius),
             "Corpus name": self.corpus_name,
-            "Distance type": self.distance_type.name,
             "Length factor": str(self.length_factor),
             "SD factor": str(self.edge_decay_sd),
             "Node decay": str(self.node_decay_factor),
             "Firing threshold": str(self.firing_threshold),
             "Impulse pruning threshold": str(self.impulse_pruning_threshold),
         })
+        if self.distance_type is not None:
+            d.update({
+                "Distance type": self.distance_type.name,
+            })
         if self.pruning_type is not None:
             d.update({
                 "Pruning type": self.pruning_type.name,
