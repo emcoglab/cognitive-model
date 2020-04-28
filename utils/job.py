@@ -79,9 +79,12 @@ class JobSpec(ABC):
     def save(self, in_location: Optional[Path] = None) -> None:
         """
         Save the model spec in a common format.
+        Creates the output location if it doesn't already exist.
         """
         if in_location is None:
             in_location = self.output_location()
+        if not in_location.is_dir():
+            in_location.mkdir(parents=True)
         with open(Path(in_location, " model_spec.yaml"), mode="w", encoding="utf-8") as spec_file:
             yaml.dump(self._to_dict, spec_file, yaml.SafeLoader)
 
