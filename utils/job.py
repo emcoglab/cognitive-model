@@ -443,7 +443,6 @@ class Job(ABC):
         return cmd
 
     @property
-    @abstractmethod
     def command(self) -> str:
         """The CLI command to run, complete with arguments, to execute this job."""
         cmd = self.script_name
