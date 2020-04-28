@@ -19,7 +19,6 @@ from abc import ABC
 from collections import namedtuple, defaultdict
 from typing import Dict, DefaultDict, Optional, List, Callable
 
-from model.version import VERSION, GIT_HASH
 from model.basic_types import ActivationValue, ItemIdx, ItemLabel
 from model.events import ModelEvent, ItemActivatedEvent
 from model.graph import Graph

@@ -28,10 +28,12 @@ from ldm.utils.maths import DistanceType
 from model.basic_types import ActivationValue, Length
 from model.graph import EdgePruningType
 from model.sensorimotor_components import NormAttenuationStatistic
-from model.version import VERSION
+from model.version import VERSION, GIT_HASH
 
 _SerialisableDict = Dict[str, str]
 
+
+# region Job Specs
 
 @dataclass
 class JobSpec(ABC):
@@ -55,15 +57,20 @@ class JobSpec(ABC):
 
     @abstractmethod
     def _to_dict(self) -> _SerialisableDict:
-        return dict()
+        """Serialise."""
+        return {
+            "Version": VERSION,
+            "Commit": GIT_HASH,
+        }
 
     @classmethod
     @abstractmethod
     def _from_dict(cls, dictionary: _SerialisableDict):
+        """Deserialise.  Does not preserve Version or Commit."""
         raise NotImplementedError()
 
     @abstractmethod
-    def output_location(self, for_version: str = VERSION) -> Path:
+    def output_location(self) -> Path:
         """
         Relative path for a job's output to be saved.
         """
@@ -80,6 +87,8 @@ class JobSpec(ABC):
 
     @classmethod
     def load(cls, filename: Path):
+        # This works
+        # noinspection PyTypeChecker
         with open(filename, mode="r", encoding="utf-8") as file:
             return cls._from_dict(yaml.load(file, yaml.SafeLoader))
 
@@ -157,9 +166,9 @@ class SensorimotorPropagationJobSpec(PropagationJobSpec):
                f"ac{self.accessible_set_capacity if self.accessible_set_capacity is not None else '-'}_" \
                f"b{self.buffer_threshold}"
 
-    def output_location(self, for_version: str = VERSION) -> Path:
+    def output_location(self) -> Path:
         return Path(
-            f"Sensorimotor {for_version}",
+            f"Sensorimotor {VERSION}",
             f"{self.distance_type.name} length {self.length_factor} attenuate {self.attenuation_statistic.name}",
             f"max-r {self.max_radius};"
             f" n-decay-median {self.node_decay_median};"
@@ -247,7 +256,7 @@ class LinguisticPropagationJobSpec(PropagationJobSpec):
             args.append(f"--distance_type {self.distance_type.name}")
         return args
 
-    def output_location(self, for_version: str = VERSION) -> Path:
+    def output_location(self) -> Path:
         if self.pruning_type is None:
             pruning_suffix = ""
         elif self.pruning_type == EdgePruningType.Percent:
@@ -257,7 +266,7 @@ class LinguisticPropagationJobSpec(PropagationJobSpec):
         else:
             raise NotImplementedError()
         return Path(
-            f"Linguistic {for_version}",
+            f"Linguistic {VERSION}",
             f"{self.model_name} {self.distance_type.name} {self.n_words:,} words,"
             f" length {self.length_factor}{pruning_suffix}",
             f"firing-θ {self.firing_threshold};"
@@ -318,9 +327,9 @@ class LinguisticPropagationJobSpec(PropagationJobSpec):
 
 
 class LinguisticOneHopJobSpec(LinguisticPropagationJobSpec):
-    def output_location(self, for_version: str = VERSION) -> Path:
+    def output_location(self) -> Path:
         return Path(
-            f"Linguistic one-hop {for_version}",
+            f"Linguistic one-hop {VERSION}",
             f"{self.model_name}"
             f" {self.n_words:,} words, length {self.length_factor}",
             f"firing-θ {self.firing_threshold};"
@@ -331,9 +340,9 @@ class LinguisticOneHopJobSpec(LinguisticPropagationJobSpec):
 
 
 class SensorimotorOneHopJobSpec(SensorimotorPropagationJobSpec):
-    def output_location(self, for_version: str = VERSION) -> Path:
+    def output_location(self) -> Path:
         return Path(
-            f"Sensorimotor one-hop {for_version}",
+            f"Sensorimotor one-hop {VERSION}",
             f"{self.distance_type.name} length {self.length_factor} attenuate {self.attenuation_statistic.name}",
             f"max-r {self.max_radius};"
             f" n-decay-median {self.node_decay_median};"
@@ -356,21 +365,46 @@ class CombinedJobSpec(JobSpec, ABC):
         return self.linguistic_spec.cli_args + self.sensorimotor_spec.cli_args
 
     def _to_dict(self) -> _SerialisableDict:
-        # Not relevant
-        raise NotImplementedError()
+        return {
+            **{
+                f"(Linguistic) " + key: value
+                for key, value in self.linguistic_spec._to_dict().items()
+            },
+            **{
+                f"(Sensorimotor) " + key: value
+                for key, value in self.sensorimotor_spec._to_dict().items()
+            }
+        }
 
     @classmethod
     def _from_dict(cls, dictionary: _SerialisableDict):
-        # Not relevant
-        raise NotImplementedError()
+        def trim_and_filter_keys(d: _SerialisableDict, prefix: str):
+            return {
+                key[len(prefix)]: value
+                for key, value in d.items()
+                if key.startswith(prefix)
+            }
+        return CombinedJobSpec(
+            linguistic_spec=LinguisticPropagationJobSpec._from_dict(
+                trim_and_filter_keys(dictionary, "(Linguistic) ")),
+            sensorimotor_spec=SensorimotorPropagationJobSpec._from_dict(
+                trim_and_filter_keys(dictionary, "(Sensorimotor) ")),
+        )
 
 
 @dataclass
 class NoninteractiveCombinedJobSpec(CombinedJobSpec):
+    def output_location(self) -> Path:
+        pass
+
     @property
     def shorthand(self) -> str:
         return f"ni_{self.linguistic_spec.shorthand}_{self.sensorimotor_spec.shorthand}"
 
+# endregion
+
+
+# region Jobs
 
 class Job(ABC):
     _shim = "model/utils/shim.sh"
@@ -453,3 +487,5 @@ class LinguisticPropagationJob(PropagationJob, ABC):
     def __init__(self, *args, **kwargs):
         self.spec: LinguisticPropagationJobSpec
         super().__init__(*args, **kwargs)
+
+# endregion
