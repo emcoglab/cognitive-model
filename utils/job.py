@@ -86,7 +86,7 @@ class JobSpec(ABC):
         if not in_location.is_dir():
             in_location.mkdir(parents=True)
         with open(Path(in_location, " model_spec.yaml"), mode="w", encoding="utf-8") as spec_file:
-            yaml.dump(self._to_dict, spec_file, yaml.SafeDumper)
+            yaml.dump(self._to_dict(), spec_file, yaml.SafeDumper)
 
     @classmethod
     def load(cls, filename: Path):
