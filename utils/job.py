@@ -446,6 +446,7 @@ class Job(ABC):
     def command(self) -> str:
         """The CLI command to run, complete with arguments, to execute this job."""
         cmd = self.script_name
+        cmd += " "  # separates args from script name
         cmd += " ".join(self.spec.cli_args)
         return cmd
 
