@@ -70,19 +70,17 @@ class JobSpec(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def output_location(self) -> Path:
+    def output_location_relative(self) -> Path:
         """
         Relative path for a job's output to be saved.
         """
         raise NotImplementedError()
 
-    def save(self, in_location: Optional[Path] = None) -> None:
+    def save(self, in_location: Path) -> None:
         """
         Save the model spec in a common format.
         Creates the output location if it doesn't already exist.
         """
-        if in_location is None:
-            in_location = self.output_location()
         if not in_location.is_dir():
             in_location.mkdir(parents=True)
         with open(Path(in_location, " model_spec.yaml"), mode="w", encoding="utf-8") as spec_file:
@@ -168,7 +166,7 @@ class SensorimotorPropagationJobSpec(PropagationJobSpec):
                f"ac{self.accessible_set_capacity if self.accessible_set_capacity is not None else '-'}_" \
                f"b{self.buffer_threshold}"
 
-    def output_location(self) -> Path:
+    def output_location_relative(self) -> Path:
         return Path(
             f"Sensorimotor {VERSION}",
             f"{self.distance_type.name} length {self.length_factor} attenuate {self.attenuation_statistic.name}",
@@ -256,7 +254,7 @@ class LinguisticPropagationJobSpec(PropagationJobSpec):
             args.append(f"--distance_type {self.distance_type.name}")
         return args
 
-    def output_location(self) -> Path:
+    def output_location_relative(self) -> Path:
         if self.pruning_type is None:
             pruning_suffix = ""
         elif self.pruning_type == EdgePruningType.Percent:
@@ -338,7 +336,7 @@ class LinguisticPropagationJobSpec(PropagationJobSpec):
 
 
 class LinguisticOneHopJobSpec(LinguisticPropagationJobSpec):
-    def output_location(self) -> Path:
+    def output_location_relative(self) -> Path:
         return Path(
             f"Linguistic one-hop {VERSION}",
             f"{self.model_name}"
@@ -351,7 +349,7 @@ class LinguisticOneHopJobSpec(LinguisticPropagationJobSpec):
 
 
 class SensorimotorOneHopJobSpec(SensorimotorPropagationJobSpec):
-    def output_location(self) -> Path:
+    def output_location_relative(self) -> Path:
         return Path(
             f"Sensorimotor one-hop {VERSION}",
             f"{self.distance_type.name} length {self.length_factor} attenuate {self.attenuation_statistic.name}",
@@ -405,7 +403,7 @@ class CombinedJobSpec(JobSpec, ABC):
 
 @dataclass
 class NoninteractiveCombinedJobSpec(CombinedJobSpec):
-    def output_location(self) -> Path:
+    def output_location_relative(self) -> Path:
         pass
 
     @property
