@@ -14,14 +14,15 @@ caiwingfield.net
 2019
 ---------------------------
 """
-from abc import ABCMeta
+
+from abc import ABC
 from dataclasses import dataclass
 
 from model.basic_types import ActivationValue, ItemIdx
 
 
 @dataclass
-class ModelEvent(metaclass=ABCMeta):
+class ModelEvent(ABC):
     """An event associated with model activity."""
     # The time at which the event occurred.
     time: int
@@ -30,14 +31,14 @@ class ModelEvent(metaclass=ABCMeta):
 
 
 @dataclass
-class ItemEvent(ModelEvent, metaclass=ABCMeta):
+class ItemEvent(ModelEvent, ABC):
     """An event involving an item."""
     # The item being activated.
     item: ItemIdx
 
 
 @dataclass
-class BufferEvent(ModelEvent, metaclass=ABCMeta):
+class BufferEvent(ModelEvent, ABC):
     """Events involving the working memory buffer."""
     pass
 

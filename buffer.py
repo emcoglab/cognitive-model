@@ -64,7 +64,7 @@ class LimitedCapacityItemSet(ABC):
         :param time:
             The current time on the clock. Will be used in events.
         """
-        pass
+        raise NotImplementedError()
 
     @abstractmethod
     def present_items(self,
@@ -80,7 +80,7 @@ class LimitedCapacityItemSet(ABC):
         :param time:
             The current time on the clock. Will be used in events.
         """
-        pass
+        raise NotImplementedError()
 
 
 class WorkingMemoryBuffer(LimitedCapacityItemSet):
