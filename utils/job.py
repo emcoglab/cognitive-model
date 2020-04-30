@@ -133,11 +133,11 @@ class SensorimotorPropagationJobSpec(PropagationJobSpec):
     max_radius: int
     node_decay_sigma: float
     node_decay_median: float
-    buffer_threshold: float
-    accessible_set_threshold: float
     distance_type: DistanceType
-    buffer_capacity: Optional[int]
+    accessible_set_threshold: float
     accessible_set_capacity: Optional[int]
+    buffer_threshold: float
+    buffer_capacity: Optional[int]
     attenuation_statistic: NormAttenuationStatistic
 
     @property
@@ -145,9 +145,9 @@ class SensorimotorPropagationJobSpec(PropagationJobSpec):
         args = super().cli_args + [
             f"--distance_type {self.distance_type.name}",
             f"--max_sphere_radius {self.max_radius}",
-            f"--accessible_set_capacity {self.accessible_set_capacity}",
             f"--buffer_capacity {self.buffer_capacity}",
             f"--buffer_threshold {self.buffer_threshold}",
+            f"--accessible_set_capacity {self.accessible_set_capacity}",
             f"--accessible_set_threshold {self.accessible_set_threshold}",
             f"--length_factor {self.length_factor}",
             f"--node_decay_median {self.node_decay_median}",
@@ -200,18 +200,18 @@ class SensorimotorPropagationJobSpec(PropagationJobSpec):
     @classmethod
     def _from_dict(cls, dictionary: _SerialisableDict):
         return SensorimotorPropagationJobSpec(
-            length_factor=int(dictionary["Length factor"]),
-            run_for_ticks=dictionary["Run for ticks"] if "Run for ticks" in dictionary else None,
-            bailout=dictionary["Bailout"] if "Bailout" in dictionary else None,
-            max_radius=Length(dictionary["Max radius"]),
-            node_decay_sigma=float(dictionary["Log-normal sigma"]),
-            node_decay_median=float(dictionary["Log-normal median"]),
-            buffer_threshold=ActivationValue(dictionary["Buffer threshold"]),
-            accessible_set_threshold=int(dictionary["Buffer capacity"]),
-            distance_type=DistanceType.from_name(dictionary["Distance type"]),
-            buffer_capacity=int(dictionary["Buffer capacity"]),
-            accessible_set_capacity=int(dictionary["Accessible set capacity"]),
-            attenuation_statistic=NormAttenuationStatistic.from_slug(dictionary["Attenuation statistic"]),
+            length_factor           =int(dictionary["Length factor"]),
+            run_for_ticks           =dictionary["Run for ticks"] if "Run for ticks" in dictionary else None,
+            bailout                 =dictionary["Bailout"] if "Bailout" in dictionary else None,
+            max_radius              =Length(dictionary["Max radius"]),
+            node_decay_sigma        =float(dictionary["Log-normal sigma"]),
+            node_decay_median       =float(dictionary["Log-normal median"]),
+            buffer_capacity         =int(dictionary["Buffer capacity"]),
+            buffer_threshold        =ActivationValue(dictionary["Buffer threshold"]),
+            accessible_set_capacity =int(dictionary["Accessible set capacity"]),
+            accessible_set_threshold=ActivationValue(dictionary["Accessible set threshold"]),
+            distance_type           =DistanceType.from_name(dictionary["Distance type"]),
+            attenuation_statistic   =NormAttenuationStatistic.from_slug(dictionary["Attenuation statistic"]),
         )
 
 
@@ -224,6 +224,8 @@ class LinguisticPropagationJobSpec(PropagationJobSpec):
     corpus_name: str
     edge_decay_sd: float
     node_decay_factor: float
+    accessible_set_threshold: float
+    accessible_set_capacity: Optional[int]
     impulse_pruning_threshold: ActivationValue
     pruning_type: Optional[EdgePruningType]
     pruning: Optional[int]
@@ -239,6 +241,8 @@ class LinguisticPropagationJobSpec(PropagationJobSpec):
             f"--corpus_name {self.corpus_name}",
             f"--edge_decay_sd_factor {self.edge_decay_sd}",
             f"--node_decay_factor {self.node_decay_factor}",
+            f"--accessible_set_capacity {self.accessible_set_capacity}",
+            f"--accessible_set_threshold {self.accessible_set_threshold}",
             f"--impulse_pruning_threshold {self.impulse_pruning_threshold}",
         ]
         if self.pruning is not None:
@@ -253,6 +257,16 @@ class LinguisticPropagationJobSpec(PropagationJobSpec):
         if self.distance_type is not None:
             args.append(f"--distance_type {self.distance_type.name}")
         return args
+
+    @property
+    def shorthand(self):
+        return f"{int(self.n_words / 1000)}k_" \
+               f"f{self.firing_threshold}_" \
+               f"s{self.edge_decay_sd}_" \
+               f"a{self.accessible_set_threshold}_" \
+               f"ac{self.accessible_set_capacity if self.accessible_set_capacity is not None else '-'}_" \
+               f"{self.model_name}_" \
+               f"pr{self.pruning}"
 
     def output_location_relative(self) -> Path:
         if self.pruning_type is None:
@@ -278,18 +292,12 @@ class LinguisticPropagationJobSpec(PropagationJobSpec):
             f"firing-θ {self.firing_threshold};"
             f" n-decay-f {self.node_decay_factor};"
             f" e-decay-sd {self.edge_decay_sd};"
+            f" as-θ {self.accessible_set_threshold};"
+            f" as-cap {self.accessible_set_capacity:,};"
             f" imp-prune-θ {self.impulse_pruning_threshold};"
             f" run-for {self.run_for_ticks};"
             f" bail {self.bailout}",
         )
-
-    @property
-    def shorthand(self):
-        return f"{int(self.n_words / 1000)}k_" \
-               f"f{self.firing_threshold}_" \
-               f"s{self.edge_decay_sd}_" \
-               f"{self.model_name}_" \
-               f"pr{self.pruning}"
 
     def _to_dict(self) -> _SerialisableDict:
         d = super()._to_dict()
@@ -301,6 +309,8 @@ class LinguisticPropagationJobSpec(PropagationJobSpec):
             "Length factor": str(self.length_factor),
             "SD factor": str(self.edge_decay_sd),
             "Node decay": str(self.node_decay_factor),
+            "Accessible set threshold": str(self.accessible_set_threshold),
+            "Accessible set capacity": str(self.accessible_set_capacity),
             "Firing threshold": str(self.firing_threshold),
             "Impulse pruning threshold": str(self.impulse_pruning_threshold),
         })
@@ -318,20 +328,23 @@ class LinguisticPropagationJobSpec(PropagationJobSpec):
     @classmethod
     def _from_dict(cls, dictionary: _SerialisableDict):
         return LinguisticPropagationJobSpec(
-            length_factor=int(dictionary["Length factor"]),
-            run_for_ticks=dictionary["Run for ticks"] if "Run for ticks" in dictionary else None,
-            bailout=dictionary["Bailout"] if "Bailout" in dictionary else None,
-            distance_type=DistanceType.from_name(dictionary["Distance type"]) if "Distance type" in dictionary else None,
-            n_words=int(dictionary["Words"]),
-            firing_threshold=ActivationValue(dictionary["Firing threshold"]),
-            model_name=str(dictionary["Model name"]),
-            model_radius=int(dictionary["Model radius"]),
-            corpus_name=str(dictionary["Corpus name"]),
-            edge_decay_sd=float(dictionary["SD factor"]),
-            node_decay_factor=float(dictionary["Node decay"]),
+            length_factor            =int(dictionary["Length factor"]),
+            run_for_ticks            =dictionary["Run for ticks"] if "Run for ticks" in dictionary else None,
+            bailout                  =dictionary["Bailout"] if "Bailout" in dictionary else None,
+            distance_type            =DistanceType.from_name(dictionary["Distance type"]) if "Distance type" in dictionary else None,
+            n_words                  =int(dictionary["Words"]),
+            firing_threshold         =ActivationValue(dictionary["Firing threshold"]),
+            model_name               =str(dictionary["Model name"]),
+            model_radius             =int(dictionary["Model radius"]),
+            corpus_name              =str(dictionary["Corpus name"]),
+            edge_decay_sd            =float(dictionary["SD factor"]),
+            node_decay_factor        =float(dictionary["Node decay"]),
+            accessible_set_capacity  =int(dictionary["Accessible set capacity"]),
+            accessible_set_threshold =ActivationValue(dictionary["Accessible set threshold"]),
             impulse_pruning_threshold=ActivationValue(dictionary["Impulse pruning threshold"]),
-            pruning_type=EdgePruningType.from_name(dictionary["Pruning type"]) if "Pruning type" in dictionary else None,
-            pruning=int(dictionary["Pruning"]) if "Pruning" in dictionary else None,
+            pruning_type             =EdgePruningType.from_name(dictionary["Pruning type"]) if "Pruning type" in dictionary else None,
+            pruning                  =int(dictionary["Pruning"]) if "Pruning" in dictionary else None,
+
         )
 
 
@@ -339,12 +352,7 @@ class LinguisticOneHopJobSpec(LinguisticPropagationJobSpec):
     def output_location_relative(self) -> Path:
         return Path(
             f"Linguistic one-hop {VERSION}",
-            f"{self.model_name}"
-            f" {self.n_words:,} words, length {self.length_factor}",
-            f"firing-θ {self.firing_threshold};"
-            f" n-decay-f {self.node_decay_factor};"
-            f" e-decay-sd {self.edge_decay_sd};"
-            f" imp-prune-θ {self.impulse_pruning_threshold}"
+            *super().output_location_relative().parts[1:]
         )
 
 
@@ -352,14 +360,7 @@ class SensorimotorOneHopJobSpec(SensorimotorPropagationJobSpec):
     def output_location_relative(self) -> Path:
         return Path(
             f"Sensorimotor one-hop {VERSION}",
-            f"{self.distance_type.name} length {self.length_factor} attenuate {self.attenuation_statistic.name}",
-            f"max-r {self.max_radius};"
-            f" n-decay-median {self.node_decay_median};"
-            f" n-decay-sigma {self.node_decay_sigma};"
-            f" as-θ {self.accessible_set_threshold};"
-            f" as-cap {self.accessible_set_capacity:,};"
-            f" buff-θ {self.buffer_threshold};"
-            f" buff-cap {self.buffer_capacity}"
+            *super().output_location_relative().parts[1:]
         )
 
 

@@ -16,8 +16,8 @@ caiwingfield.net
 """
 import json
 from abc import ABC
-from collections import namedtuple, defaultdict
-from typing import Dict, DefaultDict, Optional, List, Callable
+from collections import namedtuple, defaultdict, deque
+from typing import Dict, DefaultDict, Optional, List, Callable, Deque
 
 from model.basic_types import ActivationValue, ItemIdx, ItemLabel
 from model.events import ModelEvent, ItemActivatedEvent
@@ -119,7 +119,7 @@ class GraphPropagator(ABC):
         #     The unmodified presynaptic activation.
         # :return:
         #     The modified presynaptic activation.
-        self.presynaptic_modulations: List[Modulation] = []
+        self.presynaptic_modulations: Deque[Modulation] = deque()
         # presynaptic_guards:
         #     Guards a node's accumulation (and hence also its firing) based on its activation before incoming activation has
         #     accumulated.  (E.g. making sufficiently-activated nodes into sinks until they decay.)
@@ -131,7 +131,7 @@ class GraphPropagator(ABC):
         #     The activation level of the item before accumulation.
         # :return:
         #     True if the node should be allowed fire, else False.
-        self.presynaptic_guards: List[Guard] = []
+        self.presynaptic_guards: Deque[Guard] = deque()
         # postsynaptic_modulations:
         #     Modulates the activations of items after accumulation, but before firing.
         #     (E.g. applying an activation cap).
@@ -143,7 +143,7 @@ class GraphPropagator(ABC):
         #     The unmodified postsynaptic activation.
         # :return:
         #     The modified postsynaptic activation.
-        self.postsynaptic_modulations: List[Modulation] = []
+        self.postsynaptic_modulations: Deque[Modulation] = deque()
         # postsynaptic_guards:
         #     Guards a node's firing based on its activation after incoming activation has accumulated.
         #     (E.g. applying a firing threshold.)
@@ -156,7 +156,7 @@ class GraphPropagator(ABC):
         #     The activation level of the item after accumulation.
         # :return:
         #     True if the node should be allowed to fire, else False.
-        self.postsynaptic_guards: List[Guard] = []
+        self.postsynaptic_guards: Deque[Guard] = deque()
 
         # endregion
 

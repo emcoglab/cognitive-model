@@ -3,10 +3,9 @@ from __future__ import annotations
 from enum import Enum, auto
 from typing import Optional, List, Dict
 
-from model.utils.logging import logger
 from model.basic_types import ActivationValue, ItemIdx
-from model.buffer import AccessibleSet, WorkingMemoryBuffer
-from model.components import ModelComponent
+from model.buffer import WorkingMemoryBuffer
+from model.components import ModelComponentWithAccessibleSet
 from model.events import ModelEvent, ItemActivatedEvent
 from model.sensorimotor_propagator import SensorimotorPropagator
 from model.utils.iterable import partition
@@ -14,7 +13,7 @@ from model.utils.maths import prevalence_from_fraction_known, scale_prevalence_0
 from sensorimotor_norms.sensorimotor_norms import SensorimotorNorms
 
 
-class SensorimotorComponent(ModelComponent):
+class SensorimotorComponent(ModelComponentWithAccessibleSet):
 
     def __init__(self,
                  propagator: SensorimotorPropagator,
@@ -24,24 +23,13 @@ class SensorimotorComponent(ModelComponent):
                  accessible_set_capacity: Optional[int],
                  ):
 
+        super().__init__(propagator, accessible_set_threshold, accessible_set_capacity)
+        assert isinstance(self.propagator, SensorimotorPropagator)
+
         assert (activation_cap
                 # If activation_cap == accessible_set_threshold, items will only enter the accessible set when fully
                 # activated.
-                >= accessible_set_threshold
-                # accessible_set_threshold must be strictly positive, else no item can ever be reactivated (since
-                # membership to the accessible set is a guard to reactivation).
-                > 0)
-
-        # region Resettable
-        # These fields are reinitialised in .reset()
-
-        # The set of items which are "accessible to conscious awareness" even if they are not in the working memory
-        # buffer
-        self.accessible_set: AccessibleSet = AccessibleSet(accessible_set_threshold, accessible_set_capacity)
-
-        # TODO: really, this should be hidden, and the present class should provide the external interface
-        super().__init__(propagator)
-        assert isinstance(self.propagator, SensorimotorPropagator)
+                >= self.accessible_set.threshold)
 
         # Data
 
@@ -71,19 +59,18 @@ class SensorimotorComponent(ModelComponent):
         # region modulations and guards
 
         # No pre-synaptic guards
-        self.propagator.presynaptic_modulations.extend([
+        self.propagator.presynaptic_modulations.extendleft(
             # Apply cap before attenuations
-            self._apply_activation_cap(activation_cap),
-            self._attenuate_by_statistic,
-            self._apply_memory_pressure,
-        ])
+            # when using extendleft, elements must be presented in reversed order to end up in the correct order
+            reversed([
+                self._apply_activation_cap(activation_cap),
+                self._attenuate_by_statistic,
+        ]))
         self.propagator.postsynaptic_modulations.extend([
             # Cap on a node's total activation after receiving incoming
             self._apply_activation_cap(activation_cap)
         ])
-        self.propagator.postsynaptic_guards.extend([
-            self._not_in_accessible_set
-        ])
+        # No post-synaptic guards
 
         # endregion
 
@@ -91,42 +78,6 @@ class SensorimotorComponent(ModelComponent):
     def _attenuate_by_statistic(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
         # Attenuate the incoming activations to a concept based on a statistic of the concept
         return activation * self._attenuation_statistic[idx]
-
-    def _apply_memory_pressure(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
-        # When AS is full, MP is 1, and activation is killed.
-        # When AS is empty, MP is 0, and activation is unaffected.
-        return activation * 1 - self.accessible_set.pressure
-
-    def _not_in_accessible_set(self, idx: ItemIdx, activation: ActivationValue) -> bool:
-        # Node will only fire if it's not in the accessible set
-        return idx not in self.accessible_set
-
-    def reset(self):
-        super().reset()
-        self.accessible_set.clear()
-
-    def tick(self) -> List[ModelEvent]:
-        # Decay events before activating anything new
-        # (in case accessible set membership is used to modulate or guard anything)
-        self.accessible_set.prune_decayed_items(activation_lookup=self.propagator.activation_of_item_with_idx,
-                                                time=self.propagator.clock)
-
-        logger.info(f"\tAS: {len(self.accessible_set)}"
-                    f"/{self.accessible_set.capacity if self.accessible_set.capacity is not None else '∞'} "
-                    f"(MP: {self.accessible_set.pressure})")
-
-        # Proceed with .tick() and record what became activated
-        # Activation and firing may be affected by the size of or membership to the accessible set and the buffer, but
-        # nothing will ENTER it until later, and everything that will LEAVE this tick already has done so.
-        tick_events = super().tick()
-        activation_events, other_events = partition(tick_events, lambda e: isinstance(e, ItemActivatedEvent))
-
-        # Update accessible set
-        self.accessible_set.present_items(activation_events=activation_events,
-                                          activation_lookup=self.propagator.activation_of_item_with_idx,
-                                          time=self.propagator.clock)
-
-        return activation_events + other_events
 
 
 class BufferedSensorimotorComponent(SensorimotorComponent):
