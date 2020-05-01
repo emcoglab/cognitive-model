@@ -132,7 +132,7 @@ class BufferedSensorimotorComponent(SensorimotorComponent):
         # Decay events before activating anything new
         # (in case buffer membership is used to modulate or guard anything)
         decay_events = self.working_memory_buffer.prune_decayed_items(
-            activation_lookup=self.propagator.activation_of_item_with_idx,
+            activation_lookup=lambda item: self.propagator.activation_of_item_with_idx(item.idx),
             time=self.propagator.clock)
 
         tick_events = super().tick()
@@ -143,7 +143,7 @@ class BufferedSensorimotorComponent(SensorimotorComponent):
         # `activation_events` may now contain some non-activation events.
         activation_events = self.working_memory_buffer.present_items(
             activation_events,
-            activation_lookup=self.propagator.activation_of_item_with_idx,
+            activation_lookup=lambda item: self.propagator.activation_of_item_with_idx(item.idx),
             time=self.propagator.clock)
 
         return decay_events + activation_events + other_events

@@ -90,7 +90,7 @@ class ModelComponentWithAccessibleSet(ModelComponent, ABC):
     def tick(self) -> List[ModelEvent]:
         # Decay events before activating anything new
         # (in case accessible set membership is used to modulate or guard anything)
-        self.accessible_set.prune_decayed_items(activation_lookup=self.propagator.activation_of_item_with_idx,
+        self.accessible_set.prune_decayed_items(activation_lookup=lambda item: self.propagator.activation_of_item_with_idx(item.idx),
                                                 time=self.propagator.clock)
 
         # Proceed with .tick() and record what became activated
@@ -101,7 +101,7 @@ class ModelComponentWithAccessibleSet(ModelComponent, ABC):
 
         # Update accessible set
         self.accessible_set.present_items(activation_events=activation_events,
-                                          activation_lookup=self.propagator.activation_of_item_with_idx,
+                                          activation_lookup=lambda item: self.propagator.activation_of_item_with_idx(item.idx),
                                           time=self.propagator.clock)
 
         return activation_events + other_events

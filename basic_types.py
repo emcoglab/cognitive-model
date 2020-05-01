@@ -27,7 +27,6 @@ ItemLabel = str
 Length = int
 
 Size = int
-UNIT_SIZE = Size(1)
 
 
 @dataclass(eq=True, frozen=True)
