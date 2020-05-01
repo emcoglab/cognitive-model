@@ -53,10 +53,7 @@ class ItemActivatedEvent(ItemEvent):
 @dataclass
 class ItemEnteredBufferEvent(BufferEvent, ItemActivatedEvent):
     """An item was activated and entered the working memory buffer."""
-    @classmethod
-    def from_activation_event(cls, event: ItemActivatedEvent):
-        """Convert from ItemActivatedEvent."""
-        return cls(time=event.time, item=event.item, activation=event.activation, fired=event.fired)
+    pass
 
 
 @dataclass

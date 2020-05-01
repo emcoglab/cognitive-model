@@ -19,7 +19,7 @@ from abc import ABC
 from collections import namedtuple, defaultdict, deque
 from typing import Dict, DefaultDict, Optional, List, Callable, Deque
 
-from model.basic_types import ActivationValue, ItemIdx, ItemLabel, Item
+from model.basic_types import ActivationValue, ItemIdx, ItemLabel, Item, Component
 from model.events import ModelEvent, ItemActivatedEvent
 from model.graph import Graph
 from model.utils.maths import make_decay_function_constant
@@ -59,6 +59,7 @@ class GraphPropagator(ABC):
                  impulse_pruning_threshold: ActivationValue,
                  node_decay_function: Optional[DecayFunction],
                  edge_decay_function: Optional[DecayFunction],
+                 component: Component,
                  ):
         """
         Underlying shared code between model components which operate via propagation of activation on a graph.
@@ -187,6 +188,8 @@ class GraphPropagator(ABC):
                 lambda: ActivationValue(0)
             ))
 
+        self.component: Component = component
+
         # endregion
 
     def reset(self):
@@ -304,7 +307,8 @@ class GraphPropagator(ABC):
             new_activation = modulation(idx, new_activation)
 
         # The item activated, so an activation event occurs
-        event = ItemActivatedEvent(time=self.clock, item=Item(idx), activation=new_activation, fired=False)
+        event = ItemActivatedEvent(time=self.clock, item=Item(idx=idx, component=self.component), activation=new_activation,
+                                   fired=False)
 
         # Record the activation
         self._activation_records[idx] = ActivationRecord(new_activation, self.clock)

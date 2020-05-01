@@ -33,13 +33,14 @@ UNIT_SIZE = Size(1)
 @dataclass(eq=True, frozen=True)
 class Item:
     idx: ItemIdx
+    component: Component
 
 
 @dataclass(eq=True, frozen=True)
 class SizedItem(Item):
-    component: SizedItem.Component
     size: Size
 
-    class Component(Enum):
-        linguistic = auto()
-        sensorimotor = auto()
+
+class Component(Enum):
+    linguistic = auto()
+    sensorimotor = auto()

@@ -6,7 +6,7 @@ from pandas import DataFrame
 from ldm.corpus.corpus import CorpusMetadata
 from ldm.model.base import DistributionalSemanticModel
 from ldm.utils.maths import DistanceType
-from model.basic_types import Length, ItemIdx, ItemLabel, ActivationValue
+from model.basic_types import Length, ItemIdx, ItemLabel, ActivationValue, Component
 
 from model.utils.logging import logger
 from model.events import ModelEvent
@@ -65,6 +65,7 @@ class LinguisticPropagator(GraphPropagator):
                 decay_factor=node_decay_factor),
             edge_decay_function=make_decay_function_gaussian_with_sd(
                 sd=edge_decay_sd_factor * length_factor),
+            component=Component.linguistic,
         )
 
 
