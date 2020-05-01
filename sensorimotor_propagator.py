@@ -50,8 +50,8 @@ class SensorimotorPropagator(GraphPropagator):
 
         # max_sphere_radius == 0 would be degenerate: no item can ever activate any other item.
         assert (max_sphere_radius > 0)
-        # node_decay_lognormal_sigma or node_decay_lognormal_median == 0 will probably cause a division-by-zero error, and anyway is
-        # degenerate: it causes everything to decay to 0 activation in a single tick.
+        # node_decay_lognormal_sigma or node_decay_lognormal_median == 0 will probably cause a division-by-zero error,
+        # and anyway is degenerate: it causes everything to decay to 0 activation in a single tick.
         assert (node_decay_lognormal_median > 0)
         assert (node_decay_lognormal_sigma > 0)
 

@@ -21,6 +21,7 @@ from typing import Optional, Set, Dict, List, Callable
 from ldm.utils.maths import clamp01
 from model.basic_types import ActivationValue, ItemIdx
 from model.events import ItemLeftBufferEvent, ItemActivatedEvent, ModelEvent, ItemEnteredBufferEvent, BufferFloodEvent
+from model.utils.logging import logger
 
 
 class LimitedCapacityItemSet(ABC):
@@ -101,7 +102,7 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
         decayed_out = self.items - new_buffer_items
         self.replace_contents(new_buffer_items)
         return [
-            ItemLeftBufferEvent(time=time, item=item)
+            ItemLeftBufferEvent(time=time, item_idx=item.idx)
             for item in decayed_out
         ]
 
@@ -121,13 +122,13 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
             return []
 
         # At this point self.working_memory_buffer is still the old buffer (after decayed items have been removed)
-        presented_items = set(e.item for e in activation_events)
+        presented_items = set(e.item_idx for e in activation_events)
 
         # Don't present items already in the buffer
         items_already_in_buffer = self.items & presented_items
         presented_items -= items_already_in_buffer
 
-        # region New buffer items list of (item, activation)s
+        # region New buffer items
 
         # First build a new buffer out of everything which *could* end up in the buffer, then cut out things which don't
         # belong there
@@ -143,9 +144,10 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
         # ...plus everything above threshold.
         # We use a dictionary with .update() here to overwrite the activation of anything already in the buffer.
         new_buffer_items.update({
-            event.item: WorkingMemoryBuffer._SortingData(activation=event.activation,
-                                                         # We've already worked out whether items are potentially entering the buffer
-                                                         being_presented=event.item in presented_items)
+            event.item_idx: WorkingMemoryBuffer._SortingData(activation=event.activation,
+                                                             # We've already worked out whether items are potentially
+                                                             # entering the buffer
+                                                             being_presented=event.item_idx in presented_items)
             for event in activation_events
             if event.activation >= self.threshold
         })
@@ -184,7 +186,7 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
             # Upgrade only those events which newly entered the buffer
             (
                 ItemEnteredBufferEvent.from_activation_event(e)
-                if e.item in self.items - items_already_in_buffer
+                if e.item_idx in self.items - items_already_in_buffer
                 else e
             )
             for e in activation_events
@@ -240,11 +242,11 @@ class AccessibleSet(LimitedCapacityItemSet):
         # unlike the buffer, we're not returning any events, and there is no size limit, so we don't need to be so
         # careful about confirming what's already in there and what's getting replaced, etc.
 
-        self.items |= {
-            e.item
+        self.items = self.items.union({
+            e.item_idx
             for e in activation_events
             if e.activation >= self.threshold
-        }
+        })
 
     def prune_decayed_items(self,
                             activation_lookup: Callable[[ItemIdx], ActivationValue],

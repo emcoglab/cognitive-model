@@ -18,7 +18,7 @@ caiwingfield.net
 from abc import ABC
 from dataclasses import dataclass
 
-from model.basic_types import ActivationValue, ItemIdx
+from model.basic_types import ActivationValue, Item
 
 
 @dataclass
@@ -34,7 +34,7 @@ class ModelEvent(ABC):
 class ItemEvent(ModelEvent, ABC):
     """An event involving an item."""
     # The item being activated.
-    item: ItemIdx
+    item: Item
 
 
 @dataclass
