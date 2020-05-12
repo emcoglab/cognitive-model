@@ -19,6 +19,8 @@ from __future__ import annotations
 
 from typing import List, Optional
 
+from numpy import lcm
+
 from model.basic_types import ActivationValue, ItemLabel, Component, Size, Item, SizedItem
 from model.buffer import WorkingMemoryBuffer
 from model.events import ItemActivatedEvent, ItemEvent, ModelEvent
@@ -33,10 +35,9 @@ class InteractiveCombinedCognitiveModel:
                  sensorimotor_component: SensorimotorComponent,
                  lc_to_smc_delay: int,
                  smc_to_lc_delay: int,
-                 lc_item_size: Size,
-                 smc_item_size: Size,
                  buffer_threshold: ActivationValue,
-                 buffer_capacity: Optional[Size],
+                 buffer_capacity_linguistic_items: Optional[int],
+                 buffer_capacity_sensorimotor_items: Optional[int],
                  ):
 
         # Inter-component delays
@@ -44,10 +45,13 @@ class InteractiveCombinedCognitiveModel:
         self._smc_to_lc_delay: int = smc_to_lc_delay
 
         # Relative component item sizes in the shared buffer
-        self._lc_item_size: Size = lc_item_size
-        self._smc_item_size: Size = smc_item_size
+        total_capacity: Size = Size(lcm(buffer_capacity_linguistic_items, buffer_capacity_sensorimotor_items))
+        assert total_capacity / buffer_capacity_linguistic_items == total_capacity // buffer_capacity_linguistic_items
+        assert total_capacity / buffer_capacity_sensorimotor_items == total_capacity // buffer_capacity_sensorimotor_items
+        self._lc_item_size: Size = Size(total_capacity // buffer_capacity_linguistic_items)
+        self._smc_item_size: Size = Size(total_capacity // buffer_capacity_sensorimotor_items)
 
-        self.buffer = WorkingMemoryBuffer(threshold=buffer_threshold, capacity=buffer_capacity)
+        self.buffer = WorkingMemoryBuffer(threshold=buffer_threshold, capacity=total_capacity)
 
         self.linguistic_component: LinguisticComponent = linguistic_component
         self.sensorimotor_component: SensorimotorComponent = sensorimotor_component
