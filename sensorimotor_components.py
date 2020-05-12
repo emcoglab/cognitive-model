@@ -123,7 +123,7 @@ class BufferedSensorimotorComponent(SensorimotorComponent):
         # A fixed size (self.buffer_capacity).  Items may enter the buffer when they are activated and leave when they
         # decay sufficiently (self.buffer_pruning_threshold) or are displaced.
         #
-        # This is updated each .tick() based on items which fired (a prerequisite for entering the buffer)
+        # This is updated each .tick() based on items which became activated (a prerequisite for entering the buffer)
         self.working_memory_buffer: WorkingMemoryBuffer = WorkingMemoryBuffer(buffer_threshold, buffer_capacity)
 
         # endregion

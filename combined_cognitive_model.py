@@ -19,9 +19,9 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from model.basic_types import ActivationValue, ItemLabel, Size, Item, Component
+from model.basic_types import ActivationValue, ItemLabel, Component, Size, Item, SizedItem
 from model.buffer import WorkingMemoryBuffer
-from model.events import ItemActivatedEvent
+from model.events import ItemActivatedEvent, ItemEvent, ModelEvent
 from model.linguistic_components import LinguisticComponent
 from model.sensorimotor_components import SensorimotorComponent
 from model.utils.iterable import partition
@@ -45,7 +45,7 @@ class InteractiveCombinedCognitiveModel:
 
         # Relative component item sizes in the shared buffer
         self._lc_item_size: Size = lc_item_size
-        self._sm_item_size: Size = smc_item_size
+        self._smc_item_size: Size = smc_item_size
 
         self.buffer = WorkingMemoryBuffer(threshold=buffer_threshold, capacity=buffer_capacity)
 
@@ -54,6 +54,10 @@ class InteractiveCombinedCognitiveModel:
 
         assert (self.buffer.threshold >= self.sensorimotor_component.accessible_set.threshold >= 0)
         assert (self.buffer.threshold >= self.linguistic_component.accessible_set.threshold >= 0)
+
+        # The shared buffer does not affect the activity within either component or between them.
+        self.linguistic_component.propagator.postsynaptic_guards.extend([])
+        self.sensorimotor_component.propagator.postsynaptic_guards.extend([])
 
     @property
     def clock(self) -> int:
@@ -79,6 +83,22 @@ class InteractiveCombinedCognitiveModel:
         elif item.component == Component.linguistic:
             return self.linguistic_component.propagator.activation_of_item_with_idx(item.idx)
 
+    def _apply_item_sizes(self, events: List[ModelEvent]) -> None:
+        """
+        Converts Items in events to have SizedItems withe the appropriate size.
+        :param events:
+            List of events.
+            Gets mutated.
+        """
+        for e in events:
+            if isinstance(e, ItemEvent):
+                if e.item.component == Component.linguistic:
+                    e.item = SizedItem(idx=e.item.idx, component=e.item.component,
+                                       size=self._lc_item_size)
+                elif e.item.component == Component.sensorimotor:
+                    e.item = SizedItem(idx=e.item.idx, component=e.item.component,
+                                       size=self._smc_item_size)
+
     def tick(self):
 
         decay_events = self.buffer.prune_decayed_items(
@@ -87,33 +107,36 @@ class InteractiveCombinedCognitiveModel:
 
         # Advance each component
         # Increments clock
-        lc_tick_events = self.linguistic_component.tick()
-        smc_tick_events = self.sensorimotor_component.tick()
+        lc_events = self.linguistic_component.tick()
+        smc_events = self.sensorimotor_component.tick()
 
-        lc_buffer_events = self.buffer.present_items(
-            activation_events=[e for e in lc_tick_events if isinstance(e, ItemActivatedEvent)],
+        self._apply_item_sizes(lc_events)
+        self._apply_item_sizes(smc_events)
+
+        lc_events = self.buffer.present_items(
+            activation_events=[e for e in lc_events if isinstance(e, ItemActivatedEvent)],
             activation_lookup=self._activation_of_item,
             time=self.clock)
-        smc_buffer_events = self.buffer.present_items(
-            activation_events=[e for e in smc_tick_events if isinstance(e, ItemActivatedEvent)],
+        smc_events = self.buffer.present_items(
+            activation_events=[e for e in smc_events if isinstance(e, ItemActivatedEvent)],
             activation_lookup=self._activation_of_item,
             time=self.clock)
 
-        lc_activation_events, lc_other_events = partition(lc_buffer_events, lambda e: isinstance(e, ItemActivatedEvent))
-        smc_activation_events, smc_other_events = partition(smc_buffer_events, lambda e: isinstance(e, ItemActivatedEvent))
+        lc_activation_events, lc_other_events = partition(lc_events, lambda e: isinstance(e, ItemActivatedEvent))
+        smc_activation_events, smc_other_events = partition(smc_events, lambda e: isinstance(e, ItemActivatedEvent))
 
         # Schedule inter-component activations
         for event in lc_activation_events:
             self.sensorimotor_component.propagator.schedule_activation_of_item_with_idx(
-                event.item.idx, event.activation,
-                event.time + self._lc_to_smc_delay)
+                idx=event.item.idx, activation=event.activation,
+                arrival_time=event.time + self._lc_to_smc_delay)
         for event in smc_activation_events:
             self.linguistic_component.propagator.schedule_activation_of_item_with_idx(
-                event.item.idx, event.activation,
-                event.time + self._smc_to_lc_delay)
+                idx=event.item.idx, activation=event.activation,
+                arrival_time=event.time + self._smc_to_lc_delay)
 
         return (
                 decay_events
-                + lc_activation_events + smc_activation_events
-                + lc_other_events + smc_other_events
+                + lc_activation_events + lc_other_events
+                + smc_activation_events + smc_other_events
         )
