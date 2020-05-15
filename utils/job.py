@@ -654,4 +654,10 @@ class LinguisticPropagationJob(PropagationJob, ABC):
         self.spec: LinguisticPropagationJobSpec
         super().__init__(*args, **kwargs)
 
+
+class InteractiveCombinedJob(PropagationJob, ABC):
+    def __init__(self, *args, **kwargs):
+        self.spec: InteractiveCombinedJobSpec
+        super().__init__(*args, **kwargs)
+
 # endregion
