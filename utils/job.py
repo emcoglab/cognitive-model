@@ -27,7 +27,7 @@ import yaml
 from ldm.utils.maths import DistanceType
 from model.basic_types import ActivationValue, Length
 from model.graph import EdgePruningType
-from model.sensorimotor_components import NormAttenuationStatistic
+from model.norm_attenuation_statistic import NormAttenuationStatistic
 from model.version import VERSION, GIT_HASH
 
 _SerialisableDict = Dict[str, str]

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from enum import Enum, auto
 from typing import Optional, List, Dict
 
 from model.basic_types import ActivationValue, ItemIdx
 from model.buffer import WorkingMemoryBuffer
 from model.components import ModelComponentWithAccessibleSet, FULL_ACTIVATION
 from model.events import ModelEvent, ItemActivatedEvent
+from model.norm_attenuation_statistic import NormAttenuationStatistic
 from model.sensorimotor_propagator import SensorimotorPropagator
 from model.utils.iterable import partition
 from model.utils.job import SensorimotorPropagationJobSpec, BufferedSensorimotorPropagationJobSpec
@@ -188,28 +188,3 @@ class BufferedSensorimotorComponent(SensorimotorComponent):
             buffer_capacity=spec.buffer_capacity,
             buffer_threshold=spec.buffer_threshold,
         )
-
-
-class NormAttenuationStatistic(Enum):
-    """The statistic to use for attenuating activation of norms labels."""
-    FractionKnown = auto()
-    Prevalence = auto()
-
-    @property
-    def name(self) -> str:
-        """The name of the NormAttenuationStatistic"""
-        if self is NormAttenuationStatistic.FractionKnown:
-            return "Fraction known"
-        if self is NormAttenuationStatistic.Prevalence:
-            return "Prevalence"
-        else:
-            raise NotImplementedError()
-
-    @classmethod
-    def from_slug(cls, slug: str) -> NormAttenuationStatistic:
-        if slug.lower() in {"fraction-known", "fraction", "known", "fractionknown", NormAttenuationStatistic.FractionKnown.name.lower()}:
-            return cls.FractionKnown
-        elif slug.lower() in {"prevalence", NormAttenuationStatistic.Prevalence.name.lower()}:
-            return cls.Prevalence
-        else:
-            raise NotImplementedError()
