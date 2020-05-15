@@ -6,7 +6,7 @@ from model.basic_types import ActivationValue, ItemIdx
 from model.buffer import WorkingMemoryBuffer
 from model.components import ModelComponentWithAccessibleSet, FULL_ACTIVATION
 from model.events import ModelEvent, ItemActivatedEvent
-from model.norm_attenuation_statistic import NormAttenuationStatistic
+from model.attenuation_statistic import AttenuationStatistic
 from model.sensorimotor_propagator import SensorimotorPropagator
 from model.utils.iterable import partition
 from model.utils.job import SensorimotorPropagationJobSpec, BufferedSensorimotorPropagationJobSpec
@@ -19,7 +19,7 @@ class SensorimotorComponent(ModelComponentWithAccessibleSet):
     def __init__(self,
                  propagator: SensorimotorPropagator,
                  activation_cap: ActivationValue,
-                 norm_attenuation_statistic: NormAttenuationStatistic,
+                 attenuation_statistic: AttenuationStatistic,
                  accessible_set_threshold: ActivationValue,
                  accessible_set_capacity: Optional[int],
                  ):
@@ -42,10 +42,10 @@ class SensorimotorComponent(ModelComponentWithAccessibleSet):
 
         def get_statistic_for_item(idx: ItemIdx):
             """Gets the correct statistic for an item."""
-            if norm_attenuation_statistic is NormAttenuationStatistic.FractionKnown:
+            if attenuation_statistic is AttenuationStatistic.FractionKnown:
                 # Fraction known will all be in the range [0, 1], so we can use it as a scaling factor directly
                 return sensorimotor_norms.fraction_known(self.propagator.idx2label[idx])
-            elif norm_attenuation_statistic is NormAttenuationStatistic.Prevalence:
+            elif attenuation_statistic is AttenuationStatistic.Prevalence:
                 # Brysbaert et al.'s (2019) prevalence has a defined range, so we can affine-scale it into [0, 1] for the
                 # purposes of attenuating the activation
                 return scale_prevalence_01(prevalence_from_fraction_known(sensorimotor_norms.fraction_known(self.propagator.idx2label[idx])))
@@ -88,7 +88,7 @@ class SensorimotorComponent(ModelComponentWithAccessibleSet):
             ),
             accessible_set_threshold=spec.accessible_set_threshold,
             accessible_set_capacity=spec.accessible_set_capacity,
-            norm_attenuation_statistic=spec.attenuation_statistic,
+            attenuation_statistic=spec.attenuation_statistic,
             activation_cap=FULL_ACTIVATION
         )
 
@@ -103,7 +103,7 @@ class BufferedSensorimotorComponent(SensorimotorComponent):
     def __init__(self,
                  propagator: SensorimotorPropagator,
                  activation_cap: ActivationValue,
-                 norm_attenuation_statistic: NormAttenuationStatistic,
+                 attenuation_statistic: AttenuationStatistic,
                  accessible_set_threshold: ActivationValue,
                  accessible_set_capacity: Optional[int],
                  buffer_threshold: ActivationValue,
@@ -120,7 +120,7 @@ class BufferedSensorimotorComponent(SensorimotorComponent):
         super().__init__(
             propagator=propagator,
             activation_cap=activation_cap,
-            norm_attenuation_statistic=norm_attenuation_statistic,
+            attenuation_statistic=attenuation_statistic,
             accessible_set_threshold=accessible_set_threshold,
             accessible_set_capacity=accessible_set_capacity,
         )
@@ -183,7 +183,7 @@ class BufferedSensorimotorComponent(SensorimotorComponent):
             ),
             accessible_set_threshold=spec.accessible_set_threshold,
             accessible_set_capacity=spec.accessible_set_capacity,
-            norm_attenuation_statistic=spec.attenuation_statistic,
+            attenuation_statistic=spec.attenuation_statistic,
             activation_cap=FULL_ACTIVATION,
             buffer_capacity=spec.buffer_capacity,
             buffer_threshold=spec.buffer_threshold,

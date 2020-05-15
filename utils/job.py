@@ -27,7 +27,7 @@ import yaml
 from ldm.utils.maths import DistanceType
 from model.basic_types import ActivationValue, Length
 from model.graph import EdgePruningType
-from model.norm_attenuation_statistic import NormAttenuationStatistic
+from model.attenuation_statistic import AttenuationStatistic
 from model.version import VERSION, GIT_HASH
 
 _SerialisableDict = Dict[str, str]
@@ -152,7 +152,7 @@ class SensorimotorPropagationJobSpec(PropagationJobSpec):
     distance_type: DistanceType
     accessible_set_threshold: float
     accessible_set_capacity: Optional[int]
-    attenuation_statistic: NormAttenuationStatistic
+    attenuation_statistic: AttenuationStatistic
 
     @property
     def cli_args(self) -> List[str]:
@@ -216,7 +216,7 @@ class SensorimotorPropagationJobSpec(PropagationJobSpec):
             accessible_set_capacity =int(dictionary["Accessible set capacity"]),
             accessible_set_threshold=ActivationValue(dictionary["Accessible set threshold"]),
             distance_type           =DistanceType.from_name(dictionary["Distance type"]),
-            attenuation_statistic   =NormAttenuationStatistic.from_slug(dictionary["Attenuation statistic"]),
+            attenuation_statistic   =AttenuationStatistic.from_slug(dictionary["Attenuation statistic"]),
         )
 
 
@@ -275,7 +275,7 @@ class BufferedSensorimotorPropagationJobSpec(SensorimotorPropagationJobSpec):
             accessible_set_capacity =int(dictionary["Accessible set capacity"]),
             accessible_set_threshold=ActivationValue(dictionary["Accessible set threshold"]),
             distance_type           =DistanceType.from_name(dictionary["Distance type"]),
-            attenuation_statistic   =NormAttenuationStatistic.from_slug(dictionary["Attenuation statistic"]),
+            attenuation_statistic   =AttenuationStatistic.from_slug(dictionary["Attenuation statistic"]),
         )
 
 
