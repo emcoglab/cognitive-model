@@ -38,6 +38,15 @@ _SerialisableDict = Dict[str, str]
 @dataclass
 class JobSpec(ABC):
 
+    def __post_init__(self):
+        self._validate()
+
+    def _validate(self) -> None:
+        """
+        Returns silently if class is valid
+        """
+        return
+
     @property
     @abstractmethod
     def shorthand(self) -> str:
@@ -424,10 +433,33 @@ class CombinedJobSpec(JobSpec, ABC):
     linguistic_spec: LinguisticPropagationJobSpec
     sensorimotor_spec: SensorimotorPropagationJobSpec
 
+    def _validate(self) -> None:
+        super()._validate()
+        assert self.linguistic_spec.run_for_ticks == self.sensorimotor_spec.run_for_ticks
+        assert self.linguistic_spec.bailout == self.sensorimotor_spec.bailout
+
+    @property
+    def run_for_ticks(self) -> int:
+        return self.linguistic_spec.run_for_ticks
+
+    @property
+    def bailout(self) -> int:
+        return self.linguistic_spec.bailout
+
     @property
     def cli_args(self) -> List[str]:
-        # TODO: this isn't right
-        return self.linguistic_spec.cli_args + self.sensorimotor_spec.cli_args
+        linguistic_args = [
+            f"--linguistic_{a.lstrip('-')}"
+            for a in self.linguistic_spec.cli_args
+            # ignore args which would be shared between component jobs; move to container model
+            if all(ignored_arg not in a for ignored_arg in ["bailout", "run_for_ticks"])
+        ]
+        sensorimotor_args = [
+            f"--sensorimotor_{a.lstrip('-')}"
+            for a in self.sensorimotor_spec.cli_args
+            if all(ignored_arg not in a for ignored_arg in ["bailout", "run_for_ticks"])
+        ]
+        return linguistic_args + sensorimotor_args
 
     def _to_dict(self) -> _SerialisableDict:
         return {
@@ -465,6 +497,75 @@ class NoninteractiveCombinedJobSpec(CombinedJobSpec):
     @property
     def shorthand(self) -> str:
         return f"ni_{self.linguistic_spec.shorthand}_{self.sensorimotor_spec.shorthand}"
+
+
+@dataclass
+class InteractiveCombinedJobSpec(CombinedJobSpec):
+    lc_to_smc_delay: int
+    smc_to_lc_delay: int
+    buffer_threshold: ActivationValue
+    buffer_capacity_linguistic_items: Optional[int]
+    buffer_capacity_sensorimotor_items: Optional[int]
+
+    def output_location_relative(self) -> Path:
+        return Path(
+            f"Interactive combined {VERSION}",
+            *self.sensorimotor_spec.output_location_relative().parts,
+            *self.linguistic_spec.output_location_relative().parts,
+        )
+
+    @property
+    def shorthand(self) -> str:
+        return f"ic_" \
+               f"{self.linguistic_spec.shorthand}_" \
+               f"{self.sensorimotor_spec.shorthand}_" \
+               f"ls{self.lc_to_smc_delay}_" \
+               f"sl{self.smc_to_lc_delay}_" \
+               f"b{self.buffer_threshold}_" \
+               f"bcl{self.buffer_capacity_linguistic_items}_" \
+               f"bcs{self.buffer_capacity_sensorimotor_items}"
+
+    @property
+    def cli_args(self) -> List[str]:
+        return super().cli_args + [
+            f"--buffer_threshold {self.buffer_threshold}",
+            f"--buffer_capacity_linguistic_items {self.buffer_capacity_linguistic_items}",
+            f"--buffer_capacity_sensorimotor_items {self.buffer_capacity_sensorimotor_items}",
+            f"--lc_to_smc_delay {self.lc_to_smc_delay}",
+            f"--smc_to_lc_delay {self.smc_to_lc_delay}",
+            f"--bailout {self.bailout}",
+            f"--run_for_ticks {self.run_for_ticks}",
+        ]
+
+    def _to_dict(self) -> _SerialisableDict:
+        return {
+            **{
+                f"(Linguistic) " + key: value
+                for key, value in self.linguistic_spec._to_dict().items()
+            },
+            **{
+                f"(Sensorimotor) " + key: value
+                for key, value in self.sensorimotor_spec._to_dict().items()
+            },
+            "Linguistic to sensorimotor delay": str(self.lc_to_smc_delay),
+            "Sensorimotor to linguistic delay": str(self.smc_to_lc_delay),
+            "Buffer threshold": str(self.buffer_threshold),
+            "Buffer capacity (linguistic items)": str(self.buffer_capacity_linguistic_items),
+            "Buffer capacity (sensorimotor items)": str(self.buffer_capacity_sensorimotor_items),
+        }
+
+    @classmethod
+    def _from_dict(cls, dictionary: _SerialisableDict) -> InteractiveCombinedJobSpec:
+        cjs = CombinedJobSpec._from_dict(dictionary)
+        return cls(
+            linguistic_spec=cjs.linguistic_spec,
+            sensorimotor_spec=cjs.sensorimotor_spec,
+            lc_to_smc_delay=int(dictionary["Linguistic to sensorimotor delay"]),
+            smc_to_lc_delay=int(dictionary["Sensorimotor to linguistic delay"]),
+            buffer_threshold=ActivationValue(dictionary["Buffer threshold"]),
+            buffer_capacity_linguistic_items=int(dictionary["Buffer capacity (linguistic items)"]),
+            buffer_capacity_sensorimotor_items=int(dictionary["Buffer capacity (sensorimotor items)"]),
+        )
 
 # endregion
 

@@ -21,7 +21,7 @@ from typing import List, Optional
 
 from numpy import lcm
 
-from model.basic_types import ActivationValue, ItemLabel, Component, Size, Item, SizedItem
+from model.basic_types import ActivationValue, Component, Size, Item, SizedItem
 from model.buffer import WorkingMemoryBuffer
 from model.events import ItemActivatedEvent, ItemEvent, ModelEvent
 from model.linguistic_components import LinguisticComponent
@@ -67,14 +67,6 @@ class InteractiveCombinedCognitiveModel:
     def clock(self) -> int:
         assert self.linguistic_component.propagator.clock == self.sensorimotor_component.propagator.clock
         return self.linguistic_component.propagator.clock
-
-    def activate_item(self, label: ItemLabel, activation: ActivationValue):
-        self.linguistic_component.propagator.activate_item_with_label(label, activation)
-        self.sensorimotor_component.propagator.activate_item_with_label(label, activation)
-
-    def activate_items(self, labels: List[ItemLabel], activation: ActivationValue):
-        self.linguistic_component.propagator.activate_items_with_labels(labels, activation)
-        self.sensorimotor_component.propagator.activate_items_with_labels(labels, activation)
 
     def reset(self):
         self.linguistic_component.reset()
