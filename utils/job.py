@@ -93,6 +93,13 @@ class JobSpec(ABC):
         with open(filename, mode="r", encoding="utf-8") as file:
             return cls._from_dict(yaml.load(file, yaml.SafeLoader))
 
+    def csv_comments(self) -> List[str]:
+        """List of commented"""
+        return [
+            f"# \t{k} = {v}"
+            for k, v in self._to_dict().items()
+        ]
+
 
 @dataclass
 class PropagationJobSpec(JobSpec, ABC):

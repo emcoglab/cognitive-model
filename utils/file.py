@@ -53,4 +53,6 @@ def add_column_to_csv(column, column_name: str, csv_path: str, index_col=None):
 
 def comment_line_from_str(message: str) -> str:
     """Converts a string into a commented line (with trailing newline)."""
+    # normalise leading comments
+    message = message.lstrip("# ")
     return f"# {message}\n"
