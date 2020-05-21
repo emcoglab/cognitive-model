@@ -135,11 +135,11 @@ class SensorimotorOneHopPropagator(SensorimotorPropagator):
         super().reset()
         self._block_firing = False
 
-    def schedule_activation_of_item_with_idx(self, idx: ItemIdx, activation: ActivationValue, arrival_time: int):
+    def _schedule_activation_of_item_with_idx(self, idx: ItemIdx, activation: ActivationValue, arrival_time: int):
         if self._block_firing:
             return
         else:
-            super().schedule_activation_of_item_with_idx(idx, activation, arrival_time)
+            super()._schedule_activation_of_item_with_idx(idx, activation, arrival_time)
 
     def _evolve_model(self) -> List[ModelEvent]:
         model_events = super()._evolve_model()

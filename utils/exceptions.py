@@ -19,3 +19,8 @@ caiwingfield.net
 class ParseError(Exception):
     """Represents an error in parsing a string."""
     pass
+
+
+class ItemNotFoundError(KeyError):
+    """Represents an item not being found in a model or component."""
+    pass

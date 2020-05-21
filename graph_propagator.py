@@ -22,6 +22,7 @@ from typing import Dict, DefaultDict, Optional, List, Callable, Deque
 from model.basic_types import ActivationValue, ItemIdx, ItemLabel, Item, Component
 from model.events import ModelEvent, ItemActivatedEvent
 from model.graph import Graph
+from model.utils.exceptions import ItemNotFoundError
 from model.utils.maths import make_decay_function_constant
 
 Modulation = Callable[[ItemIdx, ActivationValue], ActivationValue]
@@ -341,7 +342,7 @@ class GraphPropagator(ABC):
                 continue
 
             # Accumulate activation at target node at time when it's due to arrive
-            self.schedule_activation_of_item_with_idx(idx=target_idx, activation=arrival_activation, arrival_time=self.clock + length)
+            self._schedule_activation_of_item_with_idx(idx=target_idx, activation=arrival_activation, arrival_time=self.clock + length)
 
         return event
 
@@ -353,10 +354,12 @@ class GraphPropagator(ABC):
         """
         Returns the current activation of a node.
         Call this AFTER .tick() to see effect of activations applied since .tick() was last called.
+        :raises ItemNotFoundError
         """
-        assert idx in self.graph.nodes
-
-        activation_record: ActivationRecord = self._activation_records[idx]
+        try:
+            activation_record: ActivationRecord = self._activation_records[idx]
+        except KeyError:
+            raise ItemNotFoundError(idx)
         # If the last known activation is zero, we don't need to compute decay
         if activation_record.activation == 0:
             return ActivationValue(0)
@@ -386,28 +389,50 @@ class GraphPropagator(ABC):
             self.activate_item_with_idx(idx, activation)
 
     def activate_item_with_idx(self, idx: ItemIdx, activation: ActivationValue):
-        self.schedule_activation_of_item_with_idx(idx, activation, self.clock)
+        self._schedule_activation_of_item_with_idx(idx, activation, self.clock)
 
     def activate_items_with_labels(self, labels: List[ItemLabel], activation: ActivationValue):
         """
         Activate a list of items.
         Call this BEFORE .tick().
+        :raises ItemNotFoundError
         """
-        self.activate_items_with_idxs([self.label2idx[label] for label in labels], activation)
+        try:
+            idxs = [self.label2idx[label] for label in labels]
+        except KeyError as e:
+            raise ItemNotFoundError(e.args)
+        self.activate_items_with_idxs(idxs, activation)
 
     def activate_item_with_label(self, label: ItemLabel, activation: ActivationValue):
         """
         Activate an item.
         Call this BEFORE .tick().
+        :raises ItemNotFoundError
         """
+        try:
+            idx = self.label2idx[label]
+        except KeyError:
+            raise ItemNotFoundError(label)
         self.activate_item_with_idx(self.label2idx[label], activation)
 
-    def schedule_activation_of_item_with_idx(self, idx: ItemIdx, activation: ActivationValue, arrival_time: int):
+    def _schedule_activation_of_item_with_idx(self, idx: ItemIdx, activation: ActivationValue, arrival_time: int):
         """
         Schedule an item to receive activation at a future time.
         Call this BEFORE .tick().
         """
         self._scheduled_activations[arrival_time][idx] += activation
+
+    def schedule_activation_of_item_with_label(self, label: ItemLabel, activation: ActivationValue, arrival_time: int):
+        """
+        Schedule an item to receive activation at a future time.
+        Call this BEFORE .tick().
+        :raises: ItemNotFoundError
+        """
+        try:
+            idx=self.label2idx[label]
+        except KeyError:
+            raise ItemNotFoundError(label)
+        self._schedule_activation_of_item_with_idx(idx=self.label2idx[label], activation=activation, arrival_time=arrival_time)
 
     # endregion
 

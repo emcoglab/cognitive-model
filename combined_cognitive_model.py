@@ -26,6 +26,7 @@ from model.buffer import WorkingMemoryBuffer
 from model.events import ItemActivatedEvent, ItemEvent, ModelEvent
 from model.linguistic_components import LinguisticComponent
 from model.sensorimotor_components import SensorimotorComponent
+from model.utils.exceptions import ItemNotFoundError
 from model.utils.iterable import partition
 
 
@@ -123,13 +124,25 @@ class InteractiveCombinedCognitiveModel:
 
         # Schedule inter-component activations
         for event in lc_activation_events:
-            self.sensorimotor_component.propagator.schedule_activation_of_item_with_idx(
-                idx=event.item.idx, activation=event.activation,
-                arrival_time=event.time + self._lc_to_smc_delay)
+            try:
+                self.sensorimotor_component.propagator.schedule_activation_of_item_with_label(
+                    # Use label lookup from source component
+                    label=self.linguistic_component.propagator.idx2label[event.item.idx],
+                    activation=event.activation,
+                    arrival_time=event.time + self._lc_to_smc_delay)
+            except ItemNotFoundError:
+                # Linguistic item was not found in Sensorimotor component
+                pass
         for event in smc_activation_events:
-            self.linguistic_component.propagator.schedule_activation_of_item_with_idx(
-                idx=event.item.idx, activation=event.activation,
-                arrival_time=event.time + self._smc_to_lc_delay)
+            try:
+                self.linguistic_component.propagator.schedule_activation_of_item_with_label(
+                    # Use label lookup from source component
+                    label=self.sensorimotor_component.propagator.idx2label[event.item.idx],
+                    activation=event.activation,
+                    arrival_time=event.time + self._smc_to_lc_delay)
+            except ItemNotFoundError:
+                # Sensorimotor item was not found in Linguistic component
+                pass
 
         return (
                 decay_events
