@@ -59,6 +59,8 @@ class LimitedCapacityItemSet(ABC):
 
     @property
     def items(self) -> FrozenSet[Item]:
+        # Since self.__items is a frozenset, we don't need to check for capacity after getting (in a finally block)
+        # because the item isn't mutated, even by -=, it's just replaced.
         return self.__items
 
     @items.setter
@@ -220,7 +222,7 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
 
         # Trim down to size if necessary
         if self.capacity is not None:
-            while self._aggregate_size(new_buffer_items) > self.capacity:
+            while self._aggregate_size([i for i, _ in new_buffer_items]) > self.capacity:
                 new_buffer_items.pop()
 
         # endregion
