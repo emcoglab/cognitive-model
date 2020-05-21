@@ -20,7 +20,7 @@ from pathlib import Path
 from subprocess import run
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Union
 
 import yaml
 
@@ -616,9 +616,21 @@ class Job(ABC):
         cmd += " ".join(self.spec.cli_args)
         return cmd
 
-    def run_locally(self):
-        print(self.command)
-        run(f"python {self.command}", shell=True)
+    def run_locally(self, extra_arguments: Optional[Union[List[str], str]] = None):
+        """
+        Run the job on the local machine.
+        :param extra_arguments:
+            Either an extra CLI argument to include which isn't specified in the job spec, or a list of such arguments.
+            None, "" or [] implies no extra arguments.
+        :return:
+        """
+        if extra_arguments is None:
+            extra_arguments = []
+        elif isinstance(extra_arguments, str):
+            extra_arguments = [extra_arguments]
+        command = self.command + " " + " ".join(extra_arguments)
+        print(command)
+        run(f"python {command}", shell=True)
 
     def submit(self):
         print(self.qsub_command)

@@ -281,7 +281,7 @@ class AccessibleSet(LimitedCapacityItemSet):
 
     @property
     def items(self) -> FrozenSet[Item]:
-        return super().items
+        return self.__items
 
     @items.setter
     def items(self, value):
