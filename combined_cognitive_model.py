@@ -36,14 +36,18 @@ class InteractiveCombinedCognitiveModel:
                  sensorimotor_component: SensorimotorComponent,
                  lc_to_smc_delay: int,
                  smc_to_lc_delay: int,
+                 inter_component_attenuation: float,
                  buffer_threshold: ActivationValue,
                  buffer_capacity_linguistic_items: Optional[int],
                  buffer_capacity_sensorimotor_items: Optional[int],
                  ):
 
-        # Inter-component delays
+        # Inter-component delays and dampening
         self._lc_to_smc_delay: int = lc_to_smc_delay
         self._smc_to_lc_delay: int = smc_to_lc_delay
+        self._inter_component_attenuation: float = inter_component_attenuation
+
+        assert (0 <= self._inter_component_attenuation <= 1)
 
         # Relative component item sizes in the shared buffer
         total_capacity: Size = Size(lcm(buffer_capacity_linguistic_items, buffer_capacity_sensorimotor_items))
@@ -128,7 +132,7 @@ class InteractiveCombinedCognitiveModel:
                 self.sensorimotor_component.propagator.schedule_activation_of_item_with_label(
                     # Use label lookup from source component
                     label=self.linguistic_component.propagator.idx2label[event.item.idx],
-                    activation=event.activation,
+                    activation=event.activation * self._inter_component_attenuation,
                     arrival_time=event.time + self._lc_to_smc_delay)
             except ItemNotFoundError:
                 # Linguistic item was not found in Sensorimotor component
@@ -138,7 +142,7 @@ class InteractiveCombinedCognitiveModel:
                 self.linguistic_component.propagator.schedule_activation_of_item_with_label(
                     # Use label lookup from source component
                     label=self.sensorimotor_component.propagator.idx2label[event.item.idx],
-                    activation=event.activation,
+                    activation=event.activation * self._inter_component_attenuation,
                     arrival_time=event.time + self._smc_to_lc_delay)
             except ItemNotFoundError:
                 # Sensorimotor item was not found in Linguistic component
