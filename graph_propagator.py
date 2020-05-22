@@ -103,8 +103,12 @@ class GraphPropagator(ABC):
         # activation.
         # Each should be of the form (age, initial_activation) ↦ current_activation
         # Use a constant function by default
-        self.node_decay_function: DecayFunction = node_decay_function if node_decay_function is not None else make_decay_function_constant()
-        self.edge_decay_function: DecayFunction = edge_decay_function if edge_decay_function is not None else make_decay_function_constant()
+        self.node_decay_function: DecayFunction = (node_decay_function
+                                                   if node_decay_function is not None
+                                                   else make_decay_function_constant())
+        self.edge_decay_function: DecayFunction = (edge_decay_function
+                                                   if edge_decay_function is not None
+                                                   else make_decay_function_constant())
 
         # Modulations and guards are applied in sequence
         # The output of one modulation is the input to the next; the output of the final is the result.  If there are
@@ -112,9 +116,9 @@ class GraphPropagator(ABC):
         # If any guard in the sequence returns False, the sequence terminates with False; else we get True.
 
         # presynaptic_modulations:
-        #     Modulates the incoming activations to items. E.g. by scaling incoming activation by some property of the item.
-        #     Applies to the sum total of all converging activation, not to each individual incoming activation (this isn't
-        #     the same unless the modulation is linear).
+        #     Modulates the incoming activations to items. E.g. by scaling incoming activation by some property of the
+        #     item. Applies to the sum total of all converging activation, not to each individual incoming activation
+        #     (this isn't the same unless the modulation is linear).
         # :param idx:
         #     The item receiving the activation.
         # :param activation:
@@ -123,8 +127,8 @@ class GraphPropagator(ABC):
         #     The modified presynaptic activation.
         self.presynaptic_modulations: Deque[Modulation] = deque()
         # presynaptic_guards:
-        #     Guards a node's accumulation (and hence also its firing) based on its activation before incoming activation has
-        #     accumulated.  (E.g. making sufficiently-activated nodes into sinks until they decay.)
+        #     Guards a node's accumulation (and hence also its firing) based on its activation before incoming
+        #     activation has accumulated.  (E.g. making sufficiently-activated nodes into sinks until they decay.)
         #     See "Guard" below for signature.
         #     argument `activation` is the activation level of the item BEFORE accumulation.
         # :param idx:
@@ -270,7 +274,8 @@ class GraphPropagator(ABC):
                         activation_events.append(activation_event)
         return activation_events
 
-    def __apply_activation_to_item_with_idx(self, idx: ItemIdx, activation: ActivationValue) -> Optional[ItemActivatedEvent]:
+    def __apply_activation_to_item_with_idx(self, idx: ItemIdx, activation: ActivationValue
+                                            ) -> Optional[ItemActivatedEvent]:
         """
         Apply activation to an item.
         :param idx:
@@ -308,7 +313,8 @@ class GraphPropagator(ABC):
             new_activation = modulation(idx, new_activation)
 
         # The item activated, so an activation event occurs
-        event = ItemActivatedEvent(time=self.clock, item=Item(idx=idx, component=self.component), activation=new_activation,
+        event = ItemActivatedEvent(time=self.clock, item=Item(idx=idx, component=self.component),
+                                   activation=new_activation,
                                    fired=False)
 
         # Record the activation
@@ -342,7 +348,8 @@ class GraphPropagator(ABC):
                 continue
 
             # Accumulate activation at target node at time when it's due to arrive
-            self._schedule_activation_of_item_with_idx(idx=target_idx, activation=arrival_activation, arrival_time=self.clock + length)
+            self._schedule_activation_of_item_with_idx(idx=target_idx, activation=arrival_activation,
+                                                       arrival_time=self.clock + length)
 
         return event
 
@@ -358,8 +365,8 @@ class GraphPropagator(ABC):
         """
         try:
             activation_record: ActivationRecord = self._activation_records[idx]
-        except KeyError:
-            raise ItemNotFoundError(idx)
+        except KeyError as e:
+            raise ItemNotFoundError(idx) from e
         # If the last known activation is zero, we don't need to compute decay
         if activation_record.activation == 0:
             return ActivationValue(0)
@@ -400,7 +407,7 @@ class GraphPropagator(ABC):
         try:
             idxs = [self.label2idx[label] for label in labels]
         except KeyError as e:
-            raise ItemNotFoundError(e.args)
+            raise ItemNotFoundError() from e
         self.activate_items_with_idxs(idxs, activation)
 
     def activate_item_with_label(self, label: ItemLabel, activation: ActivationValue):
@@ -411,9 +418,9 @@ class GraphPropagator(ABC):
         """
         try:
             idx = self.label2idx[label]
-        except KeyError:
-            raise ItemNotFoundError(label)
-        self.activate_item_with_idx(self.label2idx[label], activation)
+        except KeyError as e:
+            raise ItemNotFoundError(label) from e
+        self.activate_item_with_idx(idx, activation)
 
     def _schedule_activation_of_item_with_idx(self, idx: ItemIdx, activation: ActivationValue, arrival_time: int):
         """
@@ -429,10 +436,10 @@ class GraphPropagator(ABC):
         :raises: ItemNotFoundError
         """
         try:
-            idx=self.label2idx[label]
-        except KeyError:
-            raise ItemNotFoundError(label)
-        self._schedule_activation_of_item_with_idx(idx=self.label2idx[label], activation=activation, arrival_time=arrival_time)
+            idx = self.label2idx[label]
+        except KeyError as e:
+            raise ItemNotFoundError(label) from e
+        self._schedule_activation_of_item_with_idx(idx=idx, activation=activation, arrival_time=arrival_time)
 
     # endregion
 
