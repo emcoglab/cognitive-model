@@ -512,6 +512,11 @@ class InteractiveCombinedJobSpec(CombinedJobSpec):
             f"Interactive combined {VERSION}",
             *self.sensorimotor_spec.output_location_relative().parts,
             *self.linguistic_spec.output_location_relative().parts,
+            f"delay-ls {self.lc_to_smc_delay};"
+            f" delay-sl {self.smc_to_lc_delay};"
+            f" buff-θ {self.buffer_threshold};"
+            f" buff-cap-ling {self.buffer_capacity_linguistic_items};"
+            f" buff-cap-sm {self.buffer_capacity_sensorimotor_items}"
         )
 
     @property
