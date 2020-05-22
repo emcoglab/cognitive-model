@@ -51,10 +51,12 @@ class InteractiveCombinedCognitiveModel:
 
         # Relative component item sizes in the shared buffer
         total_capacity: Size = Size(lcm(buffer_capacity_linguistic_items, buffer_capacity_sensorimotor_items))
-        assert total_capacity / buffer_capacity_linguistic_items == total_capacity // buffer_capacity_linguistic_items
-        assert total_capacity / buffer_capacity_sensorimotor_items == total_capacity // buffer_capacity_sensorimotor_items
         self._lc_item_size: Size = Size(total_capacity // buffer_capacity_linguistic_items)
         self._smc_item_size: Size = Size(total_capacity // buffer_capacity_sensorimotor_items)
+
+        # Make sure things divide evenly
+        assert total_capacity / buffer_capacity_linguistic_items == total_capacity // buffer_capacity_linguistic_items
+        assert total_capacity / buffer_capacity_sensorimotor_items == total_capacity // buffer_capacity_sensorimotor_items
 
         self.buffer = WorkingMemoryBuffer(threshold=buffer_threshold, capacity=total_capacity)
 
@@ -123,30 +125,36 @@ class InteractiveCombinedCognitiveModel:
             activation_lookup=self._activation_of_item,
             time=self.clock)
 
+        lc_activation_events: List[ItemActivatedEvent]
+        smc_activation_events: List[ItemActivatedEvent]
         lc_activation_events, lc_other_events = partition(lc_events, lambda e: isinstance(e, ItemActivatedEvent))
         smc_activation_events, smc_other_events = partition(smc_events, lambda e: isinstance(e, ItemActivatedEvent))
 
         # Schedule inter-component activations
         for event in lc_activation_events:
-            try:
-                self.sensorimotor_component.propagator.schedule_activation_of_item_with_label(
-                    # Use label lookup from source component
-                    label=self.linguistic_component.propagator.idx2label[event.item.idx],
-                    activation=event.activation * self._inter_component_attenuation,
-                    arrival_time=event.time + self._lc_to_smc_delay)
-            except ItemNotFoundError:
-                # Linguistic item was not found in Sensorimotor component
-                pass
+            # Only transmit to other component if it fired.
+            if event.fired:
+                try:
+                    self.sensorimotor_component.propagator.schedule_activation_of_item_with_label(
+                        # Use label lookup from source component
+                        label=self.linguistic_component.propagator.idx2label[event.item.idx],
+                        activation=event.activation * self._inter_component_attenuation,
+                        arrival_time=event.time + self._lc_to_smc_delay)
+                except ItemNotFoundError:
+                    # Linguistic item was not found in Sensorimotor component
+                    pass
         for event in smc_activation_events:
-            try:
-                self.linguistic_component.propagator.schedule_activation_of_item_with_label(
-                    # Use label lookup from source component
-                    label=self.sensorimotor_component.propagator.idx2label[event.item.idx],
-                    activation=event.activation * self._inter_component_attenuation,
-                    arrival_time=event.time + self._smc_to_lc_delay)
-            except ItemNotFoundError:
-                # Sensorimotor item was not found in Linguistic component
-                pass
+            # Only transmit to other component if it fired.
+            if event.fired:
+                try:
+                    self.linguistic_component.propagator.schedule_activation_of_item_with_label(
+                        # Use label lookup from source component
+                        label=self.sensorimotor_component.propagator.idx2label[event.item.idx],
+                        activation=event.activation * self._inter_component_attenuation,
+                        arrival_time=event.time + self._smc_to_lc_delay)
+                except ItemNotFoundError:
+                    # Sensorimotor item was not found in Linguistic component
+                    pass
 
         return (
                 decay_events
