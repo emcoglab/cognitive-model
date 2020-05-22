@@ -463,6 +463,7 @@ class CombinedJobSpec(JobSpec, ABC):
 
     def _to_dict(self) -> _SerialisableDict:
         return {
+            **super()._to_dict(),
             **{
                 f"(Linguistic) " + key: value
                 for key, value in self.linguistic_spec._to_dict().items()
@@ -548,14 +549,7 @@ class InteractiveCombinedJobSpec(CombinedJobSpec):
 
     def _to_dict(self) -> _SerialisableDict:
         return {
-            **{
-                f"(Linguistic) " + key: value
-                for key, value in self.linguistic_spec._to_dict().items()
-            },
-            **{
-                f"(Sensorimotor) " + key: value
-                for key, value in self.sensorimotor_spec._to_dict().items()
-            },
+            **super()._to_dict(),
             "Linguistic to sensorimotor delay": str(self.lc_to_smc_delay),
             "Sensorimotor to linguistic delay": str(self.smc_to_lc_delay),
             "Inter-component attenuation": str(self.inter_component_attenuation),
