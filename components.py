@@ -83,9 +83,9 @@ class ModelComponentWithAccessibleSet(ModelComponent, ABC):
         ])
 
     def _apply_memory_pressure(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
-        # When AS is full, MP is 1, and activation is killed.
         # When AS is empty, MP is 0, and activation is unaffected.
-        return activation * 1 - self.accessible_set.pressure
+        # When AS is full,  MP is 1, and activation is killed.
+        return activation * (1 - self.accessible_set.pressure)
 
     def _not_in_accessible_set(self, idx: ItemIdx, activation: ActivationValue) -> bool:
         # Node will only fire if it's not in the accessible set
