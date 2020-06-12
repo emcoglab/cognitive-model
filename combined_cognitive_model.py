@@ -21,6 +21,7 @@ from typing import List, Optional
 
 from numpy import lcm
 
+from breng_ameng.dictionaries import breng_to_ameng, ameng_to_breng
 from model.basic_types import ActivationValue, Component, Size, Item, SizedItem
 from model.buffer import WorkingMemoryBuffer
 from model.events import ItemActivatedEvent, ItemEvent, ModelEvent
@@ -134,10 +135,17 @@ class InteractiveCombinedCognitiveModel:
         for event in lc_activation_events:
             # Only transmit to other component if it fired.
             if event.fired:
+                # Use label lookup from source component
+                linguistic_label = self.linguistic_component.propagator.idx2label[event.item.idx]
                 try:
                     self.sensorimotor_component.propagator.schedule_activation_of_item_with_label(
-                        # Use label lookup from source component
-                        label=self.linguistic_component.propagator.idx2label[event.item.idx],
+                        label=(
+                            # Use the linguistic label if it's available
+                            linguistic_label
+                            if linguistic_label in self.sensorimotor_component.available_labels
+                            # Otherwise try the Americanized version
+                            else breng_to_ameng[linguistic_label]
+                        ),
                         activation=event.activation * self._inter_component_attenuation,
                         arrival_time=event.time + self._lc_to_smc_delay)
                 except ItemNotFoundError:
@@ -146,10 +154,17 @@ class InteractiveCombinedCognitiveModel:
         for event in smc_activation_events:
             # Only transmit to other component if it fired.
             if event.fired:
+                # Use label lookup from source component
+                sensorimotor_label = self.sensorimotor_component.propagator.idx2label[event.item.idx]
                 try:
                     self.linguistic_component.propagator.schedule_activation_of_item_with_label(
-                        # Use label lookup from source component
-                        label=self.sensorimotor_component.propagator.idx2label[event.item.idx],
+                        label=(
+                            sensorimotor_label
+                            # Use the linguistic label if it's available
+                            if sensorimotor_label in self.linguistic_component.available_labels
+                            # Otherwise try the Britishised version
+                            else ameng_to_breng[sensorimotor_label]
+                        ),
                         activation=event.activation * self._inter_component_attenuation,
                         arrival_time=event.time + self._smc_to_lc_delay)
                 except ItemNotFoundError:
