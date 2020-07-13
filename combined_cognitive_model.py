@@ -21,7 +21,7 @@ from typing import List, Optional
 
 from numpy import lcm
 
-from breng_ameng.dictionaries import breng_to_ameng, ameng_to_breng
+from breng_ameng.dialect_dictionary import ameng_to_breng, breng_to_ameng
 from model.basic_types import ActivationValue, Component, Size, Item, SizedItem
 from model.buffer import WorkingMemoryBuffer
 from model.events import ItemActivatedEvent, ItemEvent, ModelEvent
@@ -144,7 +144,7 @@ class InteractiveCombinedCognitiveModel:
                             linguistic_label
                             if linguistic_label in self.sensorimotor_component.available_labels
                             # Otherwise try the Americanized version
-                            else breng_to_ameng[linguistic_label]
+                            else breng_to_ameng.best_translation_for(linguistic_label)
                         ),
                         activation=event.activation * self._inter_component_attenuation,
                         arrival_time=event.time + self._lc_to_smc_delay)
@@ -163,7 +163,7 @@ class InteractiveCombinedCognitiveModel:
                             # Use the linguistic label if it's available
                             if sensorimotor_label in self.linguistic_component.available_labels
                             # Otherwise try the Britishised version
-                            else ameng_to_breng[sensorimotor_label]
+                            else ameng_to_breng.best_translation_for(sensorimotor_label)
                         ),
                         activation=event.activation * self._inter_component_attenuation,
                         arrival_time=event.time + self._smc_to_lc_delay)
