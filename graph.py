@@ -599,7 +599,7 @@ def save_edgelist_from_similarity_matrix(file_path: str,
 
 
 def iter_edges_from_edgelist(file_path: str) -> Iterator[Tuple[Edge, Length]]:
-    """Yields tuples of (edge: Edge, edge_lengths: EdgeData) from an edgelist file."""
+    """Yields tuples of (edge: Edge, length: Length) from an edgelist file."""
     with open(file_path, mode="r", encoding="utf-8") as edgelist_file:
         for line in edgelist_file:
             n1, n2, length = line.split()
