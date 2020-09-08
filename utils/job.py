@@ -25,7 +25,7 @@ from typing import Optional, List, Dict, Union
 import yaml
 
 from ldm.utils.maths import DistanceType
-from model.basic_types import ActivationValue, Length
+from model.basic_types import ActivationValue
 from model.graph import EdgePruningType
 from model.attenuation_statistic import AttenuationStatistic
 from model.version import VERSION, GIT_HASH
@@ -93,7 +93,9 @@ class JobSpec(ABC):
         if not in_location.is_dir():
             in_location.mkdir(parents=True)
         with open(Path(in_location, " model_spec.yaml"), mode="w", encoding="utf-8") as spec_file:
-            yaml.dump(self._to_dict(), spec_file, yaml.SafeDumper)
+            yaml.dump(self._to_dict(), spec_file, yaml.SafeDumper,
+                      # Always serialise in block style
+                      default_flow_style=False)
 
     @classmethod
     def load(cls, filename: Path):
@@ -146,7 +148,7 @@ class PropagationJobSpec(JobSpec, ABC):
 
 @dataclass
 class SensorimotorPropagationJobSpec(PropagationJobSpec):
-    max_radius: int
+    max_radius: float
     node_decay_sigma: float
     node_decay_median: float
     distance_type: DistanceType
@@ -210,7 +212,7 @@ class SensorimotorPropagationJobSpec(PropagationJobSpec):
             length_factor           =int(dictionary["Length factor"]),
             run_for_ticks           =dictionary["Run for ticks"] if "Run for ticks" in dictionary else None,
             bailout                 =dictionary["Bailout"] if "Bailout" in dictionary else None,
-            max_radius              =Length(dictionary["Max radius"]),
+            max_radius              =float(dictionary["Max radius"]),
             node_decay_sigma        =float(dictionary["Log-normal sigma"]),
             node_decay_median       =float(dictionary["Log-normal median"]),
             accessible_set_capacity =int(dictionary["Accessible set capacity"]),
@@ -267,7 +269,7 @@ class BufferedSensorimotorPropagationJobSpec(SensorimotorPropagationJobSpec):
             length_factor           =int(dictionary["Length factor"]),
             run_for_ticks           =dictionary["Run for ticks"] if "Run for ticks" in dictionary else None,
             bailout                 =dictionary["Bailout"] if "Bailout" in dictionary else None,
-            max_radius              =Length(dictionary["Max radius"]),
+            max_radius              =float(dictionary["Max sphere radius"]),
             node_decay_sigma        =float(dictionary["Log-normal sigma"]),
             node_decay_median       =float(dictionary["Log-normal median"]),
             buffer_capacity         =int(dictionary["Buffer capacity"]),
@@ -303,7 +305,7 @@ class LinguisticPropagationJobSpec(PropagationJobSpec):
             f"--model_name {self.model_name}",
             f"--radius {self.model_radius}",
             f"--corpus_name {self.corpus_name}",
-            f"--edge_decay_sd_factor {self.edge_decay_sd}",
+            f"--edge_decay_sd {self.edge_decay_sd}",
             f"--node_decay_factor {self.node_decay_factor}",
             f"--accessible_set_capacity {self.accessible_set_capacity}",
             f"--accessible_set_threshold {self.accessible_set_threshold}",
@@ -357,7 +359,7 @@ class LinguisticPropagationJobSpec(PropagationJobSpec):
             f" n-decay-f {self.node_decay_factor};"
             f" e-decay-sd {self.edge_decay_sd};"
             f" as-θ {self.accessible_set_threshold};"
-            f" as-cap {self.accessible_set_capacity:,};"
+            f" as-cap {self.accessible_set_capacity};"
             f" imp-prune-θ {self.impulse_pruning_threshold};"
             f" run-for {self.run_for_ticks};"
             f" bail {self.bailout}",
@@ -371,7 +373,7 @@ class LinguisticPropagationJobSpec(PropagationJobSpec):
             "Model radius": str(self.model_radius),
             "Corpus name": self.corpus_name,
             "Length factor": str(self.length_factor),
-            "SD factor": str(self.edge_decay_sd),
+            "Edge decay SD": str(self.edge_decay_sd),
             "Node decay": str(self.node_decay_factor),
             "Accessible set threshold": str(self.accessible_set_threshold),
             "Accessible set capacity": str(self.accessible_set_capacity),
@@ -401,9 +403,9 @@ class LinguisticPropagationJobSpec(PropagationJobSpec):
             model_name               =str(dictionary["Model name"]),
             model_radius             =int(dictionary["Model radius"]),
             corpus_name              =str(dictionary["Corpus name"]),
-            edge_decay_sd            =float(dictionary["SD factor"]),
+            edge_decay_sd            =float(dictionary["Edge decay SD"]),
             node_decay_factor        =float(dictionary["Node decay"]),
-            accessible_set_capacity  =int(dictionary["Accessible set capacity"]),
+            accessible_set_capacity  =int(dictionary["Accessible set capacity"]) if dictionary["Accessible set capacity"] != 'None' else None,
             accessible_set_threshold =ActivationValue(dictionary["Accessible set threshold"]),
             impulse_pruning_threshold=ActivationValue(dictionary["Impulse pruning threshold"]),
             pruning_type             =EdgePruningType.from_name(dictionary["Pruning type"]) if "Pruning type" in dictionary else None,
@@ -626,7 +628,7 @@ class Job(ABC):
         Run the job on the local machine.
         :param extra_arguments:
             Either an extra CLI argument to include which isn't specified in the job spec, or a list of such arguments.
-            None, "" or [] implies no extra arguments.
+            None, "", or [] implies no extra arguments.
         :return:
         """
         if extra_arguments is None:

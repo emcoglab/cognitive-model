@@ -77,7 +77,7 @@ class LinguisticComponent(ModelComponentWithAccessibleSet):
                 n_words=spec.n_words,
                 distributional_model=distributional_model,
                 node_decay_factor=spec.node_decay_factor,
-                edge_decay_sd_factor=spec.edge_decay_sd,
+                edge_decay_sd=spec.edge_decay_sd,
                 edge_pruning_type=spec.pruning_type,
                 edge_pruning=spec.pruning,
             ),

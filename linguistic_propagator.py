@@ -28,7 +28,7 @@ class LinguisticPropagator(GraphPropagator):
                  distributional_model: DistributionalSemanticModel,
                  distance_type: Optional[DistanceType],
                  node_decay_factor: float,
-                 edge_decay_sd_factor: float,
+                 edge_decay_sd: float,
                  edge_pruning_type: Optional[EdgePruningType],
                  edge_pruning: Optional[Length],
                  ):
@@ -41,8 +41,9 @@ class LinguisticPropagator(GraphPropagator):
             The form of the linguistic distributional space.
         :param distance_type:
             The metric used to determine distances between vectors.
-        :param edge_decay_sd_factor:
+        :param edge_decay_sd:
             The SD of the gaussian curve governing edge decay.
+            Scale is the source distance, not the quantised Length.
         :param node_decay_factor:
             The decay factor for the exponential decay on nodes.
         :param edge_pruning_type:
@@ -64,7 +65,7 @@ class LinguisticPropagator(GraphPropagator):
             node_decay_function=make_decay_function_exponential_with_decay_factor(
                 decay_factor=node_decay_factor),
             edge_decay_function=make_decay_function_gaussian_with_sd(
-                sd=edge_decay_sd_factor * length_factor),
+                sd=edge_decay_sd * length_factor),
             component=Component.linguistic,
         )
 
@@ -101,7 +102,7 @@ def _load_graph(n_words, length_factor, distributional_model, distance_type, edg
         pruning_length = quantile_data[
             # Use 1 - so that smallest top quantiles get converted to longest edges
             quantile_data["Top quantile"] == 1 - (edge_pruning / 100)
-            ]["Pruning length"].iloc[0]
+        ]["Pruning length"].iloc[0]
         logger.info(f"Loading graph from {graph_file_name}, pruning longest {edge_pruning}% of edges (anything over {pruning_length})")
         graph = Graph.load_from_edgelist(file_path=path.join(Preferences.graphs_dir, graph_file_name),
                                          ignore_edges_longer_than=edge_pruning,
@@ -130,7 +131,7 @@ class LinguisticOneHopPropagator(LinguisticPropagator):
                  distributional_model: DistributionalSemanticModel,
                  distance_type: Optional[DistanceType],
                  node_decay_factor: float,
-                 edge_decay_sd_factor: float,
+                 edge_decay_sd: float,
                  edge_pruning_type: Optional[EdgePruningType],
                  edge_pruning: Optional[Length],
                  ):
@@ -141,7 +142,7 @@ class LinguisticOneHopPropagator(LinguisticPropagator):
             distributional_model=distributional_model,
             distance_type=distance_type,
             node_decay_factor=node_decay_factor,
-            edge_decay_sd_factor=edge_decay_sd_factor,
+            edge_decay_sd=edge_decay_sd,
             edge_pruning_type=edge_pruning_type,
             edge_pruning=edge_pruning,
             )

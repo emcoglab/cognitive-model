@@ -25,7 +25,7 @@ class SensorimotorPropagator(GraphPropagator):
     def __init__(self,
                  length_factor: int,
                  distance_type: DistanceType,
-                 max_sphere_radius: int,
+                 max_sphere_radius: float,
                  node_decay_lognormal_median: float,
                  node_decay_lognormal_sigma: float,
                  use_prepruned: bool = False,
@@ -36,9 +36,11 @@ class SensorimotorPropagator(GraphPropagator):
         :param length_factor:
             How distances are scaled into connection lengths.
         :param max_sphere_radius:
-            What is the maximum radius of a sphere
+            What is the maximum radius of a sphere.
+            Scale is for the source distance, not the quantised length.
         :param node_decay_lognormal_median:
             The node_decay_median of the lognormal decay.
+            Scale is for the source distance, not the quantised length.
         :param node_decay_lognormal_sigma:
             The node_decay_sigma parameter for the lognormal decay.
         :param use_prepruned:
@@ -62,7 +64,7 @@ class SensorimotorPropagator(GraphPropagator):
         super().__init__(
             graph=_load_graph(distance_type, length_factor, max_sphere_radius, use_prepruned, idx2label),
             idx2label=idx2label,
-            node_decay_function=make_decay_function_lognormal(median=node_decay_lognormal_median, sigma=node_decay_lognormal_sigma),
+            node_decay_function=make_decay_function_lognormal(median=node_decay_lognormal_median * length_factor, sigma=node_decay_lognormal_sigma),
             # Once pruning has been done, we don't need to decay activation in edges, as target items should receive the
             # full activations of their source items at the time they were last activated.
             # The maximal sphere radius is achieved by the initial graph pruning.
@@ -99,8 +101,9 @@ def _load_graph(distance_type, length_factor, max_sphere_radius, use_prepruned, 
         edgelist_path = path.join(Preferences.graphs_dir, edgelist_filename)
 
         logger.info(f"Loading sensorimotor graph ({edgelist_filename})")
-        sensorimotor_graph: Graph = Graph.load_from_edgelist(file_path=edgelist_path,
-                                                             ignore_edges_longer_than=max_sphere_radius)
+        sensorimotor_graph: Graph = Graph.load_from_edgelist(
+            file_path=edgelist_path,
+            ignore_edges_longer_than=max_sphere_radius * length_factor)
     return sensorimotor_graph
 
 
