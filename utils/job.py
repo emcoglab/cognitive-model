@@ -99,10 +99,16 @@ class JobSpec(ABC):
 
     @classmethod
     def load(cls, filename: Path):
-        # This works
-        # noinspection PyTypeChecker
         with open(filename, mode="r", encoding="utf-8") as file:
             return cls._from_dict(yaml.load(file, yaml.SafeLoader))
+
+    @classmethod
+    def load_multiple(cls, filename: Path) -> List:
+        with open(filename, mode="r", encoding="utf-8") as file:
+            return [
+                cls._from_dict(d)
+                for d in yaml.load_all(file, yaml.SafeLoader)
+            ]
 
     def csv_comments(self) -> List[str]:
         """List of commented"""
