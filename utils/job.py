@@ -399,7 +399,7 @@ class LinguisticPropagationJobSpec(PropagationJobSpec):
 
     @classmethod
     def _from_dict(cls, dictionary: _SerialisableDict):
-        return LinguisticPropagationJobSpec(
+        return cls(
             length_factor            =int(dictionary["Length factor"]),
             run_for_ticks            =dictionary["Run for ticks"] if "Run for ticks" in dictionary else None,
             bailout                  =dictionary["Bailout"] if "Bailout" in dictionary else None,
@@ -416,7 +416,6 @@ class LinguisticPropagationJobSpec(PropagationJobSpec):
             impulse_pruning_threshold=ActivationValue(dictionary["Impulse pruning threshold"]),
             pruning_type             =EdgePruningType.from_name(dictionary["Pruning type"]) if "Pruning type" in dictionary else None,
             pruning                  =int(dictionary["Pruning"]) if "Pruning" in dictionary else None,
-
         )
 
 
