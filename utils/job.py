@@ -639,9 +639,14 @@ class Job(ABC):
         print(command)
         run(f"python {command}", shell=True)
 
-    def submit(self):
-        print(self.qsub_command)
-        run(self.qsub_command, shell=True)
+    def submit(self, extra_arguments: Optional[Union[List[str], str]] = None):
+        if extra_arguments is None:
+            extra_arguments = []
+        elif isinstance(extra_arguments, str):
+            extra_arguments = [extra_arguments]
+        command = self.qsub_command + " " + " ".join(extra_arguments)
+        print(command)
+        run(command, shell=True)
 
     @classmethod
     def _without_py(cls, script_name: str) -> str:
