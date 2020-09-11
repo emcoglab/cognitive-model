@@ -188,8 +188,8 @@ class SensorimotorPropagationJobSpec(PropagationJobSpec):
     def output_location_relative(self) -> Path:
         return Path(
             f"Sensorimotor {VERSION}",
-            f"{self.distance_type.name} length {self.length_factor} attenuate {self.attenuation_statistic.name}",
-            f"max-r {self.max_radius};"
+            f"{self.distance_type.name} length {self.length_factor} attenuate {self.attenuation_statistic.name};"
+            f" max-r {self.max_radius};"
             f" n-decay-median {self.node_decay_median};"
             f" n-decay-sigma {self.node_decay_sigma};"
             f" as-θ {self.accessible_set_threshold};"
@@ -249,8 +249,8 @@ class BufferedSensorimotorPropagationJobSpec(SensorimotorPropagationJobSpec):
     def output_location_relative(self) -> Path:
         return Path(
             f"Sensorimotor {VERSION}",
-            f"{self.distance_type.name} length {self.length_factor} attenuate {self.attenuation_statistic.name}",
-            f"max-r {self.max_radius};"
+            f"{self.distance_type.name} length {self.length_factor} attenuate {self.attenuation_statistic.name};"
+            f" max-r {self.max_radius};"
             f" n-decay-median {self.node_decay_median};"
             f" n-decay-sigma {self.node_decay_sigma};"
             f" as-θ {self.accessible_set_threshold};"
@@ -351,17 +351,17 @@ class LinguisticPropagationJobSpec(PropagationJobSpec):
             raise NotImplementedError()
 
         if self.distance_type is not None:
-            model_dir_name = (f"{self.model_name}"
+            model_name = (f"{self.model_name}"
                               f" {self.distance_type.name}"
                               f" {self.n_words:,} words, length {self.length_factor}{pruning_suffix}")
         else:
-            model_dir_name = (f"{self.model_name}"
+            model_name = (f"{self.model_name}"
                               f" {self.n_words:,} words, length {self.length_factor}{pruning_suffix}")
 
         return Path(
             f"Linguistic {VERSION}",
-            model_dir_name,
-            f"firing-θ {self.firing_threshold};"
+            f"{model_name};"
+            f" firing-θ {self.firing_threshold};"
             f" n-decay-f {self.node_decay_factor};"
             f" e-decay-sd {self.edge_decay_sd};"
             f" as-θ {self.accessible_set_threshold};"
@@ -519,8 +519,8 @@ class InteractiveCombinedJobSpec(CombinedJobSpec):
     def output_location_relative(self) -> Path:
         return Path(
             f"Interactive combined {VERSION}",
-            *self.sensorimotor_spec.output_location_relative().parts,
-            *self.linguistic_spec.output_location_relative().parts,
+            *self.sensorimotor_spec.output_location_relative().parts[1:],  # Skip the type name and version number
+            *self.linguistic_spec.output_location_relative().parts[1:],  # Skip the type name and version number
             f"delay-ls {self.lc_to_smc_delay};"
             f" delay-sl {self.smc_to_lc_delay};"
             f" ic-attenuation {self.inter_component_attenuation};"
