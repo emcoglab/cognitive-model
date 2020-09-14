@@ -188,10 +188,10 @@ class SensorimotorPropagationJobSpec(PropagationJobSpec):
     def output_location_relative(self) -> Path:
         return Path(
             f"Sensorimotor {VERSION}",
-            f"{self.distance_type.name} length {self.length_factor} attenuate {self.attenuation_statistic.name};"
+            f"{self.distance_type.name} length {self.length_factor} att {self.attenuation_statistic.name};"
             f" max-r {self.max_radius};"
-            f" n-decay-median {self.node_decay_median};"
-            f" n-decay-sigma {self.node_decay_sigma};"
+            f" n-decay-m {self.node_decay_median};"
+            f" n-decay-σ {self.node_decay_sigma};"
             f" as-θ {self.accessible_set_threshold};"
             f" as-cap {self.accessible_set_capacity:,};"
             f" run-for {self.run_for_ticks};"
