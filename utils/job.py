@@ -251,8 +251,8 @@ class BufferedSensorimotorPropagationJobSpec(SensorimotorPropagationJobSpec):
             f"Sensorimotor {VERSION}",
             f"{self.distance_type.name} length {self.length_factor} attenuate {self.attenuation_statistic.name};"
             f" max-r {self.max_radius};"
-            f" n-decay-median {self.node_decay_median};"
-            f" n-decay-sigma {self.node_decay_sigma};"
+            f" n-decay-m {self.node_decay_median};"
+            f" n-decay-σ {self.node_decay_sigma};"
             f" as-θ {self.accessible_set_threshold};"
             f" as-cap {self.accessible_set_capacity:,};"
             f" buff-θ {self.buffer_threshold};"
@@ -443,7 +443,6 @@ class CombinedJobSpec(JobSpec, ABC):
     def _validate(self) -> None:
         super()._validate()
         assert self.linguistic_spec.run_for_ticks == self.sensorimotor_spec.run_for_ticks
-        assert self.linguistic_spec.bailout == self.sensorimotor_spec.bailout
 
     @property
     def run_for_ticks(self) -> int:
