@@ -112,7 +112,7 @@ class SensorimotorOneHopPropagator(SensorimotorPropagator):
     def __init__(self,
                  distance_type: DistanceType,
                  length_factor: int,
-                 max_sphere_radius: int,
+                 max_sphere_radius: float,
                  node_decay_lognormal_median: float,
                  node_decay_lognormal_sigma: float,
                  use_prepruned: bool = False,
