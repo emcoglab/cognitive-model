@@ -1,0 +1,28 @@
+# Caches
+__pycache__/
+.cache
+
+# Cython
+*_core.c
+*.so
+
+# Distribution / packaging
+.Python
+build/
+
+# Environments
+venv/
+
+# pycharm
+.idea
+
+# MacOS
+.DS_Store
+
+# Logs and output
+jobs/logs/
+jobs/*.o*
+jobs/*.e*
+
+# Config overrides
+config*.yaml
