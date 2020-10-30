@@ -19,11 +19,11 @@ from abc import ABC
 from collections import namedtuple, defaultdict, deque
 from typing import Dict, DefaultDict, Optional, List, Callable, Deque
 
-from model.basic_types import ActivationValue, ItemIdx, ItemLabel, Item, Component
-from model.events import ModelEvent, ItemActivatedEvent
-from model.graph import Graph
-from model.utils.exceptions import ItemNotFoundError
-from model.utils.maths import make_decay_function_constant
+from .basic_types import ActivationValue, ItemIdx, ItemLabel, Item, Component
+from .events import ModelEvent, ItemActivatedEvent
+from .graph import Graph
+from .utils.exceptions import ItemNotFoundError
+from .utils.maths import make_decay_function_constant
 
 Modulation = Callable[[ItemIdx, ActivationValue], ActivationValue]
 Guard = Callable[[ItemIdx, ActivationValue], bool]

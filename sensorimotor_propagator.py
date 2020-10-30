@@ -3,14 +3,14 @@ from __future__ import annotations
 from os import path
 from typing import Dict, List
 
-from ldm.utils.maths import DistanceType
-from model.basic_types import ItemIdx, ItemLabel, Node, ActivationValue, Component
-from model.events import ModelEvent
-from model.graph import Graph
-from model.graph_propagator import GraphPropagator, _load_labels, IMPULSE_PRUNING_THRESHOLD
-from model.utils.logging import logger
-from model.utils.maths import make_decay_function_lognormal
-from preferences import Preferences
+from .ldm.utils.maths import DistanceType
+from .basic_types import ItemIdx, ItemLabel, Node, ActivationValue, Component
+from .events import ModelEvent
+from .graph import Graph
+from .graph_propagator import GraphPropagator, _load_labels, IMPULSE_PRUNING_THRESHOLD
+from .utils.logging import logger
+from .utils.maths import make_decay_function_lognormal
+from .preferences import Preferences
 
 
 class SensorimotorPropagator(GraphPropagator):

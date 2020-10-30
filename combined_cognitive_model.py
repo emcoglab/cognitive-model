@@ -22,13 +22,13 @@ from typing import List, Optional
 from numpy import lcm
 
 from breng_ameng.dialect_dictionary import ameng_to_breng, breng_to_ameng
-from model.basic_types import ActivationValue, Component, Size, Item, SizedItem
-from model.buffer import WorkingMemoryBuffer
-from model.events import ItemActivatedEvent, ItemEvent, ModelEvent
-from model.linguistic_components import LinguisticComponent
-from model.sensorimotor_components import SensorimotorComponent
-from model.utils.exceptions import ItemNotFoundError
-from model.utils.iterable import partition
+from .basic_types import ActivationValue, Component, Size, Item, SizedItem
+from .buffer import WorkingMemoryBuffer
+from .events import ItemActivatedEvent, ItemEvent, ModelEvent
+from .linguistic_components import LinguisticComponent
+from .sensorimotor_components import SensorimotorComponent
+from .utils.exceptions import ItemNotFoundError
+from .utils.iterable import partition
 
 
 class InteractiveCombinedCognitiveModel:

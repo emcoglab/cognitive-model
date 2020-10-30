@@ -2,16 +2,15 @@ from __future__ import annotations
 
 from typing import Optional, List, Dict
 
-from model.basic_types import ActivationValue, ItemIdx
-from model.buffer import WorkingMemoryBuffer
-from model.components import ModelComponentWithAccessibleSet, FULL_ACTIVATION
-from model.events import ModelEvent, ItemActivatedEvent
-from model.attenuation_statistic import AttenuationStatistic
-from model.sensorimotor_propagator import SensorimotorPropagator
-from model.utils.iterable import partition
-from model.utils.job import SensorimotorPropagationJobSpec, BufferedSensorimotorPropagationJobSpec
-from model.utils.maths import prevalence_from_fraction_known, scale_prevalence_01
-from sensorimotor_norms.sensorimotor_norms import SensorimotorNorms
+from .basic_types import ActivationValue, ItemIdx
+from .buffer import WorkingMemoryBuffer
+from .components import ModelComponentWithAccessibleSet
+from .events import ModelEvent, ItemActivatedEvent
+from .attenuation_statistic import AttenuationStatistic
+from .sensorimotor_propagator import SensorimotorPropagator
+from .utils.iterable import partition
+from .utils.maths import prevalence_from_fraction_known, scale_prevalence_01
+from .sensorimotor_norms.sensorimotor_norms import SensorimotorNorms
 
 
 class SensorimotorComponent(ModelComponentWithAccessibleSet):
@@ -74,23 +73,6 @@ class SensorimotorComponent(ModelComponentWithAccessibleSet):
         # No post-synaptic guards
 
         # endregion
-
-    @classmethod
-    def from_spec(cls, spec: SensorimotorPropagationJobSpec, use_prepruned: bool = False) -> SensorimotorComponent:
-        return cls(
-            propagator=SensorimotorPropagator(
-                distance_type=spec.distance_type,
-                length_factor=spec.length_factor,
-                max_sphere_radius=spec.max_radius,
-                node_decay_lognormal_median=spec.node_decay_median,
-                node_decay_lognormal_sigma=spec.node_decay_sigma,
-                use_prepruned=use_prepruned,
-            ),
-            accessible_set_threshold=spec.accessible_set_threshold,
-            accessible_set_capacity=spec.accessible_set_capacity,
-            attenuation_statistic=spec.attenuation_statistic,
-            activation_cap=FULL_ACTIVATION
-        )
 
     # todo: make static modulation-producers
     def _attenuate_by_statistic(self, idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
@@ -169,22 +151,3 @@ class BufferedSensorimotorComponent(SensorimotorComponent):
     def reset(self):
         super().reset()
         self.working_memory_buffer.clear()
-
-    @classmethod
-    def from_spec(cls, spec: BufferedSensorimotorPropagationJobSpec, use_prepruned: bool = False) -> BufferedSensorimotorComponent:
-        return cls(
-            propagator=SensorimotorPropagator(
-                distance_type=spec.distance_type,
-                length_factor=spec.length_factor,
-                max_sphere_radius=spec.max_radius,
-                node_decay_lognormal_median=spec.node_decay_median,
-                node_decay_lognormal_sigma=spec.node_decay_sigma,
-                use_prepruned=use_prepruned,
-            ),
-            accessible_set_threshold=spec.accessible_set_threshold,
-            accessible_set_capacity=spec.accessible_set_capacity,
-            attenuation_statistic=spec.attenuation_statistic,
-            activation_cap=FULL_ACTIVATION,
-            buffer_capacity=spec.buffer_capacity,
-            buffer_threshold=spec.buffer_threshold,
-        )

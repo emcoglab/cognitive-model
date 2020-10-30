@@ -18,14 +18,10 @@ from __future__ import annotations
 
 from typing import Optional
 
-from cli.lookups import get_corpus_from_name, get_model_from_params
-from ldm.corpus.indexing import FreqDist
-from ldm.model.base import DistributionalSemanticModel
-from model.basic_types import ActivationValue, ItemIdx
-from model.components import ModelComponentWithAccessibleSet
-from model.graph_propagator import Guard
-from model.linguistic_propagator import LinguisticPropagator
-from model.utils.job import LinguisticPropagationJobSpec
+from .basic_types import ActivationValue, ItemIdx
+from .components import ModelComponentWithAccessibleSet
+from .graph_propagator import Guard
+from .linguistic_propagator import LinguisticPropagator
 
 
 class LinguisticComponent(ModelComponentWithAccessibleSet):
@@ -64,27 +60,6 @@ class LinguisticComponent(ModelComponentWithAccessibleSet):
             # Activation must exceed a firing threshold to cause further propagation.
             self._exceeds_firing_threshold(self.firing_threshold)
         ])
-
-    @classmethod
-    def from_spec(cls, spec: LinguisticPropagationJobSpec) -> LinguisticComponent:
-        corpus = get_corpus_from_name(spec.corpus_name)
-        freq_dist = FreqDist.load(corpus.freq_dist_path)
-        distributional_model: DistributionalSemanticModel = get_model_from_params(corpus, freq_dist, spec.model_name, spec.model_radius)
-        return cls(
-            propagator=LinguisticPropagator(
-                distance_type=spec.distance_type,
-                length_factor=spec.length_factor,
-                n_words=spec.n_words,
-                distributional_model=distributional_model,
-                node_decay_factor=spec.node_decay_factor,
-                edge_decay_sd=spec.edge_decay_sd,
-                edge_pruning_type=spec.pruning_type,
-                edge_pruning=spec.pruning,
-            ),
-            accessible_set_threshold=spec.accessible_set_threshold,
-            accessible_set_capacity=spec.accessible_set_capacity,
-            firing_threshold=spec.firing_threshold,
-        )
 
     @staticmethod
     def _exceeds_firing_threshold(firing_threshold: ActivationValue) -> Guard:

@@ -18,7 +18,7 @@ caiwingfield.net
 from abc import ABC
 from dataclasses import dataclass
 
-from model.basic_types import ActivationValue, Item
+from .basic_types import ActivationValue, Item
 
 
 @dataclass

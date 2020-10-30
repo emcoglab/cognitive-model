@@ -1,0 +1,10 @@
+-r ldm/requirements.txt
+-r sensorimotor_norms/requirements.txt
+cython
+gitpython
+numpy
+pandas
+pyyaml
+scipy
+sklearn
+sortedcontainers

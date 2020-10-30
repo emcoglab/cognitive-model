@@ -20,8 +20,8 @@ from numpy import percentile, float_power, pi, sqrt, log
 from scipy.special import ndtri
 from scipy.stats import t as student_t
 
-from model.utils.maths_core import gaussian_decay, exponential_decay, lognormal_sf
-from model.basic_types import ActivationValue
+from .maths_core import gaussian_decay, exponential_decay, lognormal_sf
+from ..basic_types import ActivationValue
 
 TAU: float = 2 * pi
 

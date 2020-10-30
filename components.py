@@ -16,15 +16,14 @@ caiwingfield.net
 """
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import Set, List, Optional
 
-from model.basic_types import ActivationValue, ItemIdx, ItemLabel
-from model.buffer import AccessibleSet
-from model.events import ModelEvent, ItemActivatedEvent
-from model.graph_propagator import Modulation, GraphPropagator
-from model.utils.iterable import partition
-from model.utils.job import PropagationJobSpec
+from .basic_types import ActivationValue, ItemIdx, ItemLabel
+from .buffer import AccessibleSet
+from .events import ModelEvent, ItemActivatedEvent
+from .graph_propagator import Modulation, GraphPropagator
+from .utils.iterable import partition
 
 FULL_ACTIVATION = ActivationValue(1.0)
 
@@ -47,12 +46,6 @@ class ModelComponent(ABC):
 
     def tick(self) -> List[ModelEvent]:
         return self.propagator.tick()
-
-    @classmethod
-    @abstractmethod
-    def from_spec(cls, spec: PropagationJobSpec) -> ModelComponent:
-        """Produce a component from a job spec, with choices set to defaults."""
-        raise NotImplementedError()
 
     @staticmethod
     def _apply_activation_cap(activation_cap: ActivationValue) -> Modulation:

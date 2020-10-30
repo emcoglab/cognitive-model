@@ -19,9 +19,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional, Dict, List, Callable, FrozenSet, Iterable
 
-from ldm.utils.maths import clamp01
-from model.basic_types import ActivationValue, Size, SizedItem, Item
-from model.events import ItemLeftBufferEvent, ItemActivatedEvent, ModelEvent, ItemEnteredBufferEvent, BufferFloodEvent, \
+from .ldm.utils.maths import clamp01
+from .basic_types import ActivationValue, Size, SizedItem, Item
+from .events import ItemLeftBufferEvent, ItemActivatedEvent, ModelEvent, ItemEnteredBufferEvent, BufferFloodEvent, \
     BufferEvent
 
 

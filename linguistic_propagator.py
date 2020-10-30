@@ -3,17 +3,16 @@ from typing import Dict, Optional, List
 
 from pandas import DataFrame
 
-from ldm.corpus.corpus import CorpusMetadata
-from ldm.model.base import DistributionalSemanticModel
-from ldm.utils.maths import DistanceType
-from model.basic_types import Length, ItemIdx, ItemLabel, ActivationValue, Component
-
-from model.utils.logging import logger
-from model.events import ModelEvent
-from model.graph import Graph, EdgePruningType
-from model.graph_propagator import GraphPropagator, _load_labels, IMPULSE_PRUNING_THRESHOLD
-from model.utils.maths import make_decay_function_exponential_with_decay_factor, make_decay_function_gaussian_with_sd
-from preferences import Preferences
+from .ldm.corpus.corpus import CorpusMetadata
+from .ldm.model.base import DistributionalSemanticModel
+from .ldm.utils.maths import DistanceType
+from .basic_types import Length, ItemIdx, ItemLabel, ActivationValue, Component
+from .utils.logging import logger
+from .events import ModelEvent
+from .graph import Graph, EdgePruningType
+from .graph_propagator import GraphPropagator, _load_labels, IMPULSE_PRUNING_THRESHOLD
+from .utils.maths import make_decay_function_exponential_with_decay_factor, make_decay_function_gaussian_with_sd
+from .preferences import Preferences
 
 
 class LinguisticPropagator(GraphPropagator):
