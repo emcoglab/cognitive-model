@@ -208,13 +208,18 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
 
         # Convert to a list of key-value pairs, sorted by activation, descending.
         # We want the order to be by activation, but with ties broken by recency, i.e. items being presented to the
-        # buffer precede those already in the buffer.  Because Python's sorting is stable, meaning if we sort by
-        # recency first, and then by activation, we get what we want [0].
+        # buffer precede those already in the buffer.  Python's sorting is stable, meaning if we sort by recency first,
+        # and then by activation, we get what we want [0].
         #
         # So first we sort by recency (i.e. whether they were presented), descending
         # (i.e. .presented==1 comes before .presented==0)
         #
         #     [0]: https://wiki.python.org/moin/HowTo/Sorting#Sort_Stability_and_Complex_Sorts
+        #
+        # In case of remaining ties (i.e. equal activation, both being presented or not), ties are broken by existing
+        # orders of events:
+        #     3. Emission order
+        #     4. Alphabetically by alphabetically earliest edge endpoint
         new_buffer_items = sorted(new_buffer_items.items(), key=lambda kv: kv[1].being_presented, reverse=True)
         # Then we sort by activation, descending (larger activation first)
         # Also new_buffer_items is now a list of kv pairs, not a dictionary, so we don't need to use .items()

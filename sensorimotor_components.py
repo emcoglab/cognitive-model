@@ -4,7 +4,7 @@ from typing import Optional, List, Dict
 
 from .basic_types import ActivationValue, ItemIdx
 from .buffer import WorkingMemoryBuffer
-from .components import ModelComponentWithAccessibleSet
+from .components import ModelComponentWithAccessibleSet, FULL_ACTIVATION
 from .events import ModelEvent, ItemActivatedEvent
 from .attenuation_statistic import AttenuationStatistic
 from .sensorimotor_propagator import SensorimotorPropagator
@@ -21,6 +21,7 @@ class SensorimotorComponent(ModelComponentWithAccessibleSet):
                  attenuation_statistic: AttenuationStatistic,
                  accessible_set_threshold: ActivationValue,
                  accessible_set_capacity: Optional[int],
+                 use_breng_translation: bool,
                  ):
 
         super().__init__(propagator, accessible_set_threshold, accessible_set_capacity)
@@ -37,7 +38,7 @@ class SensorimotorComponent(ModelComponentWithAccessibleSet):
         # Cap on a node's total activation after receiving incoming.
         self.activation_cap: ActivationValue = activation_cap
 
-        sensorimotor_norms = SensorimotorNorms()
+        sensorimotor_norms = SensorimotorNorms(use_breng_translation=use_breng_translation)
 
         def get_statistic_for_item(idx: ItemIdx):
             """Gets the correct statistic for an item."""
@@ -90,6 +91,7 @@ class BufferedSensorimotorComponent(SensorimotorComponent):
                  accessible_set_capacity: Optional[int],
                  buffer_threshold: ActivationValue,
                  buffer_capacity: Optional[int],
+                 use_breng_translation: bool,
                  ):
         """
         :param buffer_capacity:
@@ -105,6 +107,7 @@ class BufferedSensorimotorComponent(SensorimotorComponent):
             attenuation_statistic=attenuation_statistic,
             accessible_set_threshold=accessible_set_threshold,
             accessible_set_capacity=accessible_set_capacity,
+            use_breng_translation=use_breng_translation,
         )
 
         assert (activation_cap
