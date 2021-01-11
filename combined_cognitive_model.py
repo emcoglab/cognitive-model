@@ -40,19 +40,15 @@ class InterComponentMapping:
     def __init__(self,
                  linguistic_vocab: Set[str],
                  sensorimotor_vocab: Set[str],
+                 ignore_identity_mapping: bool = True,
                  ):
-        # The mapping is not symmetric, so we must store both directions
-        linguistic_to_sensorimotor: DefaultDict[str, Set[str]] = defaultdict(set)
-        sensorimotor_to_linguistic: DefaultDict[str, Set[str]] = defaultdict(set)
-
-        # Assume sensorimotor norms have already been translated into BrEng.
-
         _logger.info("Setting up inter-component mapping")
 
         lemmatiser = WordNetLemmatizer()
 
         # linguistic --> sensorimotor direction
         # This is the easier direction, as we only ever map one -> one
+        linguistic_to_sensorimotor: DefaultDict[str, Set[str]] = defaultdict(set)
         for linguistic_term in linguistic_vocab:
 
             if linguistic_term in sensorimotor_vocab:
@@ -65,27 +61,44 @@ class InterComponentMapping:
                 breng_linguistic_terms = ameng_to_breng.best_translations_for(linguistic_term)
                 if len(breng_linguistic_terms) > 0:
                     # If there is at least one option, pick the best one by BrEng preference.
-                    linguistic_to_sensorimotor[linguistic_term].add(breng_linguistic_terms[0])
+                    for breng_linguistic_term in breng_linguistic_terms:
+                        if breng_linguistic_term in sensorimotor_vocab:
+                            linguistic_to_sensorimotor[linguistic_term].add(breng_linguistic_term)
+                            break
+                    # If unset, try to lemmatise
+                    # TODO: 1. this really seems like it could be cleaned up
+                    # TODO: 2. some tests would be nice, for purposes of cleaning it up without breaking anything...
+                    #  how about the tests from the example??
+                    if linguistic_term not in linguistic_to_sensorimotor:
+                        for breng_linguistic_term in breng_linguistic_terms:
+                            lemma = lemmatiser.lemmatize(breng_linguistic_term)
+                            if lemma in sensorimotor_vocab:
+                                linguistic_to_sensorimotor[linguistic_term].add(lemma)
+                                break
+                    # If we're unset here, there's nothing we can do
+                    pass
                 else:
                     # No translations, so as a last-ditch attempt we try for a lemmatisation:
                     lemma = lemmatiser.lemmatize(linguistic_term)
                     if lemma in sensorimotor_vocab:
-                        linguistic_to_sensorimotor[linguistic_term] = lemma
+                        linguistic_to_sensorimotor[linguistic_term].add(lemma)
                     else:
                         # There's nothing we can do
                         pass
 
         # sensorimotor --> linguistic direction
+        sensorimotor_to_linguistic: DefaultDict[str, Set[str]] = defaultdict(set)
         for sensorimotor_term in sensorimotor_vocab:
 
-            # Complexity here comes with the need to deal with the following two cases:
-            #   1a. ANAESTHETISE -> anaesthetise (anaesthetise >> anesthetise)
+            # Complexity here comes with the need to deal with the following two cases containing collisions:
+            #   1a. ANAESTHETISE -> anaesthetise (where anaesthetise >> anesthetise)
             #   1b. ANESTHETISE  -> anaesthetise
             # and
-            #   2a. COURGETTE -> courgette (courgette ~ zucchini)
+            #   2a. COURGETTE -> courgette (where courgette ~ zucchini)
             #   2b. ZUCCHINI  -> zucchini
             # This means we need to check first if there may be collisions (both the above cases), and then if so,
             # check which of the two sub-cases we're in.
+            # TODO: this could be simplified if this was provided as a method from the dictionary...
             potential_collisions = ameng_to_breng.best_translations_for(sensorimotor_term)
             if len(potential_collisions) > 1:
                 if sensorimotor_term not in potential_collisions:
@@ -129,20 +142,21 @@ class InterComponentMapping:
                     continue
 
         # Almost every item will be mapped to itself, so we don't need to explicitly remember that. Let's save memory!
-        linguistic_identity = [
-            s
-            for s, ts in linguistic_to_sensorimotor.items()
-            if ts == {s}
-        ]
-        sensorimotor_identity = [
-            s
-            for s, ts in sensorimotor_to_linguistic.items()
-            if ts == {s}
-        ]
-        for i in linguistic_identity:
-            del linguistic_to_sensorimotor[i]
-        for i in sensorimotor_identity:
-            del sensorimotor_to_linguistic[i]
+        if ignore_identity_mapping:
+            linguistic_identity = [
+                s
+                for s, ts in linguistic_to_sensorimotor.items()
+                if ts == {s}
+            ]
+            sensorimotor_identity = [
+                s
+                for s, ts in sensorimotor_to_linguistic.items()
+                if ts == {s}
+            ]
+            for i in linguistic_identity:
+                del linguistic_to_sensorimotor[i]
+            for i in sensorimotor_identity:
+                del sensorimotor_to_linguistic[i]
 
         # Freeze and set
         self.linguistic_to_sensorimotor: Dict[str, Set[str]] = dict(linguistic_to_sensorimotor)
