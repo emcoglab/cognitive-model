@@ -2,6 +2,7 @@
 -r sensorimotor_norms/requirements.txt
 cython
 gitpython
+nltk
 numpy
 pandas
 pyyaml

@@ -22,6 +22,7 @@ from typing import List, Optional, Set, Dict, DefaultDict
 from logging import getLogger
 
 from numpy import lcm
+from nltk.stem import WordNetLemmatizer
 
 from .sensorimotor_norms.breng_translation.dictionary.dialect_dictionary import ameng_to_breng
 from .basic_types import ActivationValue, Component, Size, Item, SizedItem
@@ -48,6 +49,8 @@ class InterComponentMapping:
 
         _logger.info("Setting up inter-component mapping")
 
+        lemmatiser = WordNetLemmatizer()
+
         # linguistic --> sensorimotor direction
         # This is the easier direction, as we only ever map one -> one
         for linguistic_term in linguistic_vocab:
@@ -60,11 +63,17 @@ class InterComponentMapping:
                 # Can't map directly
                 # Attempt translation:
                 breng_linguistic_terms = ameng_to_breng.best_translations_for(linguistic_term)
-                if len(breng_linguistic_terms) == 0:
-                    # No translations, can't map
-                    continue
-                # If there is at least one option, pick the best one by BrEng preference.
-                linguistic_to_sensorimotor[linguistic_term].add(breng_linguistic_terms[0])
+                if len(breng_linguistic_terms) > 0:
+                    # If there is at least one option, pick the best one by BrEng preference.
+                    linguistic_to_sensorimotor[linguistic_term].add(breng_linguistic_terms[0])
+                else:
+                    # No translations, so as a last-ditch attempt we try for a lemmatisation:
+                    lemma = lemmatiser.lemmatize(linguistic_term)
+                    if lemma in sensorimotor_vocab:
+                        linguistic_to_sensorimotor[linguistic_term] = lemma
+                    else:
+                        # There's nothing we can do
+                        pass
 
         # sensorimotor --> linguistic direction
         for sensorimotor_term in sensorimotor_vocab:
