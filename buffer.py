@@ -216,6 +216,7 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
         #
         #     [0]: https://wiki.python.org/moin/HowTo/Sorting#Sort_Stability_and_Complex_Sorts
         #
+        # TODO: Just freakin' randomise it!!!!!!!!
         # In case of remaining ties (i.e. equal activation, both being presented or not), ties are broken by existing
         # orders of events:
         #     3. Emission order

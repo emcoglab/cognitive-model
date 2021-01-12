@@ -42,6 +42,7 @@ class InterComponentMapping:
                  sensorimotor_vocab: Set[str],
                  ignore_identity_mapping: bool = True,
                  ):
+
         _logger.info("Setting up inter-component mapping")
 
         lemmatiser = WordNetLemmatizer()
@@ -90,7 +91,8 @@ class InterComponentMapping:
         sensorimotor_to_linguistic: DefaultDict[str, Set[str]] = defaultdict(set)
         for sensorimotor_term in sensorimotor_vocab:
 
-            # Complexity here comes with the need to deal with the following two cases containing collisions:
+            # Complexity here comes with the need to deal with the following cases containing collisions and
+            # multi-mappings:
             #   1a. ANAESTHETISE -> anaesthetise (where anaesthetise >> anesthetise)
             #   1b. ANESTHETISE  -> anaesthetise
             # and
@@ -100,6 +102,24 @@ class InterComponentMapping:
             # check which of the two sub-cases we're in.
             # TODO: this could be simplified if this was provided as a method from the dictionary...
             potential_collisions = ameng_to_breng.best_translations_for(sensorimotor_term)
+            # We also need to check for multi-maps, i.e. single sensorimotor terms which map to multiple linguistic
+            # terms. E.g.:
+            #   3.  JUDGEMENT -> judgement (where judgement ~ judgment)
+            #       JUDGEMENT -> judgment
+            # or
+            #   4.  COLOUR -> colour (where colour >> color)
+            #       COLOUR /> color
+            # We have already done the linguistic -> sensorimotor side so we can use that to find them quickly
+            multimaps = {
+                l
+                for l, ss in linguistic_to_sensorimotor.items()
+                if sensorimotor_term in ss
+            }
+            if len(multimaps) > 1:
+                # Both cases (3) and (4) are covered by this, we just add the best option(s) in each
+                winners = ameng_to_breng.zipf_winners_among(multimaps)
+                sensorimotor_to_linguistic[sensorimotor_term] |= set(winners)
+                continue
             if len(potential_collisions) > 1:
                 if sensorimotor_term not in potential_collisions:
                     # We're in the first case (1b)
