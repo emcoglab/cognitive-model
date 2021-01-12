@@ -23,6 +23,7 @@ from logging import getLogger
 
 from numpy import lcm
 from nltk.stem import WordNetLemmatizer
+from nltk.corpus.reader.wordnet import NOUN as POS_NOUN, VERB as POS_VERB
 
 from .sensorimotor_norms.breng_translation.dictionary.dialect_dictionary import ameng_to_breng, breng_to_ameng
 from .basic_types import ActivationValue, Component, Size, Item, SizedItem
@@ -66,26 +67,11 @@ class InterComponentMapping:
                         if breng_linguistic_term in sensorimotor_vocab:
                             linguistic_to_sensorimotor[linguistic_term].add(breng_linguistic_term)
                             break
-                    # If unset, try to lemmatise
-                    # TODO: 1. this really seems like it could be cleaned up
-                    # TODO: 2. some tests would be nice, for purposes of cleaning it up without breaking anything...
-                    #  how about the tests from the example??
-                    if linguistic_term not in linguistic_to_sensorimotor:
-                        for breng_linguistic_term in breng_linguistic_terms:
-                            lemma = lemmatiser.lemmatize(breng_linguistic_term)
-                            if lemma in sensorimotor_vocab:
-                                linguistic_to_sensorimotor[linguistic_term].add(lemma)
-                                break
                     # If we're unset here, there's nothing we can do
-                    pass
+                    continue
                 else:
-                    # No translations, so as a last-ditch attempt we try for a lemmatisation:
-                    lemma = lemmatiser.lemmatize(linguistic_term)
-                    if lemma in sensorimotor_vocab:
-                        linguistic_to_sensorimotor[linguistic_term].add(lemma)
-                    else:
-                        # There's nothing we can do
-                        pass
+                    # Nothing we can do
+                    continue
 
         # sensorimotor --> linguistic direction
         sensorimotor_to_linguistic: DefaultDict[str, Set[str]] = defaultdict(set)
@@ -96,7 +82,7 @@ class InterComponentMapping:
                 linguistic_source
                 for linguistic_source, sensorimotor_targets in linguistic_to_sensorimotor.items()
                 if sensorimotor_term in sensorimotor_targets
-            } | set(
+            } | {
                 # Translations of sensorimotor terms (e.g. zucchini to courgette) in case both exist.
                 # In order to pick up examples like ANESTHETISE -> anaesthetise (where anesthetise isn't AmEng), we need
                 # to find all co-sourced translations; i.e. target-dialogue words who share a source-dialogue
@@ -105,7 +91,7 @@ class InterComponentMapping:
                 for source in breng_to_ameng.translations_for(sensorimotor_term)  # e.g. anaesthetise
                 for cosourced_target in ameng_to_breng.translations_for(source)  # e.g. anesthetize
 
-            )
+            }
             # But we only want valid targets
             possible_targets &= linguistic_vocab
 
@@ -119,6 +105,37 @@ class InterComponentMapping:
             else:
                 # Pick the best equivalence class of targets
                 sensorimotor_to_linguistic[sensorimotor_term] = set(ameng_to_breng.zipf_winners_among(possible_targets))
+
+        # Add lemmatised forms to linguistic -> sensorimotor direction
+        for linguistic_term in linguistic_vocab:
+            if linguistic_term not in linguistic_to_sensorimotor:
+                # No mapping already exists, so we try for a lemmatisation of the base form:
+                lemma_noun = lemmatiser.lemmatize(linguistic_term, pos=POS_NOUN)
+                lemma_verb = lemmatiser.lemmatize(linguistic_term, pos=POS_VERB)
+                if lemma_noun in sensorimotor_vocab:
+                    linguistic_to_sensorimotor[linguistic_term].add(lemma_noun)
+                    continue
+                elif lemma_verb in sensorimotor_vocab:
+                    linguistic_to_sensorimotor[linguistic_term].add(lemma_verb)
+                    continue
+                else:
+                    # If it hasn't worked this time, we can try a last-ditch attempt to translate it first
+                    # First try a translation
+                    breng_linguistic_terms = ameng_to_breng.best_translations_for(linguistic_term)
+                    if len(breng_linguistic_terms) > 0:
+                        # We've already tried this above, and it won't have worked,
+                        # but we can try to lemmatise AFTER translation
+                        for breng_linguistic_term in breng_linguistic_terms:
+                            lemma_noun = lemmatiser.lemmatize(breng_linguistic_term, pos=POS_NOUN)
+                            lemma_verb = lemmatiser.lemmatize(breng_linguistic_term, pos=POS_VERB)
+                            if lemma_noun in sensorimotor_vocab:
+                                linguistic_to_sensorimotor[linguistic_term].add(lemma_noun)
+                                break
+                            elif lemma_verb in sensorimotor_vocab:
+                                linguistic_to_sensorimotor[linguistic_term].add(lemma_verb)
+                                break
+                    # If it's still unset here, there's nothing we can do
+                    continue
 
         # No need to remember entries with an empty set
         linguistic_null = [

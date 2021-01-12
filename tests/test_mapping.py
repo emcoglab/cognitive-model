@@ -104,6 +104,30 @@ class TestMapping(unittest.TestCase):
 
     # TODO test_multiple_norms_multiple_linguistic_without_preference
 
+    def test_lemmatisation(self):
+        sensorimotor_vocab = {"cat", "run"}
+        linguistic_vocab = {"cat", "cats", "run", "running"}
+        mapping = InterComponentMapping(linguistic_vocab=linguistic_vocab, sensorimotor_vocab=sensorimotor_vocab,
+                                        ignore_identity_mapping=False)
+        self.assertDictEqual(
+            mapping.sensorimotor_to_linguistic,
+            {
+                "cat": {"cat"},
+                "run":  {"run"},
+            }
+        )
+        self.assertDictEqual(
+            mapping.linguistic_to_sensorimotor,
+            {
+                "cat": {"cat"},
+                "cats":  {"cat"},
+                "run": {"run"},
+                "running":  {"run"},
+            }
+        )
+
+
+
 
 if __name__ == '__main__':
     unittest.main()
