@@ -24,7 +24,7 @@ from logging import getLogger
 from numpy import lcm
 from nltk.stem import WordNetLemmatizer
 
-from .sensorimotor_norms.breng_translation.dictionary.dialect_dictionary import ameng_to_breng
+from .sensorimotor_norms.breng_translation.dictionary.dialect_dictionary import ameng_to_breng, breng_to_ameng
 from .basic_types import ActivationValue, Component, Size, Item, SizedItem
 from .buffer import WorkingMemoryBuffer
 from .events import ItemActivatedEvent, ItemEvent, ModelEvent
@@ -91,76 +91,50 @@ class InterComponentMapping:
         sensorimotor_to_linguistic: DefaultDict[str, Set[str]] = defaultdict(set)
         for sensorimotor_term in sensorimotor_vocab:
 
-            # Complexity here comes with the need to deal with the following cases containing collisions and
-            # multi-mappings:
-            #   1a. ANAESTHETISE -> anaesthetise (where anaesthetise >> anesthetise)
-            #   1b. ANESTHETISE  -> anaesthetise
-            # and
-            #   2a. COURGETTE -> courgette (where courgette ~ zucchini)
-            #   2b. ZUCCHINI  -> zucchini
-            # This means we need to check first if there may be collisions (both the above cases), and then if so,
-            # check which of the two sub-cases we're in.
-            # TODO: this could be simplified if this was provided as a method from the dictionary...
-            potential_collisions = ameng_to_breng.best_translations_for(sensorimotor_term)
-            # We also need to check for multi-maps, i.e. single sensorimotor terms which map to multiple linguistic
-            # terms. E.g.:
-            #   3.  JUDGEMENT -> judgement (where judgement ~ judgment)
-            #       JUDGEMENT -> judgment
-            # or
-            #   4.  COLOUR -> colour (where colour >> color)
-            #       COLOUR /> color
-            # We have already done the linguistic -> sensorimotor side so we can use that to find them quickly
-            multimaps = {
-                l
-                for l, ss in linguistic_to_sensorimotor.items()
-                if sensorimotor_term in ss
-            }
-            if len(multimaps) > 1:
-                # Both cases (3) and (4) are covered by this, we just add the best option(s) in each
-                winners = ameng_to_breng.zipf_winners_among(multimaps)
-                sensorimotor_to_linguistic[sensorimotor_term] |= set(winners)
+            possible_targets = {
+                # Cases where there are multiple possible linguistic options (e.g. judgement and judgment)
+                linguistic_source
+                for linguistic_source, sensorimotor_targets in linguistic_to_sensorimotor.items()
+                if sensorimotor_term in sensorimotor_targets
+            } | set(
+                # Translations of sensorimotor terms (e.g. zucchini to courgette) in case both exist.
+                # In order to pick up examples like ANESTHETISE -> anaesthetise (where anesthetise isn't AmEng), we need
+                # to find all co-sourced translations; i.e. target-dialogue words who share a source-dialogue
+                # translation.
+                cosourced_target  # e.g. anaesthetise
+                for source in breng_to_ameng.translations_for(sensorimotor_term)  # e.g. anaesthetise
+                for cosourced_target in ameng_to_breng.translations_for(source)  # e.g. anesthetize
+
+            )
+            # But we only want valid targets
+            possible_targets &= linguistic_vocab
+
+            if len(possible_targets) == 0:
+                # No hits, so there's nothing more we can do
+                _logger.warning(f"Failed to find map for {sensorimotor_term}")
                 continue
-            if len(potential_collisions) > 1:
-                if sensorimotor_term not in potential_collisions:
-                    # We're in the first case (1b)
-                    # So we're safe to map to try and map to the best available candidate
-                    for linguistic_candidate in potential_collisions:
-                        if linguistic_candidate in linguistic_vocab:
-                            sensorimotor_to_linguistic[sensorimotor_term].add(linguistic_candidate)
-                            break
-                    # In case none of the candidates are available, we can try to map to the original term, else we just
-                    # fail.
-                    if sensorimotor_term in linguistic_vocab:
-                        sensorimotor_to_linguistic[sensorimotor_term].add(sensorimotor_term)
-                    else:
-                        _logger.warning(f"Failed to find map for {sensorimotor_term}")
-                        continue
-                else:
-                    # We're in the first sub-case (1a) or the second (2a, 2b).
-                    # Either way, we're safe to map directly to the same term, if possible.
-                    if sensorimotor_term in linguistic_vocab:
-                        sensorimotor_to_linguistic[sensorimotor_term].add(sensorimotor_term)
-                    else:
-                        _logger.warning(f"Failed to find map for {sensorimotor_term}")
-                        continue
-
-            # Otherwise, we may have just one candidate:
-            elif len(potential_collisions) == 1:
-                linguistic_candidate = potential_collisions.pop()
-                if linguistic_candidate in linguistic_vocab:
-                    sensorimotor_to_linguistic[sensorimotor_term].add(linguistic_candidate)
-                else:
-                    _logger.warning(f"Failed to find map for {sensorimotor_term}")
-                    continue
-
-            # Finally, we may have no candidates, in which case we can try mapping directly
+            elif len(possible_targets) == 1:
+                # Just one option, so we pick it
+                sensorimotor_to_linguistic[sensorimotor_term] = possible_targets
             else:
-                if sensorimotor_term in linguistic_vocab:
-                    sensorimotor_to_linguistic[sensorimotor_term].add(sensorimotor_term)
-                else:
-                    _logger.warning(f"Failed to find map for {sensorimotor_term}")
-                    continue
+                # Pick the best equivalence class of targets
+                sensorimotor_to_linguistic[sensorimotor_term] = set(ameng_to_breng.zipf_winners_among(possible_targets))
 
+        # No need to remember entries with an empty set
+        linguistic_null = [
+            s
+            for s, ts in linguistic_to_sensorimotor.items()
+            if len(ts) == 0
+        ]
+        sensorimotor_null = [
+            s
+            for s, ts in sensorimotor_to_linguistic.items()
+            if len(ts) == 0
+        ]
+        for n in linguistic_null:
+            del linguistic_to_sensorimotor[n]
+        for n in sensorimotor_null:
+            del sensorimotor_to_linguistic[n]
         # Almost every item will be mapped to itself, so we don't need to explicitly remember that. Let's save memory!
         if ignore_identity_mapping:
             linguistic_identity = [

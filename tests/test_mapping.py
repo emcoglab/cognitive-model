@@ -78,6 +78,32 @@ class TestMapping(unittest.TestCase):
             }
         )
 
+    # TODO: test_multiple_norms_single_linguistic
+
+    def test_multiple_norms_multiple_linguistic_with_preference(self):
+        sensorimotor_vocab = {"anaesthetise", "anesthetise"}
+        linguistic_vocab   = {"anaesthetise", "anesthetise", "anaesthetize", "anesthetize"}
+        mapping = InterComponentMapping(linguistic_vocab=linguistic_vocab, sensorimotor_vocab=sensorimotor_vocab,
+                                        ignore_identity_mapping=False)
+        self.assertDictEqual(
+            mapping.sensorimotor_to_linguistic,
+            {
+                "anaesthetise": {"anaesthetise"},
+                "anesthetise":  {"anaesthetise"},
+            }
+        )
+        self.assertDictEqual(
+            mapping.linguistic_to_sensorimotor,
+            {
+                "anaesthetise": {"anaesthetise"},
+                "anesthetise":  {"anesthetise"},
+                "anaesthetize": {"anaesthetise"},
+                "anesthetize":  {"anaesthetise"},
+            }
+        )
+
+    # TODO test_multiple_norms_multiple_linguistic_without_preference
+
 
 if __name__ == '__main__':
     unittest.main()
