@@ -17,7 +17,7 @@ caiwingfield.net
 
 import unittest
 
-from cognitive_model.combined_cognitive_model import InterComponentMapping
+from ..combined_cognitive_model import InterComponentMapping
 
 
 class TestMapping(unittest.TestCase):
@@ -79,6 +79,8 @@ class TestMapping(unittest.TestCase):
         )
 
     # TODO: test_multiple_norms_single_linguistic
+    #  (There are literally no examples in the model where this happens, because ADVERTIZE is not a word and thus does
+    #  not appear in the dictionary.)
 
     def test_multiple_norms_multiple_linguistic_with_preference(self):
         sensorimotor_vocab = {"anaesthetise", "anesthetise"}
@@ -103,6 +105,7 @@ class TestMapping(unittest.TestCase):
         )
 
     # TODO test_multiple_norms_multiple_linguistic_without_preference
+    #  (I think there are no examples of this in the model either.)
 
     def test_lemmatisation(self):
         sensorimotor_vocab = {"cat", "run"}
@@ -126,7 +129,20 @@ class TestMapping(unittest.TestCase):
             }
         )
 
-
+    def test_tokenisation(self):
+        sensorimotor_vocab = {"part of a pharmacy"}
+        linguistic_vocab = {"part", "of", "a", "pharmacy", "chemist"}
+        mapping = InterComponentMapping(linguistic_vocab=linguistic_vocab, sensorimotor_vocab=sensorimotor_vocab, ignore_identity_mapping=True)
+        self.assertDictEqual(
+            mapping.sensorimotor_to_linguistic,
+            {
+                "part of a pharmacy": {"part", "pharmacy", "chemist"}
+            }
+        )
+        self.assertDictEqual(
+            mapping.linguistic_to_sensorimotor,
+            {}
+        )
 
 
 if __name__ == '__main__':

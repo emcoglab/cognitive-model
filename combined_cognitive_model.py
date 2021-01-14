@@ -25,6 +25,7 @@ from numpy import lcm
 from nltk.stem import WordNetLemmatizer
 from nltk.corpus.reader.wordnet import NOUN as POS_NOUN, VERB as POS_VERB
 
+from .ldm.corpus.tokenising import modified_word_tokenize
 from .sensorimotor_norms.breng_translation.dictionary.dialect_dictionary import ameng_to_breng, breng_to_ameng
 from .basic_types import ActivationValue, Component, Size, Item, SizedItem
 from .buffer import WorkingMemoryBuffer
@@ -38,6 +39,18 @@ _logger = getLogger(__name__)
 
 
 class InterComponentMapping:
+
+    _ignored_words = {
+        # articles
+        "a", "the",
+        # prepositions
+        "of",
+        # other
+        "and", "'s",
+        # punctuation
+        ".",
+    }
+
     def __init__(self,
                  linguistic_vocab: Set[str],
                  sensorimotor_vocab: Set[str],
@@ -73,10 +86,7 @@ class InterComponentMapping:
                     # Nothing we can do
                     continue
 
-        # sensorimotor --> linguistic direction
-        sensorimotor_to_linguistic: DefaultDict[str, Set[str]] = defaultdict(set)
-        for sensorimotor_term in sensorimotor_vocab:
-
+        def find_linguistic_matches(sensorimotor_term: str) -> Set[str]:
             possible_targets = {
                 # Cases where there are multiple possible linguistic options (e.g. judgement and judgment)
                 linguistic_source
@@ -90,21 +100,61 @@ class InterComponentMapping:
                 cosourced_target  # e.g. anaesthetise
                 for source in breng_to_ameng.translations_for(sensorimotor_term)  # e.g. anaesthetise
                 for cosourced_target in ameng_to_breng.translations_for(source)  # e.g. anesthetize
-
             }
+            # Don't forget to include the original term, if it's already a match
+            if sensorimotor_term in linguistic_vocab:
+                possible_targets.add(sensorimotor_term)
             # But we only want valid targets
-            possible_targets &= linguistic_vocab
+            return possible_targets & linguistic_vocab
 
-            if len(possible_targets) == 0:
-                # No hits, so there's nothing more we can do
-                _logger.warning(f"Failed to find map for {sensorimotor_term}")
-                continue
-            elif len(possible_targets) == 1:
-                # Just one option, so we pick it
-                sensorimotor_to_linguistic[sensorimotor_term] = possible_targets
+        # sensorimotor --> linguistic direction
+        sensorimotor_to_linguistic: DefaultDict[str, Set[str]] = defaultdict(set)
+        for sensorimotor_term in sensorimotor_vocab:
+
+            # We map from single-word and multi-word sensorimotor terms separately
+            if " " not in sensorimotor_term:
+                # Single-word term
+
+                possible_targets = find_linguistic_matches(sensorimotor_term)
+
+                if len(possible_targets) == 0:
+                    # No hits, so there's nothing more we can do
+                    # _logger.warning(f"Failed to find map for {sensorimotor_term}")
+                    continue
+                elif len(possible_targets) == 1:
+                    # Just one option, so we pick it
+                    sensorimotor_to_linguistic[sensorimotor_term] = possible_targets
+                else:
+                    # Pick the best equivalence class of targets
+                    sensorimotor_to_linguistic[sensorimotor_term] = set(ameng_to_breng.zipf_winners_among(possible_targets))
+
             else:
-                # Pick the best equivalence class of targets
-                sensorimotor_to_linguistic[sensorimotor_term] = set(ameng_to_breng.zipf_winners_among(possible_targets))
+                # Multi-word term
+
+                # Tokenise and ignore stopwords
+                sensorimotor_term_tokens = {
+                    token
+                    for token in modified_word_tokenize(sensorimotor_term)
+                    if token not in InterComponentMapping._ignored_words
+                }
+
+                matched_components: Set[str] = set()
+                for token in sensorimotor_term_tokens:
+                    # For each component word, apply above mapping logic
+                    matches = find_linguistic_matches(token)
+                    if len(matches) == 0:
+                        continue
+                    elif len(matches) == 1:
+                        matched_components |= matches
+                    else:
+                        # Include the zipf-preferred term where there are multiple matches found
+                        matched_components |= set(ameng_to_breng.zipf_winners_among(matches))
+
+                if len(matched_components) == 0:
+                    # No hits at all, so there's nothing more we can do
+                    continue
+                else:
+                    sensorimotor_to_linguistic[sensorimotor_term] = matched_components
 
         # Add lemmatised forms to linguistic -> sensorimotor direction
         for linguistic_term in linguistic_vocab:
