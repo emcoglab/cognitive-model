@@ -46,7 +46,7 @@ class InterComponentMapping:
         # prepositions
         "of",
         # other
-        "and", "'s",
+        "and", "'s", "in", "on"
         # punctuation
         ".",
     }
