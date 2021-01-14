@@ -22,7 +22,7 @@ class Preferences(object):
     Global preferences for spreading activation models.
     """
 
-    data = "/Volumes/Data"
+    data = "/Volumes/Big Data"
     local_data = "/Users/caiwingfield/Data"
 
     # Paths
