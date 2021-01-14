@@ -29,7 +29,7 @@ class SensorimotorPropagator(GraphPropagator):
                  max_sphere_radius: float,
                  node_decay_lognormal_median: float,
                  node_decay_lognormal_sigma: float,
-                 use_breng_translation: bool = False,
+                 use_breng_translation: bool,
                  use_prepruned: bool = False,
                  ):
         """
