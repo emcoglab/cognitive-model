@@ -88,6 +88,7 @@ class InterComponentMapping:
                     continue
 
         def find_linguistic_matches(sensorimotor_term: str) -> Set[str]:
+            """For a given sensorimotor term, finds all linguistic terms it should match"""
             possible_targets = {
                 # Cases where there are multiple possible linguistic options (e.g. judgement and judgment)
                 linguistic_source
@@ -131,6 +132,17 @@ class InterComponentMapping:
 
             else:
                 # Multi-word term
+
+                # First check for the same thing without spaces
+                crunched_sensorimotor = "".join(sensorimotor_term.split(" "))
+                crunched_matches = find_linguistic_matches(crunched_sensorimotor)
+                if len(crunched_matches) >= 1:
+                    # That worked! Use the one(s) we found
+                    sensorimotor_to_linguistic[sensorimotor_term] = crunched_matches
+                    continue
+                else:
+                    # Didn't work, we'll fall through to the next strategy below
+                    pass
 
                 # Tokenise and ignore stopwords
                 sensorimotor_term_tokens = {
