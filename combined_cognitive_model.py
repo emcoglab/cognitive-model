@@ -32,6 +32,7 @@ from .buffer import WorkingMemoryBuffer
 from .events import ItemActivatedEvent, ItemEvent, ModelEvent
 from .linguistic_components import LinguisticComponent
 from .sensorimotor_components import SensorimotorComponent
+from .utils.dictionary import forget_keys_for_values_satisfying
 from .utils.exceptions import ItemNotFoundError
 from .utils.iterable import partition
 
@@ -188,53 +189,16 @@ class InterComponentMapping:
                     continue
 
         # No need to remember entries with an empty set
-        linguistic_null = [
-            s
-            for s, ts in linguistic_to_sensorimotor.items()
-            if len(ts) == 0
-        ]
-        sensorimotor_null = [
-            s
-            for s, ts in sensorimotor_to_linguistic.items()
-            if len(ts) == 0
-        ]
-        for n in linguistic_null:
-            del linguistic_to_sensorimotor[n]
-        for n in sensorimotor_null:
-            del sensorimotor_to_linguistic[n]
+        forget_keys_for_values_satisfying(linguistic_to_sensorimotor, lambda _, targets: len(targets) == 0)
+        forget_keys_for_values_satisfying(sensorimotor_to_linguistic, lambda _, targets: len(targets) == 0)
+
         # Almost every item will be mapped to itself, so we don't need to explicitly remember that. Let's save memory!
-        if ignore_identity_mapping:
-            linguistic_identity = [
-                s
-                for s, ts in linguistic_to_sensorimotor.items()
-                if ts == {s}
-            ]
-            sensorimotor_identity = [
-                s
-                for s, ts in sensorimotor_to_linguistic.items()
-                if ts == {s}
-            ]
-            for i in linguistic_identity:
-                del linguistic_to_sensorimotor[i]
-            for i in sensorimotor_identity:
-                del sensorimotor_to_linguistic[i]
+        forget_keys_for_values_satisfying(linguistic_to_sensorimotor, lambda source, targets: targets == {source})
+        forget_keys_for_values_satisfying(sensorimotor_to_linguistic, lambda source, targets: targets == {source})
 
         # Freeze and set
         self.linguistic_to_sensorimotor: Dict[str, Set[str]] = dict(linguistic_to_sensorimotor)
         self.sensorimotor_to_linguistic: Dict[str, Set[str]] = dict(sensorimotor_to_linguistic)
-
-    @staticmethod
-    def linguistic_equivalents(linguistic_term: str) -> Set[str]:
-        """Words which are equi-preferred to the supplied word."""
-        # Check if it has any different translations
-        translations = set(ameng_to_breng.best_translations_for(linguistic_term))
-        if linguistic_term in translations:
-            # Group of equivalents
-            return translations
-        else:
-            # translations, if any, are not equivalent
-            return {linguistic_term}
-    # No one-many mappings in the other direction; each sensorimotor equivalence class is of size 1
 
 
 class InteractiveCombinedCognitiveModel:
