@@ -18,6 +18,7 @@ caiwingfield.net
 from __future__ import annotations
 
 from collections import defaultdict
+from pathlib import Path
 from typing import List, Optional, Set, Dict, DefaultDict
 from logging import getLogger
 
@@ -212,6 +213,16 @@ class InterComponentMapping:
         self.linguistic_to_sensorimotor: Dict[str, Set[str]] = dict(linguistic_to_sensorimotor)
         self.sensorimotor_to_linguistic: Dict[str, Set[str]] = dict(sensorimotor_to_linguistic)
 
+    def save_to(self, directory: Path):
+        _logger.info(f"Saving mapping to {directory}...")
+        import yaml
+        lts_filename = " mapping_linguistic_to_sensorimotor.yaml"
+        stl_filename = " mapping_sensorimotor_to_linguistic.yaml"
+        with Path(directory, lts_filename).open(mode="w", encoding="utf-8") as lts_file:
+            yaml.dump(self.linguistic_to_sensorimotor, lts_file)
+        with Path(directory, stl_filename).open(mode="w", encoding="utf-8") as stl_file:
+            yaml.dump(self.sensorimotor_to_linguistic, stl_file)
+
 
 class InteractiveCombinedCognitiveModel:
     def __init__(self,
@@ -254,7 +265,7 @@ class InteractiveCombinedCognitiveModel:
         self.sensorimotor_component.propagator.postsynaptic_guards.extend([])
 
         # Inter-component mapping logic
-        self._mapping = InterComponentMapping(
+        self.mapping = InterComponentMapping(
             linguistic_vocab=self.linguistic_component.available_labels,
             sensorimotor_vocab=self.sensorimotor_component.available_labels,
         )
@@ -326,8 +337,8 @@ class InteractiveCombinedCognitiveModel:
                 # Use label lookup from source component
                 linguistic_label = self.linguistic_component.propagator.idx2label[event.item.idx]
                 # If there are mappings, use them
-                if linguistic_label in self._mapping.linguistic_to_sensorimotor:
-                    sensorimotor_targets = self._mapping.linguistic_to_sensorimotor[linguistic_label]
+                if linguistic_label in self.mapping.linguistic_to_sensorimotor:
+                    sensorimotor_targets = self.mapping.linguistic_to_sensorimotor[linguistic_label]
                     for sensorimotor_target in sensorimotor_targets:
                         self.sensorimotor_component.propagator.schedule_activation_of_item_with_label(
                             label=sensorimotor_target,
@@ -349,8 +360,8 @@ class InteractiveCombinedCognitiveModel:
                 # Use label lookup from source component
                 sensorimotor_label = self.sensorimotor_component.propagator.idx2label[event.item.idx]
                 # If there are mappings, use them
-                if sensorimotor_label in self._mapping.sensorimotor_to_linguistic:
-                    linguistic_targets = self._mapping.sensorimotor_to_linguistic[sensorimotor_label]
+                if sensorimotor_label in self.mapping.sensorimotor_to_linguistic:
+                    linguistic_targets = self.mapping.sensorimotor_to_linguistic[sensorimotor_label]
                     for linguistic_target in linguistic_targets:
                         self.linguistic_component.propagator.schedule_activation_of_item_with_label(
                             label=linguistic_target,
