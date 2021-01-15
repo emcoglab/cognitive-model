@@ -134,11 +134,11 @@ class InterComponentMapping:
                 # Multi-word term
 
                 # First check for the same thing without spaces
-                crunched_sensorimotor = "".join(sensorimotor_term.split(" "))
-                crunched_matches = find_linguistic_matches(crunched_sensorimotor)
-                if len(crunched_matches) >= 1:
+                compound_sensorimotor_term = "".join(sensorimotor_term.split(" "))
+                compound_matches = find_linguistic_matches(compound_sensorimotor_term)
+                if len(compound_matches) >= 1:
                     # That worked! Use the one(s) we found
-                    sensorimotor_to_linguistic[sensorimotor_term] = crunched_matches
+                    sensorimotor_to_linguistic[sensorimotor_term] = compound_matches
                     continue
                 else:
                     # Didn't work, we'll fall through to the next strategy below
@@ -327,10 +327,11 @@ class InteractiveCombinedCognitiveModel:
                 linguistic_label = self.linguistic_component.propagator.idx2label[event.item.idx]
                 # If there are mappings, use them
                 if linguistic_label in self._mapping.linguistic_to_sensorimotor:
-                    for sensorimotor_label in self._mapping.linguistic_to_sensorimotor[linguistic_label]:
+                    sensorimotor_targets = self._mapping.linguistic_to_sensorimotor[linguistic_label]
+                    for sensorimotor_target in sensorimotor_targets:
                         self.sensorimotor_component.propagator.schedule_activation_of_item_with_label(
-                            label=sensorimotor_label,
-                            activation=event.activation * self._inter_component_attenuation,
+                            label=sensorimotor_target,
+                            activation=event.activation * self._inter_component_attenuation / len(sensorimotor_targets),
                             arrival_time=event.time + self._lc_to_smc_delay)
                 # Otherwise just try the fallback of direct mapping
                 else:
@@ -349,10 +350,11 @@ class InteractiveCombinedCognitiveModel:
                 sensorimotor_label = self.sensorimotor_component.propagator.idx2label[event.item.idx]
                 # If there are mappings, use them
                 if sensorimotor_label in self._mapping.sensorimotor_to_linguistic:
-                    for linguistic_label in self._mapping.sensorimotor_to_linguistic[sensorimotor_label]:
+                    linguistic_targets = self._mapping.sensorimotor_to_linguistic[sensorimotor_label]
+                    for linguistic_target in linguistic_targets:
                         self.linguistic_component.propagator.schedule_activation_of_item_with_label(
-                            label=linguistic_label,
-                            activation=event.activation * self._inter_component_attenuation,
+                            label=linguistic_target,
+                            activation=event.activation * self._inter_component_attenuation / len(linguistic_targets),
                             arrival_time=event.time + self._smc_to_lc_delay)
                 # Otherwise just try the fallback of direct mapping
                 else:
