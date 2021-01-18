@@ -11,7 +11,7 @@ from .graph import Graph
 from .graph_propagator import GraphPropagator, _load_labels, IMPULSE_PRUNING_THRESHOLD
 from .utils.logging import logger
 from .utils.maths import make_decay_function_lognormal
-from .preferences import Preferences
+from .preferences.preferences import Preferences
 
 
 class SensorimotorPropagator(GraphPropagator):
