@@ -18,10 +18,14 @@ caiwingfield.net
 from copy import deepcopy
 from os import path
 from typing import Dict
+from logging import getLogger
 
 import yaml
 
 from framework.cognitive_model.ldm.utils.metaclasses import UnsettableSingleton
+
+
+logger = getLogger(__name__)
 
 
 class Config(metaclass=UnsettableSingleton):
