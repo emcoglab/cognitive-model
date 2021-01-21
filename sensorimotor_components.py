@@ -4,7 +4,7 @@ from typing import Optional, List, Dict
 
 from .basic_types import ActivationValue, ItemIdx
 from .buffer import WorkingMemoryBuffer
-from .components import ModelComponentWithAccessibleSet, FULL_ACTIVATION
+from .components import ModelComponentWithAccessibleSet
 from .events import ModelEvent, ItemActivatedEvent
 from .attenuation_statistic import AttenuationStatistic
 from .sensorimotor_propagator import SensorimotorPropagator
@@ -24,6 +24,8 @@ class SensorimotorComponent(ModelComponentWithAccessibleSet):
                  use_breng_translation: bool,
                  ):
 
+        sensorimotor_norms = SensorimotorNorms(use_breng_translation=use_breng_translation)
+
         super().__init__(propagator, accessible_set_threshold, accessible_set_capacity)
         assert isinstance(self.propagator, SensorimotorPropagator)
 
@@ -38,16 +40,14 @@ class SensorimotorComponent(ModelComponentWithAccessibleSet):
         # Cap on a node's total activation after receiving incoming.
         self.activation_cap: ActivationValue = activation_cap
 
-        sensorimotor_norms = SensorimotorNorms(use_breng_translation=use_breng_translation)
-
         def get_statistic_for_item(idx: ItemIdx):
             """Gets the correct statistic for an item."""
             if attenuation_statistic is AttenuationStatistic.FractionKnown:
                 # Fraction known will all be in the range [0, 1], so we can use it as a scaling factor directly
                 return sensorimotor_norms.fraction_known(self.propagator.idx2label[idx])
             elif attenuation_statistic is AttenuationStatistic.Prevalence:
-                # Brysbaert et al.'s (2019) prevalence has a defined range, so we can affine-scale it into [0, 1] for the
-                # purposes of attenuating the activation
+                # Brysbaert et al.'s (2019) prevalence has a defined range, so we can affine-scale it into [0, 1] for
+                # the purposes of attenuating the activation
                 return scale_prevalence_01(prevalence_from_fraction_known(sensorimotor_norms.fraction_known(self.propagator.idx2label[idx])))
             else:
                 raise NotImplementedError()

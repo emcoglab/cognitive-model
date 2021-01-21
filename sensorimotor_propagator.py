@@ -84,7 +84,7 @@ class SensorimotorPropagator(GraphPropagator):
 
 def _load_labels_from_sensorimotor(use_breng_translation: bool) -> Dict[ItemIdx, ItemLabel]:
     if use_breng_translation:
-        # TODO: this logic should be centralised somewhere, not just copied and pasted everywhere it's  used...
+        # TODO: this logic should be centralised somewhere, not just copied and pasted everywhere it's used...
         nodelabels_filename = f"sensorimotor words BrEng v{SM_BRENG_VERSION}.nodelabels"
     else:
         nodelabels_filename = "sensorimotor words.nodelabels"
