@@ -42,6 +42,15 @@ class Edge(tuple):
         return tuple.__new__(tuple, sorted(seq))
 
 
+def edgelist_line(from_edge: Edge, with_length: Length):
+    """
+    Converts an edge and a length into a line to be written into an edgelist file,
+    complete with trailing newline.
+    """
+    n1, n2 = sorted(from_edge)
+    return f"{Node(n1)} {Node(n2)} {with_length}\n"
+
+
 class GraphError(Exception):
     pass
 
@@ -129,8 +138,7 @@ class Graph:
         """Saves a Graph as an edgelist. Disconnected nodes will not be included."""
         with open(file_path, mode="w", encoding="utf-8") as edgelist_file:
             for edge, length in self.edge_lengths.items():
-                n1, n2 = sorted(edge)
-                edgelist_file.write(f"{Node(n1)} {Node(n2)} {length}\n")
+                edgelist_file.write(edgelist_line(from_edge=edge, with_length=length))
 
     @classmethod
     def load_from_edgelist_with_importance_pruning(cls,
@@ -496,6 +504,11 @@ class Graph:
             print(f"{n1} → {n2}: {l}")
 
 
+def length_from_distance(distance: float, length_factor: int) -> Length:
+    length = Length(ceil(distance * length_factor))
+    return length
+
+
 def save_edgelist_from_distance_matrix(file_path: str,
                                        distance_matrix: ndarray,
                                        length_factor: int):
@@ -521,7 +534,7 @@ def save_edgelist_from_distance_matrix(file_path: str,
         for i in range(0, i_max):
             for j in range(i + 1, j_max):
                 distance = distance_matrix[i, j]
-                length = Length(ceil(distance * length_factor))
+                length = length_from_distance(distance, length_factor)
                 assert length > 0
                 # Write edge to file
                 temp_file.write(f"{i} {j} {length}\n")
