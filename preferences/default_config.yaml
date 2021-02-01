@@ -8,6 +8,6 @@ graphs_dir:             "/Users/caiwingfield/Data/graphs"
 node_distributions_dir: "/Volumes/Big Data/node_distributions/"
 
 output_dir:             "/Volumes/Big Data/spreading activation model/Model output/"
-results_dir:            "/Volumes/Big Data/spreading activation model/Evaluation/"
+evaluation_dir:         "/Volumes/Big Data/spreading activation model/Evaluation/"
 ancillary_dir:          "/Volumes/Big Data/spreading activation model/Ancillary results/"
 figures_dir:            "/Volumes/Big Data/spreading activation model/Figures/"

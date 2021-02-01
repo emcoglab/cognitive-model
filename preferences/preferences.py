@@ -35,7 +35,7 @@ class Preferences(object):
     graphs_dir = _config.value_by_key_path("graphs_dir")
     node_distributions_dir = _config.value_by_key_path("node_distributions_dir")
     output_dir = _config.value_by_key_path("output_dir")
-    results_dir = _config.value_by_key_path("results_dir")
+    evaluation_dir = _config.value_by_key_path("evaluation_dir")
     ancillary_dir = _config.value_by_key_path("ancillary_dir")
     figures_dir = _config.value_by_key_path("figures_dir")
 
