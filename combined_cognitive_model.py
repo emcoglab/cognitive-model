@@ -219,9 +219,19 @@ class InterComponentMapping:
         lts_filename = " mapping_linguistic_to_sensorimotor.yaml"
         stl_filename = " mapping_sensorimotor_to_linguistic.yaml"
         with Path(directory, lts_filename).open(mode="w", encoding="utf-8") as lts_file:
-            yaml.dump(self.linguistic_to_sensorimotor, lts_file)
+            yaml.dump(
+                {
+                    source: sorted(targets)
+                    for source, targets in self.linguistic_to_sensorimotor.items()
+                },
+                lts_file)
         with Path(directory, stl_filename).open(mode="w", encoding="utf-8") as stl_file:
-            yaml.dump(self.sensorimotor_to_linguistic, stl_file)
+            yaml.dump(
+                {
+                    source: sorted(targets)
+                    for source, targets in self.sensorimotor_to_linguistic.items()
+                },
+                stl_file)
 
 
 class InteractiveCombinedCognitiveModel:

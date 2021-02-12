@@ -33,6 +33,7 @@ class Preferences(object):
 
     # Paths
     graphs_dir = _config.value_by_key_path("graphs_dir")
+    # TODO: a lot of these shouldn't live here, they're project specific
     node_distributions_dir = _config.value_by_key_path("node_distributions_dir")
     output_dir = _config.value_by_key_path("output_dir")
     evaluation_dir = _config.value_by_key_path("evaluation_dir")
