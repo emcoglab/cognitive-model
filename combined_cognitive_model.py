@@ -34,7 +34,6 @@ from .events import ItemActivatedEvent, ItemEvent, ModelEvent
 from .linguistic_components import LinguisticComponent
 from .sensorimotor_components import SensorimotorComponent
 from .utils.dictionary import forget_keys_for_values_satisfying
-from .utils.exceptions import ItemNotFoundError
 from .utils.iterable import partition
 
 _logger = getLogger(__name__)
@@ -349,21 +348,19 @@ class InteractiveCombinedCognitiveModel:
                 # If there are mappings, use them
                 if linguistic_label in self.mapping.linguistic_to_sensorimotor:
                     sensorimotor_targets = self.mapping.linguistic_to_sensorimotor[linguistic_label]
-                    for sensorimotor_target in sensorimotor_targets:
-                        self.sensorimotor_component.propagator.schedule_activation_of_item_with_label(
-                            label=sensorimotor_target,
-                            activation=event.activation * self._inter_component_attenuation / len(sensorimotor_targets),
-                            arrival_time=event.time + self._lc_to_smc_delay)
                 # Otherwise just try the fallback of direct mapping
+                elif linguistic_label in self.sensorimotor_component.available_labels:
+                    sensorimotor_targets = {linguistic_label}
+                # If the mapping is not possible, just forget it
                 else:
-                    try:
-                        self.sensorimotor_component.propagator.schedule_activation_of_item_with_label(
-                            label=linguistic_label,
-                            activation=event.activation * self._inter_component_attenuation,
-                            arrival_time=event.time + self._lc_to_smc_delay)
-                    # If the direct mapping is not possible, just forget it
-                    except ItemNotFoundError:
-                        continue
+                    continue
+                for sensorimotor_target in sensorimotor_targets:
+                    # All of the sensorimotor targets are now guaranteed to be in the sensorimotor component
+                    self.sensorimotor_component.propagator.schedule_activation_of_item_with_label(
+                        label=sensorimotor_target,
+                        activation=event.activation * self._inter_component_attenuation / len(sensorimotor_targets),
+                        arrival_time=event.time + self._lc_to_smc_delay)
+
         for event in smc_activation_events:
             # Only transmit to other component if it fired.
             if event.fired:
@@ -372,21 +369,17 @@ class InteractiveCombinedCognitiveModel:
                 # If there are mappings, use them
                 if sensorimotor_label in self.mapping.sensorimotor_to_linguistic:
                     linguistic_targets = self.mapping.sensorimotor_to_linguistic[sensorimotor_label]
-                    for linguistic_target in linguistic_targets:
-                        self.linguistic_component.propagator.schedule_activation_of_item_with_label(
-                            label=linguistic_target,
-                            activation=event.activation * self._inter_component_attenuation / len(linguistic_targets),
-                            arrival_time=event.time + self._smc_to_lc_delay)
                 # Otherwise just try the fallback of direct mapping
+                elif sensorimotor_label in self.linguistic_component.available_labels:
+                    linguistic_targets = {sensorimotor_label}
+                # If the direct mapping is not possible, just forget it
                 else:
-                    try:
-                        self.linguistic_component.propagator.schedule_activation_of_item_with_label(
-                            label=sensorimotor_label,
-                            activation=event.activation * self._inter_component_attenuation,
-                            arrival_time=event.time + self._smc_to_lc_delay)
-                    # If the direct mapping is not possible, just forget it
-                    except ItemNotFoundError:
-                        continue
+                    continue
+                for linguistic_target in linguistic_targets:
+                    self.linguistic_component.propagator.schedule_activation_of_item_with_label(
+                        label=linguistic_target,
+                        activation=event.activation * self._inter_component_attenuation / len(linguistic_targets),
+                        arrival_time=event.time + self._smc_to_lc_delay)
 
         return (
             decay_events
