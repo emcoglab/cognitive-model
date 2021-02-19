@@ -348,16 +348,23 @@ class InteractiveCombinedCognitiveModel:
                    time_at_start_of_tick: int):
 
         lingustic_activation_events, linguistic_other_events = partition(linguistic_component_events, lambda e: isinstance(e, ItemActivatedEvent))
+        sensorimotor_activation_events, sensorimotor_other_events = partition(sensorimotor_component_events, lambda e: isinstance(e, ItemActivatedEvent))
+        other_events = linguistic_other_events + sensorimotor_other_events
+
         lingustic_activation_events = self.buffer.present_items(
             activation_events=lingustic_activation_events,
             activation_lookup=partial(self._activation_of_item_at_time, time=time_at_start_of_tick),
             time=time_at_start_of_tick)
-
-        sensorimotor_activation_events, sensorimotor_other_events = partition(sensorimotor_component_events, lambda e: isinstance(e, ItemActivatedEvent))
         sensorimotor_activation_events = self.buffer.present_items(
             activation_events=sensorimotor_activation_events,
             activation_lookup=partial(self._activation_of_item_at_time, time=time_at_start_of_tick),
             time=time_at_start_of_tick)
+
+        # Split off new non-activation events
+        lingustic_activation_events, linguistic_other_events = partition(lingustic_activation_events, lambda e: isinstance(e, ItemActivatedEvent))
+        sensorimotor_activation_events, sensorimotor_other_events = partition(sensorimotor_activation_events, lambda e: isinstance(e, ItemActivatedEvent))
+        other_events += linguistic_other_events
+        other_events += sensorimotor_other_events
 
         self._schedule_inter_component_activations(
             source_component=self.linguistic_component,
@@ -382,8 +389,8 @@ class InteractiveCombinedCognitiveModel:
 
         return (
             pre_tick_events
-            + lingustic_activation_events + linguistic_other_events
-            + sensorimotor_activation_events + sensorimotor_other_events
+            + lingustic_activation_events + sensorimotor_activation_events
+            + other_events
         )
 
     @classmethod
