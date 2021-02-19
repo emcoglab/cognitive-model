@@ -234,6 +234,7 @@ class Graph:
                 logger.info(f"Read {i:,} edges")
             if ignoring_long_edges and length > ignore_edges_longer_than:
                 # Add nodes but not edge
+                # This is the tricky bit which means we can't use prepruned graphs
                 for node in edge:
                     graph.add_node(node)
 
@@ -617,6 +618,15 @@ def iter_edges_from_edgelist(file_path: str) -> Iterator[Tuple[Edge, Length]]:
             n1, n2, length = line.split()
             assert Length(length) > 0
             yield Edge((Node(n1), Node(n2))), Length(length)
+
+
+def iter_edges_from_edgelist_with_pruning(file_path: str,
+                                          ignore_edges_longer_than: Length) -> Iterator[Tuple[Edge, Length]]:
+    """Yields tuples of (edge: Edge, length: Length) from an edgelist file."""
+    for edge, length in iter_edges_from_edgelist(file_path):
+        if length > ignore_edges_longer_than:
+            continue
+        yield edge, length
 
 
 def log_graph_topology(graph) -> Tuple[bool, bool]:

@@ -131,25 +131,30 @@ class BufferedSensorimotorComponent(SensorimotorComponent):
 
         # endregion
 
-    def tick(self) -> List[ModelEvent]:
+    def _pre_tick(self) -> List[ModelEvent]:
         # Decay events before activating anything new
         # (in case buffer membership is used to modulate or guard anything)
         decay_events = self.working_memory_buffer.prune_decayed_items(
             activation_lookup=lambda item: self.propagator.activation_of_item_with_idx(item.idx),
             time=self.propagator.clock)
+        return decay_events
 
-        tick_events = super().tick()
-        activation_events, other_events = partition(tick_events, lambda e: isinstance(e, ItemActivatedEvent))
+    def _post_tick(self,
+                   pre_tick_events: List[ModelEvent],
+                   propagator_events: List[ModelEvent],
+                   time_at_start_of_tick: int,
+                   ) -> List[ModelEvent]:
+        activation_events, other_events = partition(propagator_events, lambda e: isinstance(e, ItemActivatedEvent))
 
         # Update buffer
         # Some events will get updated commensurately.
         # `activation_events` may now contain some non-activation events.
         activation_events = self.working_memory_buffer.present_items(
-            activation_events,
-            activation_lookup=lambda item: self.propagator.activation_of_item_with_idx(item.idx),
-            time=self.propagator.clock)
+            activation_events=activation_events,
+            activation_lookup=lambda item: self.propagator.activation_of_item_with_idx_at_time(item.idx, time=time_at_start_of_tick),
+            time=time_at_start_of_tick)
 
-        return decay_events + activation_events + other_events
+        return pre_tick_events + activation_events + other_events
 
     def reset(self):
         super().reset()

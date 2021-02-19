@@ -18,6 +18,7 @@ caiwingfield.net
 from __future__ import annotations
 
 from collections import defaultdict
+from functools import partial
 from pathlib import Path
 from typing import List, Optional, Set, Dict, DefaultDict
 from logging import getLogger
@@ -28,7 +29,7 @@ from nltk.corpus.reader.wordnet import NOUN as POS_NOUN, VERB as POS_VERB
 
 from .ldm.corpus.tokenising import modified_word_tokenize
 from .sensorimotor_norms.breng_translation.dictionary.dialect_dictionary import ameng_to_breng, breng_to_ameng
-from .basic_types import ActivationValue, Component, Size, Item, SizedItem
+from .basic_types import ActivationValue, Component, Size, Item, SizedItem, ItemLabel
 from .buffer import WorkingMemoryBuffer
 from .events import ItemActivatedEvent, ItemEvent, ModelEvent
 from .linguistic_components import LinguisticComponent
@@ -209,8 +210,8 @@ class InterComponentMapping:
         forget_keys_for_values_satisfying(sensorimotor_to_linguistic, lambda source, targets: targets == {source})
 
         # Freeze and set
-        self.linguistic_to_sensorimotor: Dict[str, Set[str]] = dict(linguistic_to_sensorimotor)
-        self.sensorimotor_to_linguistic: Dict[str, Set[str]] = dict(sensorimotor_to_linguistic)
+        self.linguistic_to_sensorimotor: Dict[ItemLabel, Set[ItemLabel]] = dict(linguistic_to_sensorimotor)
+        self.sensorimotor_to_linguistic: Dict[ItemLabel, Set[ItemLabel]] = dict(sensorimotor_to_linguistic)
 
     def save_to(self, directory: Path):
         _logger.info(f"Saving mapping to {directory}...")
@@ -290,10 +291,13 @@ class InteractiveCombinedCognitiveModel:
         self.buffer.clear()
 
     def _activation_of_item(self, item: Item) -> ActivationValue:
+        return self._activation_of_item_at_time(item=item, time=self.clock)
+
+    def _activation_of_item_at_time(self, item: Item, time: int) -> ActivationValue:
         if item.component == Component.sensorimotor:
-            return self.sensorimotor_component.propagator.activation_of_item_with_idx(item.idx)
+            return self.sensorimotor_component.propagator.activation_of_item_with_idx_at_time(item.idx, time=time)
         elif item.component == Component.linguistic:
-            return self.linguistic_component.propagator.activation_of_item_with_idx(item.idx)
+            return self.linguistic_component.propagator.activation_of_item_with_idx_at_time(item.idx, time=time)
 
     def _apply_item_sizes(self, events: List[ModelEvent]) -> None:
         """
@@ -312,10 +316,9 @@ class InteractiveCombinedCognitiveModel:
                                        size=self._smc_item_size)
 
     def tick(self):
+        time_at_start_of_tick = self.clock
 
-        decay_events = self.buffer.prune_decayed_items(
-            activation_lookup=self._activation_of_item,
-            time=self.clock)
+        pre_tick_events = self._pre_tick()
 
         # Advance each component
         # Increments clock
@@ -325,64 +328,92 @@ class InteractiveCombinedCognitiveModel:
         self._apply_item_sizes(lc_events)
         self._apply_item_sizes(smc_events)
 
-        lc_events = self.buffer.present_items(
-            activation_events=[e for e in lc_events if isinstance(e, ItemActivatedEvent)],
+        tick_events = self._post_tick(pre_tick_events=pre_tick_events,
+                                      sensorimotor_component_events=smc_events,
+                                      linguistic_component_events=lc_events,
+                                      time_at_start_of_tick=time_at_start_of_tick)
+
+        return tick_events
+
+    def _pre_tick(self) -> List[ModelEvent]:
+        decay_events = self.buffer.prune_decayed_items(
             activation_lookup=self._activation_of_item,
             time=self.clock)
-        smc_events = self.buffer.present_items(
-            activation_events=[e for e in smc_events if isinstance(e, ItemActivatedEvent)],
-            activation_lookup=self._activation_of_item,
-            time=self.clock)
+        return decay_events
 
-        lc_activation_events: List[ItemActivatedEvent]
-        smc_activation_events: List[ItemActivatedEvent]
-        lc_activation_events, lc_other_events = partition(lc_events, lambda e: isinstance(e, ItemActivatedEvent))
-        smc_activation_events, smc_other_events = partition(smc_events, lambda e: isinstance(e, ItemActivatedEvent))
+    def _post_tick(self,
+                   pre_tick_events: List[ModelEvent],
+                   linguistic_component_events: List[ModelEvent],
+                   sensorimotor_component_events: List[ModelEvent],
+                   time_at_start_of_tick: int):
 
-        # Schedule inter-component activations
-        for event in lc_activation_events:
+        lingustic_activation_events, linguistic_other_events = partition(linguistic_component_events, lambda e: isinstance(e, ItemActivatedEvent))
+        lingustic_activation_events = self.buffer.present_items(
+            activation_events=lingustic_activation_events,
+            activation_lookup=partial(self._activation_of_item_at_time, time=time_at_start_of_tick),
+            time=time_at_start_of_tick)
+
+        sensorimotor_activation_events, sensorimotor_other_events = partition(sensorimotor_component_events, lambda e: isinstance(e, ItemActivatedEvent))
+        sensorimotor_activation_events = self.buffer.present_items(
+            activation_events=sensorimotor_activation_events,
+            activation_lookup=partial(self._activation_of_item_at_time, time=time_at_start_of_tick),
+            time=time_at_start_of_tick)
+
+        self._schedule_inter_component_activations(
+            source_component=self.linguistic_component,
+            target_component=self.sensorimotor_component,
+            soucre_component_activation_events=lingustic_activation_events,
+            label_mapping=self.mapping.linguistic_to_sensorimotor,
+            currently_suppressed_target_items=suppressed_sensorimotor_items,
+            suppressed_target_items_dict=self.mapping.suppress_sensorimotor_items_on_tick,
+            delay=self._lc_to_smc_delay,
+            attenuation=self._inter_component_attenuation,
+        )
+        self._schedule_inter_component_activations(
+            source_component=self.sensorimotor_component,
+            target_component=self.linguistic_component,
+            soucre_component_activation_events=sensorimotor_activation_events,
+            label_mapping=self.mapping.sensorimotor_to_linguistic,
+            currently_suppressed_target_items=suppressed_linguistic_items,
+            suppressed_target_items_dict=self.mapping.suppress_linguistic_items_on_tick,
+            delay=self._smc_to_lc_delay,
+            attenuation=self._inter_component_attenuation,
+        )
+
+        return (
+            pre_tick_events
+            + lingustic_activation_events + linguistic_other_events
+            + sensorimotor_activation_events + sensorimotor_other_events
+        )
+
+    @classmethod
+    def _schedule_inter_component_activations(cls,
+                                              source_component: ModelComponent,
+                                              target_component: ModelComponent,
+                                              soucre_component_activation_events: List[ItemActivatedEvent],
+                                              label_mapping: Dict[ItemLabel, Set[ItemLabel]],
+                                              currently_suppressed_target_items: List[ItemLabel],
+                                              suppressed_target_items_dict: Dict[int, List[ItemLabel]],
+                                              delay: int, attenuation: float):
+        """Mutates `suppressed_target_items_dict`"""
+        for event in soucre_component_activation_events:
             # Only transmit to other component if it fired.
             if event.fired:
                 # Use label lookup from source component
-                linguistic_label = self.linguistic_component.propagator.idx2label[event.item.idx]
+                source_label = source_component.propagator.idx2label[event.item.idx]
                 # If there are mappings, use them
-                if linguistic_label in self.mapping.linguistic_to_sensorimotor:
-                    sensorimotor_targets = self.mapping.linguistic_to_sensorimotor[linguistic_label]
+                if source_label in label_mapping:
+                    targets = label_mapping[source_label]
                 # Otherwise just try the fallback of direct mapping
-                elif linguistic_label in self.sensorimotor_component.available_labels:
-                    sensorimotor_targets = {linguistic_label}
+                elif source_label in target_component.available_labels:
+                    targets = {source_label}
                 # If the mapping is not possible, just forget it
                 else:
                     continue
-                for sensorimotor_target in sensorimotor_targets:
-                    # All of the sensorimotor targets are now guaranteed to be in the sensorimotor component
-                    self.sensorimotor_component.propagator.schedule_activation_of_item_with_label(
-                        label=sensorimotor_target,
-                        activation=event.activation * self._inter_component_attenuation / len(sensorimotor_targets),
-                        arrival_time=event.time + self._lc_to_smc_delay)
-
-        for event in smc_activation_events:
-            # Only transmit to other component if it fired.
-            if event.fired:
-                # Use label lookup from source component
-                sensorimotor_label = self.sensorimotor_component.propagator.idx2label[event.item.idx]
-                # If there are mappings, use them
-                if sensorimotor_label in self.mapping.sensorimotor_to_linguistic:
-                    linguistic_targets = self.mapping.sensorimotor_to_linguistic[sensorimotor_label]
-                # Otherwise just try the fallback of direct mapping
-                elif sensorimotor_label in self.linguistic_component.available_labels:
-                    linguistic_targets = {sensorimotor_label}
-                # If the direct mapping is not possible, just forget it
-                else:
-                    continue
-                for linguistic_target in linguistic_targets:
-                    self.linguistic_component.propagator.schedule_activation_of_item_with_label(
-                        label=linguistic_target,
-                        activation=event.activation * self._inter_component_attenuation / len(linguistic_targets),
-                        arrival_time=event.time + self._smc_to_lc_delay)
-
-        return (
-            decay_events
-            + lc_activation_events + lc_other_events
-            + smc_activation_events + smc_other_events
-        )
+                # All of the target labels are now guaranteed to be in the target component
+                for target in targets:
+                    arrival_time = event.time + delay
+                    target_component.propagator.schedule_activation_of_item_with_label(
+                        label=target,
+                        activation=event.activation * attenuation / len(targets),
+                        arrival_time=arrival_time)

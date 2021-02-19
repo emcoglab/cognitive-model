@@ -17,7 +17,7 @@ caiwingfield.net
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, Dict, List, Callable, FrozenSet, Iterable
+from typing import Optional, Dict, List, Callable, FrozenSet, Iterable, Collection
 
 from .ldm.utils.maths import clamp01
 from .basic_types import ActivationValue, Size, SizedItem, Item
@@ -121,8 +121,8 @@ class LimitedCapacityItemSet(ABC):
             All activation events.
         :param activation_lookup:
             Function mapping items to their current activation.
-            We need this as well as the activation_events because we need to know the activation of items currently in
-            the buffer, and that is not stored anywhere (because it would be out of date).
+            We need this as well as the activation_events because we need to know the activation of EXTANT items
+            currently in the buffer, and that is not stored anywhere (because it would be out of date).
         :param time:
             The current time on the clock. Will be used in events.
         """
@@ -284,7 +284,7 @@ class AccessibleSet(LimitedCapacityItemSet):
 
     # Don't care about sizes
     @staticmethod
-    def _aggregate_size(items: Iterable[Item]) -> Size:
+    def _aggregate_size(items: Collection[Item]) -> Size:
         return Size(len(items))
 
     @property

@@ -16,7 +16,7 @@ caiwingfield.net
 """
 from __future__ import annotations
 
-from abc import ABC
+from abc import ABC, abstractmethod
 from typing import Set, List, Optional
 
 from .basic_types import ActivationValue, ItemIdx, ItemLabel
@@ -45,7 +45,50 @@ class ModelComponent(ABC):
         self.propagator.reset()
 
     def tick(self) -> List[ModelEvent]:
-        return self.propagator.tick()
+        """
+        Evolve the model.
+        If you would be tempted to override this, instead try to override self._pre_tick() and self._post_tick().
+        """
+        time_at_start_of_tick = self.propagator.clock
+        pre_tick_events = self._pre_tick()
+        propagator_events = self.propagator.tick()
+        tick_events = self._post_tick(pre_tick_events=pre_tick_events, propagator_events=propagator_events,
+                                      time_at_start_of_tick=time_at_start_of_tick)
+        return tick_events
+
+    @abstractmethod
+    def _pre_tick(self) -> List[ModelEvent]:
+        """
+        Action to perform before the propagator tick().
+        Any events produced here will NOT be directly returned as part of self.tick().
+        Instead they will be passed to self._post_tick().
+        They will be stamped with the propagator-clock time at the start of the tick().
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def _post_tick(self,
+                   pre_tick_events: List[ModelEvent],
+                   propagator_events: List[ModelEvent],
+                   time_at_start_of_tick: int,
+                   ) -> List[ModelEvent]:
+        """
+        Action to perform after the propagator tick().
+        It is the responsibility of this function to return all events it is passed, though some may be modified.
+        Any events which occur here will also be returned.
+        The output of this function is exactly what is returned by self.tick().
+        :param pre_tick_events:
+            events which occurred as part of self._pre_tick().
+        :param propagator_events:
+            events which occurred as part of the propagator.tick().
+        :param time_at_start_of_tick:
+            When this function runs, propagator.clock will have advanced. In order to make sure all events which take
+            place during self.tick() have the same timestamp, you can rely on `time_at_start_of_tick` to have the
+            correct time.
+        :return:
+            all events which occurred during the self.tick().
+        """
+        raise NotImplementedError()
 
     @staticmethod
     def _apply_activation_cap(activation_cap: ActivationValue) -> Modulation:
@@ -88,21 +131,28 @@ class ModelComponentWithAccessibleSet(ModelComponent, ABC):
         super().reset()
         self.accessible_set.clear()
 
-    def tick(self) -> List[ModelEvent]:
+    def _pre_tick(self) -> List[ModelEvent]:
         # Decay events before activating anything new
         # (in case accessible set membership is used to modulate or guard anything)
         self.accessible_set.prune_decayed_items(activation_lookup=lambda item: self.propagator.activation_of_item_with_idx(item.idx),
                                                 time=self.propagator.clock)
+        return []
 
-        # Proceed with .tick() and record what became activated
+    def _post_tick(self,
+                   pre_tick_events: List[ModelEvent],
+                   propagator_events: List[ModelEvent],
+                   time_at_start_of_tick: int,
+                   ) -> List[ModelEvent]:
         # Activation and firing may be affected by the size of or membership to the accessible set and the buffer, but
         # nothing will ENTER it until later, and everything that will LEAVE this tick already has done so.
-        tick_events = super().tick()
-        activation_events, other_events = partition(tick_events, lambda e: isinstance(e, ItemActivatedEvent))
+        activation_events, other_events = partition(propagator_events, lambda e: isinstance(e, ItemActivatedEvent))
 
         # Update accessible set
-        self.accessible_set.present_items(activation_events=activation_events,
-                                          activation_lookup=lambda item: self.propagator.activation_of_item_with_idx(item.idx),
-                                          time=self.propagator.clock)
+        self.accessible_set.present_items(
+            activation_events=activation_events,
+            activation_lookup=lambda item: self.propagator.activation_of_item_with_idx_at_time(item.idx, time=time_at_start_of_tick),
+            time=time_at_start_of_tick)
 
-        return activation_events + other_events
+        return pre_tick_events + activation_events + other_events
+
+

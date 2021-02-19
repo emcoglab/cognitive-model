@@ -170,6 +170,11 @@ class GraphPropagator(ABC):
         # These fields are reinitialised in .reset()
 
         # Zero-indexed tick counter.
+        # The clock should be updated as the final step in a tick(). Thus everything that happens during a tick is
+        # stamped with the time at the start of the tick(). This means that if activations are made externally to a
+        # component at any time before or during a tick(), they will have the same timestamp, and will be processed
+        # during the tick(). Furthermore, other events which relate to the activation of items, etc, which are produced
+        # as items are activated or during the tick() will have the same timestamp.
         self.clock: int = 0
 
         # A node-keyed dictionaries of node ActivationRecords.
@@ -363,18 +368,32 @@ class GraphPropagator(ABC):
         Call this AFTER .tick() to see effect of activations applied since .tick() was last called.
         :raises ItemNotFoundError
         """
-        try:
-            activation_record: ActivationRecord = self._activation_records[idx]
-        except KeyError as e:
-            raise ItemNotFoundError(idx) from e
-        # If the last known activation is zero, we don't need to compute decay
-        if activation_record.activation == 0:
+        return self.activation_of_item_with_idx_at_time(idx, time=self.clock)
+
+    def activation_of_item_with_idx_at_time(self, idx: ItemIdx, time: int) -> ActivationValue:
+        """
+        Returns the current activation of a node.
+        Call this AFTER .tick() to see effect of activations applied since .tick() was last called.
+        :raises ItemNotFoundError
+        """
+        if idx not in self.graph.nodes:
+            raise ItemNotFoundError(idx)
+        if idx not in self._activation_records:
             return ActivationValue(0)
-        else:
-            return self.node_decay_function(
-                # node age
-                self.clock - activation_record.time_activated,
-                activation_record.activation)
+        activation_record: ActivationRecord = self._activation_records[idx]
+        # If the last known activation is zero, or we know it's never been activated, we don't need to compute decay
+        if (activation_record.activation == 0) or (activation_record.time_activated == -1):
+            return ActivationValue(0)
+        relative_age = time - activation_record.time_activated
+        if relative_age < 0:
+            raise ValueError("Can't check activation levels before node was last activated.")
+        if relative_age == 0:
+            # We don't need to compute decay if we're checking the activation on the tick it was activated
+            return activation_record.activation
+        # If we get this far, we actually have to compute decay
+        return self.node_decay_function(
+            relative_age,
+            activation_record.activation)
 
     def activation_of_item_with_label(self, label: ItemLabel) -> ActivationValue:
         """
