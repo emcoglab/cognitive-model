@@ -27,6 +27,7 @@ from numpy import lcm
 from nltk.stem import WordNetLemmatizer
 from nltk.corpus.reader.wordnet import NOUN as POS_NOUN, VERB as POS_VERB
 
+from .components import ModelComponent
 from .ldm.corpus.tokenising import modified_word_tokenize
 from .sensorimotor_norms.breng_translation.dictionary.dialect_dictionary import ameng_to_breng, breng_to_ameng
 from .basic_types import ActivationValue, Component, Size, Item, SizedItem, ItemLabel
@@ -280,6 +281,13 @@ class InteractiveCombinedCognitiveModel:
             sensorimotor_vocab=self.sensorimotor_component.available_labels,
         )
 
+        # To prevent cat -> CAT producing an automatic CAT -> cat activation a few ticks down the line, we suppress that
+        # here. When cat -> CAT is scheduled, we remember to ignore the activation coming back from CAT on the tick it
+        # was scheduled for.
+        # tick -> [items]
+        self._suppress_linguistic_items_on_tick: DefaultDict[int, List[ItemLabel]] = defaultdict(list)
+        self._suppress_sensorimotor_items_on_tick: DefaultDict[int, List[ItemLabel]] = defaultdict(list)
+
     @property
     def clock(self) -> int:
         assert self.linguistic_component.propagator.clock == self.sensorimotor_component.propagator.clock
@@ -347,6 +355,17 @@ class InteractiveCombinedCognitiveModel:
                    sensorimotor_component_events: List[ModelEvent],
                    time_at_start_of_tick: int):
 
+        # Check for suppressed items
+        try:
+            suppressed_linguistic_items = self._suppress_linguistic_items_on_tick.pop(time_at_start_of_tick)
+        except KeyError:
+            suppressed_linguistic_items = []
+        try:
+            suppressed_sensorimotor_items = self._suppress_sensorimotor_items_on_tick.pop(time_at_start_of_tick)
+        except KeyError:
+            suppressed_sensorimotor_items = []
+
+        # Split off non-activation events
         lingustic_activation_events, linguistic_other_events = partition(linguistic_component_events, lambda e: isinstance(e, ItemActivatedEvent))
         sensorimotor_activation_events, sensorimotor_other_events = partition(sensorimotor_component_events, lambda e: isinstance(e, ItemActivatedEvent))
         other_events = linguistic_other_events + sensorimotor_other_events
@@ -369,20 +388,20 @@ class InteractiveCombinedCognitiveModel:
         self._schedule_inter_component_activations(
             source_component=self.linguistic_component,
             target_component=self.sensorimotor_component,
-            soucre_component_activation_events=lingustic_activation_events,
+            source_component_activation_events=lingustic_activation_events,
             label_mapping=self.mapping.linguistic_to_sensorimotor,
-            currently_suppressed_target_items=suppressed_sensorimotor_items,
-            suppressed_target_items_dict=self.mapping.suppress_sensorimotor_items_on_tick,
+            currently_suppressed_source_items=suppressed_linguistic_items,
+            suppressed_target_items_dict=self._suppress_sensorimotor_items_on_tick,
             delay=self._lc_to_smc_delay,
             attenuation=self._inter_component_attenuation,
         )
         self._schedule_inter_component_activations(
             source_component=self.sensorimotor_component,
             target_component=self.linguistic_component,
-            soucre_component_activation_events=sensorimotor_activation_events,
+            source_component_activation_events=sensorimotor_activation_events,
             label_mapping=self.mapping.sensorimotor_to_linguistic,
-            currently_suppressed_target_items=suppressed_linguistic_items,
-            suppressed_target_items_dict=self.mapping.suppress_linguistic_items_on_tick,
+            currently_suppressed_source_items=suppressed_sensorimotor_items,
+            suppressed_target_items_dict=self._suppress_linguistic_items_on_tick,
             delay=self._smc_to_lc_delay,
             attenuation=self._inter_component_attenuation,
         )
@@ -397,17 +416,20 @@ class InteractiveCombinedCognitiveModel:
     def _schedule_inter_component_activations(cls,
                                               source_component: ModelComponent,
                                               target_component: ModelComponent,
-                                              soucre_component_activation_events: List[ItemActivatedEvent],
+                                              source_component_activation_events: List[ItemActivatedEvent],
                                               label_mapping: Dict[ItemLabel, Set[ItemLabel]],
-                                              currently_suppressed_target_items: List[ItemLabel],
+                                              currently_suppressed_source_items: List[ItemLabel],
                                               suppressed_target_items_dict: Dict[int, List[ItemLabel]],
                                               delay: int, attenuation: float):
-        """Mutates `suppressed_target_items_dict`"""
-        for event in soucre_component_activation_events:
+        """Mutates `suppressed_target_items_dict`."""
+        for event in source_component_activation_events:
             # Only transmit to other component if it fired.
             if event.fired:
                 # Use label lookup from source component
                 source_label = source_component.propagator.idx2label[event.item.idx]
+                # Check if it's currently suppressed
+                if source_label in currently_suppressed_source_items:
+                    continue
                 # If there are mappings, use them
                 if source_label in label_mapping:
                     targets = label_mapping[source_label]
@@ -424,3 +446,5 @@ class InteractiveCombinedCognitiveModel:
                         label=target,
                         activation=event.activation * attenuation / len(targets),
                         arrival_time=arrival_time)
+                    # Remember to suppress the bounce-back, if any
+                    suppressed_target_items_dict[arrival_time].append(target)
