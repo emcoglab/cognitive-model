@@ -257,8 +257,12 @@ class GraphPropagator(ABC):
 
         return events
 
-    def __apply_activations(self):
-        """Apply activations for the current time."""
+    def __apply_activations(self) -> List[ItemActivatedEvent]:
+        """
+        Apply scheduled activations for the current time.
+        :return:
+            Activation events
+        """
         activation_events = []
         if self.clock in self._scheduled_activations:
 
@@ -282,7 +286,7 @@ class GraphPropagator(ABC):
     def __apply_activation_to_item_with_idx(self, idx: ItemIdx, activation: ActivationValue
                                             ) -> Optional[ItemActivatedEvent]:
         """
-        Apply activation to an item.
+        Apply (scheduled) activation to an item.
         :param idx:
             Item to activate.
         :param activation:
