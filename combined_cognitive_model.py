@@ -241,18 +241,21 @@ class InteractiveCombinedCognitiveModel:
                  sensorimotor_component: SensorimotorComponent,
                  lc_to_smc_delay: int,
                  smc_to_lc_delay: int,
-                 inter_component_attenuation: float,
+                 lc_to_smc_threshold: ActivationValue,
+                 smc_to_lc_threshold: ActivationValue,
                  buffer_threshold: ActivationValue,
                  buffer_capacity_linguistic_items: Optional[int],
                  buffer_capacity_sensorimotor_items: Optional[int],
                  ):
 
-        # Inter-component delays and dampening
+        # Inter-component delays, thresholds and dampening
         self._lc_to_smc_delay: int = lc_to_smc_delay
         self._smc_to_lc_delay: int = smc_to_lc_delay
-        self._inter_component_attenuation: float = inter_component_attenuation
+        self._lc_to_smc_threshold: ActivationValue = lc_to_smc_threshold
+        self._smc_to_lc_threshold: ActivationValue = smc_to_lc_threshold
 
-        assert (0 <= self._inter_component_attenuation <= 1)
+        assert self._lc_to_smc_threshold >= 0
+        assert self._smc_to_lc_threshold >= 0
 
         # Relative component item sizes in the shared buffer
         total_capacity: Size = Size(lcm(buffer_capacity_linguistic_items, buffer_capacity_sensorimotor_items))
@@ -268,8 +271,8 @@ class InteractiveCombinedCognitiveModel:
         self.linguistic_component: LinguisticComponent = linguistic_component
         self.sensorimotor_component: SensorimotorComponent = sensorimotor_component
 
-        assert (self.buffer.threshold >= self.sensorimotor_component.accessible_set.threshold >= 0)
-        assert (self.buffer.threshold >= self.linguistic_component.accessible_set.threshold >= 0)
+        assert self.buffer.threshold >= self.sensorimotor_component.accessible_set.threshold >= 0
+        assert self.buffer.threshold >= self.linguistic_component.accessible_set.threshold >= 0
 
         # The shared buffer does not affect the activity within either component or between them.
         self.linguistic_component.propagator.postsynaptic_guards.extend([])
@@ -392,8 +395,8 @@ class InteractiveCombinedCognitiveModel:
             label_mapping=self.mapping.linguistic_to_sensorimotor,
             currently_suppressed_source_items=suppressed_linguistic_items,
             suppressed_target_items_dict=self._suppress_sensorimotor_items_on_tick,
+            target_component_threshold=self._lc_to_smc_threshold,
             delay=self._lc_to_smc_delay,
-            attenuation=self._inter_component_attenuation,
         )
         self._schedule_inter_component_activations(
             source_component=self.sensorimotor_component,
@@ -402,8 +405,8 @@ class InteractiveCombinedCognitiveModel:
             label_mapping=self.mapping.sensorimotor_to_linguistic,
             currently_suppressed_source_items=suppressed_sensorimotor_items,
             suppressed_target_items_dict=self._suppress_linguistic_items_on_tick,
+            target_component_threshold=self._smc_to_lc_threshold,
             delay=self._smc_to_lc_delay,
-            attenuation=self._inter_component_attenuation,
         )
 
         return (
@@ -417,11 +420,25 @@ class InteractiveCombinedCognitiveModel:
                                               source_component: ModelComponent,
                                               target_component: ModelComponent,
                                               source_component_activation_events: List[ItemActivatedEvent],
+                                              target_component_threshold: ActivationValue,
                                               label_mapping: Dict[ItemLabel, Set[ItemLabel]],
                                               currently_suppressed_source_items: List[ItemLabel],
                                               suppressed_target_items_dict: Dict[int, List[ItemLabel]],
-                                              delay: int, attenuation: float):
-        """Mutates `suppressed_target_items_dict`."""
+                                              delay: int):
+        """
+        Mutates `suppressed_target_items_dict`.
+
+        :param source_component:
+        :param target_component:
+        :param source_component_activation_events:
+        :param target_component_threshold:
+            Only activations which would meet-or-exceed this on arrival will actually be sent.
+        :param label_mapping:
+        :param currently_suppressed_source_items:
+        :param suppressed_target_items_dict:
+        :param delay:
+        :return:
+        """
         for event in source_component_activation_events:
             # Only transmit to other component if it fired.
             if event.fired:
@@ -441,10 +458,14 @@ class InteractiveCombinedCognitiveModel:
                     continue
                 # All of the target labels are now guaranteed to be in the target component
                 for target in targets:
+                    arrival_activation = event.activation / len(targets)  # Divide activation between components
+                    if arrival_activation < target_component_threshold:
+                        continue
                     arrival_time = event.time + delay
+
                     target_component.propagator.schedule_activation_of_item_with_label(
                         label=target,
-                        activation=event.activation * attenuation / len(targets),
+                        activation=arrival_activation,
                         arrival_time=arrival_time)
                     # Remember to suppress the bounce-back, if any
                     suppressed_target_items_dict[arrival_time].append(target)
