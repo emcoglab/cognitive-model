@@ -441,31 +441,32 @@ class InteractiveCombinedCognitiveModel:
         """
         for event in source_component_activation_events:
             # Only transmit to other component if it fired.
-            if event.fired:
-                # Use label lookup from source component
-                source_label = source_component.propagator.idx2label[event.item.idx]
-                # Check if it's currently suppressed
-                if source_label in currently_suppressed_source_items:
+            if not event.fired:
+                continue
+            # Use label lookup from source component
+            source_label = source_component.propagator.idx2label[event.item.idx]
+            # Check if it's currently suppressed
+            if source_label in currently_suppressed_source_items:
+                continue
+            # If there are mappings, use them
+            if source_label in label_mapping:
+                targets = label_mapping[source_label]
+            # Otherwise just try the fallback of direct mapping
+            elif source_label in target_component.available_labels:
+                targets = {source_label}
+            # If the mapping is not possible, just forget it
+            else:
+                continue
+            # All of the target labels are now guaranteed to be in the target component
+            for target in targets:
+                arrival_activation = event.activation / len(targets)  # Divide activation between components
+                if arrival_activation < target_component_threshold:
                     continue
-                # If there are mappings, use them
-                if source_label in label_mapping:
-                    targets = label_mapping[source_label]
-                # Otherwise just try the fallback of direct mapping
-                elif source_label in target_component.available_labels:
-                    targets = {source_label}
-                # If the mapping is not possible, just forget it
-                else:
-                    continue
-                # All of the target labels are now guaranteed to be in the target component
-                for target in targets:
-                    arrival_activation = event.activation / len(targets)  # Divide activation between components
-                    if arrival_activation < target_component_threshold:
-                        continue
-                    arrival_time = event.time + delay
+                arrival_time = event.time + delay
 
-                    target_component.propagator.schedule_activation_of_item_with_label(
-                        label=target,
-                        activation=arrival_activation,
-                        arrival_time=arrival_time)
-                    # Remember to suppress the bounce-back, if any
-                    suppressed_target_items_dict[arrival_time].append(target)
+                target_component.propagator.schedule_activation_of_item_with_label(
+                    label=target,
+                    activation=arrival_activation,
+                    arrival_time=arrival_time)
+                # Remember to suppress the bounce-back, if any
+                suppressed_target_items_dict[arrival_time].append(target)
