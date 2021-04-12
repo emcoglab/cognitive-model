@@ -426,7 +426,7 @@ class InteractiveCombinedCognitiveModel:
             label_mapping=self.mapping.linguistic_to_sensorimotor,
             currently_suppressed_source_items=suppressed_linguistic_items,
             suppressed_target_items_dict=self._suppress_sensorimotor_items_on_tick,
-            target_component_threshold=self._lc_to_smc_threshold,
+            activation_threshold=self._lc_to_smc_threshold,
             delay=self._lc_to_smc_delay,
         )
         self._schedule_inter_component_activations(
@@ -436,7 +436,7 @@ class InteractiveCombinedCognitiveModel:
             label_mapping=self.mapping.sensorimotor_to_linguistic,
             currently_suppressed_source_items=suppressed_sensorimotor_items,
             suppressed_target_items_dict=self._suppress_linguistic_items_on_tick,
-            target_component_threshold=self._smc_to_lc_threshold,
+            activation_threshold=self._smc_to_lc_threshold,
             delay=self._smc_to_lc_delay,
         )
 
@@ -445,7 +445,7 @@ class InteractiveCombinedCognitiveModel:
                                               source_component: ModelComponent,
                                               target_component: ModelComponent,
                                               source_component_activation_events: List[ItemActivatedEvent],
-                                              target_component_threshold: ActivationValue,
+                                              activation_threshold: ActivationValue,
                                               label_mapping: Dict[ItemLabel, Set[ItemLabel]],
                                               currently_suppressed_source_items: List[ItemLabel],
                                               suppressed_target_items_dict: Dict[int, List[ItemLabel]],
@@ -456,7 +456,7 @@ class InteractiveCombinedCognitiveModel:
         :param source_component:
         :param target_component:
         :param source_component_activation_events:
-        :param target_component_threshold:
+        :param activation_threshold:
             Only activations which would meet-or-exceed this on arrival will actually be sent.
         :param label_mapping:
         :param currently_suppressed_source_items:
@@ -485,7 +485,7 @@ class InteractiveCombinedCognitiveModel:
             # All of the target labels are now guaranteed to be in the target component
             for target in targets:
                 arrival_activation = event.activation / len(targets)  # Divide activation between components
-                if arrival_activation < target_component_threshold:
+                if arrival_activation < activation_threshold:
                     continue
                 arrival_time = event.time + delay
 
