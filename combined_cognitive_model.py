@@ -245,6 +245,7 @@ class InteractiveCombinedCognitiveModel:
                  lc_to_smc_threshold: ActivationValue,
                  smc_to_lc_threshold: ActivationValue,
                  buffer_threshold: ActivationValue,
+                 cross_component_attenuation: float,
                  buffer_capacity_linguistic_items: Optional[int],
                  buffer_capacity_sensorimotor_items: Optional[int],
                  ):
@@ -254,9 +255,12 @@ class InteractiveCombinedCognitiveModel:
         self._smc_to_lc_delay: int = smc_to_lc_delay
         self._lc_to_smc_threshold: ActivationValue = lc_to_smc_threshold
         self._smc_to_lc_threshold: ActivationValue = smc_to_lc_threshold
+        self._cross_component_attenuation: float = cross_component_attenuation
 
         assert self._lc_to_smc_threshold >= 0
         assert self._smc_to_lc_threshold >= 0
+
+        assert 0 <= self._cross_component_attenuation <= 1
 
         # Relative component item sizes in the shared buffer
         total_capacity: Size = Size(lcm(buffer_capacity_linguistic_items, buffer_capacity_sensorimotor_items))
@@ -427,6 +431,7 @@ class InteractiveCombinedCognitiveModel:
             currently_suppressed_source_items=suppressed_linguistic_items,
             suppressed_target_items_dict=self._suppress_sensorimotor_items_on_tick,
             activation_threshold=self._lc_to_smc_threshold,
+            cross_component_attenuation=self._cross_component_attenuation,
             delay=self._lc_to_smc_delay,
         )
         self._schedule_inter_component_activations(
@@ -437,6 +442,7 @@ class InteractiveCombinedCognitiveModel:
             currently_suppressed_source_items=suppressed_sensorimotor_items,
             suppressed_target_items_dict=self._suppress_linguistic_items_on_tick,
             activation_threshold=self._smc_to_lc_threshold,
+            cross_component_attenuation=self._cross_component_attenuation,
             delay=self._smc_to_lc_delay,
         )
 
@@ -446,6 +452,7 @@ class InteractiveCombinedCognitiveModel:
                                               target_component: ModelComponent,
                                               source_component_activation_events: List[ItemActivatedEvent],
                                               activation_threshold: ActivationValue,
+                                              cross_component_attenuation: float,
                                               label_mapping: Dict[ItemLabel, Set[ItemLabel]],
                                               currently_suppressed_source_items: List[ItemLabel],
                                               suppressed_target_items_dict: Dict[int, List[ItemLabel]],
@@ -458,6 +465,8 @@ class InteractiveCombinedCognitiveModel:
         :param source_component_activation_events:
         :param activation_threshold:
             Only activations which would meet-or-exceed this on arrival will actually be sent.
+        :param cross_component_attenuation:
+            Linearly scales cross-component activations (i.e. 0 => squash, 1 => identity)
         :param label_mapping:
         :param currently_suppressed_source_items:
         :param suppressed_target_items_dict:
@@ -484,7 +493,9 @@ class InteractiveCombinedCognitiveModel:
                 continue
             # All of the target labels are now guaranteed to be in the target component
             for target in targets:
-                arrival_activation = event.activation / len(targets)  # Divide activation between components
+                arrival_activation = event.activation
+                arrival_activation *= cross_component_attenuation
+                arrival_activation /= len(targets)  # Divide activation between components
                 if arrival_activation < activation_threshold:
                     continue
                 arrival_time = event.time + delay
