@@ -32,6 +32,7 @@ class LinguisticComponent(ModelComponentWithAccessibleSet):
 
     def __init__(self,
                  propagator: LinguisticPropagator,
+                 activation_cap: Optional[ActivationValue],
                  accessible_set_threshold: ActivationValue,
                  accessible_set_capacity: Optional[int],
                  firing_threshold: ActivationValue,
@@ -42,12 +43,18 @@ class LinguisticComponent(ModelComponentWithAccessibleSet):
             A node will fire on receiving activation if its activation crosses this threshold.
         """
 
+        super().__init__(propagator, accessible_set_threshold, accessible_set_capacity)
+        assert isinstance(self.propagator, LinguisticPropagator)
+
+        if activation_cap is not None:
+            assert (activation_cap
+                    # If activation_cap == accessible_set_threshold, items will only enter the accessible set when fully
+                    # activated.
+                    >= self.accessible_set.threshold)
+
         # Thresholds
         # Use >= and < to test for above/below
         self.firing_threshold: ActivationValue = firing_threshold
-
-        super().__init__(propagator, accessible_set_threshold, accessible_set_capacity)
-        assert isinstance(self.propagator, LinguisticPropagator)
 
         self.propagator.presynaptic_guards.extend([
             # If this node is currently suprathreshold, it acts as activation sink.
@@ -55,7 +62,11 @@ class LinguisticComponent(ModelComponentWithAccessibleSet):
             self._under_firing_threshold(self.firing_threshold)
         ])
         # No pre-synaptic modulation
-        # No post-synaptic modulation
+        if activation_cap is not None:
+            self.propagator.postsynaptic_modulations.extend([
+                # Cap on a node's total activation after receiving incoming activations
+                self._apply_activation_cap(activation_cap)
+            ])
         self.propagator.postsynaptic_guards.extend([
             # Activation must exceed a firing threshold to cause further propagation.
             self._exceeds_firing_threshold(self.firing_threshold)

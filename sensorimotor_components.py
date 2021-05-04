@@ -17,7 +17,7 @@ class SensorimotorComponent(ModelComponentWithAccessibleSet):
 
     def __init__(self,
                  propagator: SensorimotorPropagator,
-                 activation_cap: ActivationValue,
+                 activation_cap: Optional[ActivationValue],
                  attenuation_statistic: AttenuationStatistic,
                  accessible_set_threshold: ActivationValue,
                  accessible_set_capacity: Optional[int],
@@ -29,16 +29,11 @@ class SensorimotorComponent(ModelComponentWithAccessibleSet):
         super().__init__(propagator, accessible_set_threshold, accessible_set_capacity)
         assert isinstance(self.propagator, SensorimotorPropagator)
 
-        assert (activation_cap
-                # If activation_cap == accessible_set_threshold, items will only enter the accessible set when fully
-                # activated.
-                >= self.accessible_set.threshold)
-
-        # Data
-
-        # Use >= and < to test for above/below
-        # Cap on a node's total activation after receiving incoming.
-        self.activation_cap: ActivationValue = activation_cap
+        if activation_cap is not None:
+            assert (activation_cap
+                    # If activation_cap == accessible_set_threshold, items will only enter the accessible set when fully
+                    # activated.
+                    >= self.accessible_set.threshold)
 
         def get_statistic_for_item(idx: ItemIdx):
             """Gets the correct statistic for an item."""
@@ -60,17 +55,19 @@ class SensorimotorComponent(ModelComponentWithAccessibleSet):
         # region modulations and guards
 
         # No pre-synaptic guards
-        self.propagator.presynaptic_modulations.extendleft(
+        self.propagator.presynaptic_modulations.appendleft(
+            self._attenuate_by_statistic
+        )
+        if activation_cap is not None:
             # Apply cap before attenuations
-            # when using extendleft, elements must be presented in reversed order to end up in the correct order
-            reversed([
-                self._apply_activation_cap(activation_cap),
-                self._attenuate_by_statistic,
-        ]))
-        self.propagator.postsynaptic_modulations.extend([
-            # Cap on a node's total activation after receiving incoming
-            self._apply_activation_cap(activation_cap)
-        ])
+            self.propagator.presynaptic_modulations.appendleft(
+                self._apply_activation_cap(activation_cap)
+            )
+        if activation_cap is not None:
+            self.propagator.postsynaptic_modulations.extend([
+                # Cap on a node's total activation after receiving incoming activations
+                self._apply_activation_cap(activation_cap)
+            ])
         # No post-synaptic guards
 
         # endregion
@@ -85,7 +82,7 @@ class BufferedSensorimotorComponent(SensorimotorComponent):
 
     def __init__(self,
                  propagator: SensorimotorPropagator,
-                 activation_cap: ActivationValue,
+                 activation_cap: Optional[ActivationValue],
                  attenuation_statistic: AttenuationStatistic,
                  accessible_set_threshold: ActivationValue,
                  accessible_set_capacity: Optional[int],
@@ -110,9 +107,11 @@ class BufferedSensorimotorComponent(SensorimotorComponent):
             use_breng_translation=use_breng_translation,
         )
 
-        assert (activation_cap
-                # If activation_cap == buffer_threshold, items will only enter the buffer when fully activated.
-                >= buffer_threshold
+        if activation_cap is not None:
+            assert (activation_cap
+                    # If activation_cap == buffer_threshold, items will only enter the buffer when fully activated.
+                    >= buffer_threshold)
+        assert (buffer_threshold
                 # If buffer_pruning_threshold == accessible_set_threshold then the only things in the accessible set
                 # will be those items which were displaced from the buffer before being pruned. We probably won't use
                 # this but it's not invalid or degenerate.
