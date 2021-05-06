@@ -450,6 +450,8 @@ class GraphPropagator(ABC):
         Schedule an item to receive activation at a future time.
         Call this BEFORE .tick().
         """
+        if activation < self.impulse_pruning_threshold:
+            return
         self._scheduled_activations[arrival_time][idx] += activation
 
     def schedule_activation_of_item_with_label(self, label: ItemLabel, activation: ActivationValue, arrival_time: int):
