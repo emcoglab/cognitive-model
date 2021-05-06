@@ -494,10 +494,10 @@ class InteractiveCombinedCognitiveModel:
             # All of the target labels are now guaranteed to be in the target component
             for target in targets:
                 arrival_activation = event.activation
-                arrival_activation *= cross_component_attenuation
-                arrival_activation /= len(targets)  # Divide activation between components
                 if arrival_activation < activation_threshold:
                     continue
+                arrival_activation /= len(targets)  # Divide activation between components
+                arrival_activation *= cross_component_attenuation
                 arrival_time = event.time + delay
 
                 target_component.propagator.schedule_activation_of_item_with_label(
