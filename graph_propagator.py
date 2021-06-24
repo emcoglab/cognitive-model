@@ -97,6 +97,12 @@ class GraphPropagator(ABC):
 
         # Thresholds
         # Use >= and < to test for above/below
+
+        # Optimisation threshold which prevents minute impulses from ricocheting around forever.
+        # This applies to IMPULSES ONLY (i.e. activations scheduled elsewhere in the future).
+        # It should be applied when impulses are generated, as it will not be applied when they arrive.
+        # This also means that it only applies to presynnaptic (arrival) activations, and is not affected by
+        # presynnaptic modulations.
         self.impulse_pruning_threshold: ActivationValue = impulse_pruning_threshold
 
         # These decay functions should be stateless, and convert an original activation and an age into a current
@@ -276,7 +282,7 @@ class GraphPropagator(ABC):
                     # non-existent destination at some time will produce a scheduled 0 activation at that time.
                     # This should not happen in ordinary operation, but can happen during debugging etc.
                     # These should not affect the model's behaviour, so we manually skip them here.
-                    if (activation < self.impulse_pruning_threshold) or (activation == 0):
+                    if activation == 0:
                         continue
                     activation_event = self.__apply_activation_to_item_with_idx(destination_item, activation)
                     if activation_event:
@@ -311,7 +317,10 @@ class GraphPropagator(ABC):
         for modulation in self.presynaptic_modulations:
             activation = modulation(idx, activation)
 
-        if (activation < self.impulse_pruning_threshold) or (activation == 0):
+        # We don't check for resultant activation beneath self.impulse_pruning_threshold here, as it would prevent
+        # manual external activation beneath the threshold. Instead we must rely on the threshold being applied when
+        # *impulses* (i.e. activations scheduled elsewhere in the future) are generated.
+        if activation == 0:
             return None
 
         # Accumulate activation
@@ -338,7 +347,10 @@ class GraphPropagator(ABC):
         # If we did, not only did this node activated, it fired as well, so we upgrade the event
         event.fired = True
 
-        # Fire and rebroadcast!
+        #########################
+        # Fire and rebroadcast! #
+        #########################
+
         source_idx = idx
 
         # For each incident edge
@@ -450,8 +462,6 @@ class GraphPropagator(ABC):
         Schedule an item to receive activation at a future time.
         Call this BEFORE .tick().
         """
-        if activation < self.impulse_pruning_threshold:
-            return
         self._scheduled_activations[arrival_time][idx] += activation
 
     def schedule_activation_of_item_with_label(self, label: ItemLabel, activation: ActivationValue, arrival_time: int):

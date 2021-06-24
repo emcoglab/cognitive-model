@@ -496,6 +496,8 @@ class InteractiveCombinedCognitiveModel:
                 arrival_activation = event.activation
                 if arrival_activation < activation_threshold:
                     continue
+                if arrival_activation < source_component.propagator.impulse_pruning_threshold:
+                    continue
                 arrival_activation /= len(targets)  # Divide activation between components
                 arrival_activation *= cross_component_attenuation
                 arrival_time = event.time + delay
