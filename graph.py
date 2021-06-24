@@ -36,6 +36,10 @@ from .utils.logging import logger
 
 
 class Edge(tuple):
+    """
+    Edge in the graph.
+    A (sorted) tuple of Nodes.
+    """
     def __new__(cls, seq=()):
         assert len(seq) == 2
         # By sorting on init, we guarantee that two edges are equal iff their nodes are equal, regardless of order.
