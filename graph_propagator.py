@@ -415,8 +415,12 @@ class GraphPropagator(ABC):
         """
         Returns the current activation of a node.
         Call this AFTER .tick() to see effect of activations applied since .tick() was last called.
+        :raises: ItemNotFoundError
         """
-        return self.activation_of_item_with_idx(self.label2idx[label])
+        try:
+            return self.activation_of_item_with_idx(self.label2idx[label])
+        except KeyError as e:
+            raise ItemNotFoundError from e
 
     # endregion
 
