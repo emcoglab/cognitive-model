@@ -115,6 +115,8 @@ class ModelComponentWithAccessibleSet(ModelComponent, ABC):
             self._apply_memory_pressure,
         ])
         self.propagator.postsynaptic_guards.extend([
+            # Items are presented to the accessible set after tick(), so this will only apply if the item was already in
+            # the accessible set at the start of this tick.
             self._not_in_accessible_set
         ])
 
