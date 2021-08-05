@@ -204,6 +204,11 @@ class GraphPropagator(ABC):
                 lambda: ActivationValue(0)
             ))
 
+        # Sometimes we want to be able to externally apply an activation without generating further propagation.
+        # These are stored in the same way as self._scheduled_activations, here.
+        self._scheduled_activations_suppressed: DefaultDict[int, DefaultDict[ItemIdx, ActivationValue]] = defaultdict(
+            lambda: defaultdict(lambda: ActivationValue(0)))
+
         self.component: Component = component
 
         # endregion
@@ -213,6 +218,7 @@ class GraphPropagator(ABC):
         self.clock = 0
         self._activation_records = defaultdict(blank_node_activation_record)
         self._scheduled_activations = defaultdict(lambda: defaultdict(lambda: ActivationValue(0)))
+        self._scheduled_activations_suppressed = defaultdict(lambda: defaultdict(lambda: ActivationValue(0)))
 
     # region tick()
 
@@ -256,6 +262,9 @@ class GraphPropagator(ABC):
         Do the work of tick() before the clock is advanced.
         Override this intead of .tick()
         """
+        # Apply suppressed activations first, in case this changes the firing behaviour of other activations applied
+        # this tick.
+        self.__apply_suppressed_activations()
         events = self.__apply_activations()
 
         # There will be at most one event for each item which has an event
@@ -289,7 +298,21 @@ class GraphPropagator(ABC):
                         activation_events.append(activation_event)
         return activation_events
 
-    def __apply_activation_to_item_with_idx(self, idx: ItemIdx, activation: ActivationValue
+    def __apply_suppressed_activations(self):
+        """
+        Apply scheduled activations which won't produce ongoing propagations.
+        """
+        if self.clock in self._scheduled_activations_suppressed:
+            scheduled_activations: DefaultDict[ItemIdx, ActivationValue] = self._scheduled_activations_suppressed.pop(self.clock)
+            if len(scheduled_activations) > 0:
+                for destination_item, activation in scheduled_activations.items():
+                    if activation == 0:
+                        continue
+                    self.__apply_activation_to_item_with_idx(destination_item, activation,
+                                                             suppress_ongoing_propagation=True)
+
+    def __apply_activation_to_item_with_idx(self, idx: ItemIdx, activation: ActivationValue,
+                                            suppress_ongoing_propagation: bool = False,
                                             ) -> Optional[ItemActivatedEvent]:
         """
         Apply (scheduled) activation to an item.
@@ -337,6 +360,10 @@ class GraphPropagator(ABC):
 
         # Record the activation
         self._activation_records[idx] = ActivationRecord(new_activation, self.clock)
+
+        # If we're suppressing ongoing propagation, we stop here
+        if suppress_ongoing_propagation:
+            return event
 
         # Check if the postsynaptic firing guard is passed
         for guard in self.postsynaptic_guards:
@@ -426,59 +453,75 @@ class GraphPropagator(ABC):
 
     # region Set activations
 
-    def activate_items_with_idxs(self, idxs: List[ItemIdx], activation: ActivationValue):
+    def activate_item_with_idx(self, idx: ItemIdx, activation: ActivationValue,
+                               with_suppression: bool = False):
+        """
+        Activate an item.
+        Call this BEFORE .tick().
+        :param: with_suppression
+            Prevents onward propagation from this activation.
+        """
+        self._schedule_activation_of_item_with_idx(idx, activation, self.clock, with_suppression=with_suppression)
+
+    def activate_items_with_labels(self, labels: List[ItemLabel], activation: ActivationValue,
+                                   with_suppression: bool = False):
         """
         Activate a list of items.
         Call this BEFORE .tick().
-        """
-        for idx in idxs:
-            self.activate_item_with_idx(idx, activation)
-
-    def activate_item_with_idx(self, idx: ItemIdx, activation: ActivationValue):
-        self._schedule_activation_of_item_with_idx(idx, activation, self.clock)
-
-    def activate_items_with_labels(self, labels: List[ItemLabel], activation: ActivationValue):
-        """
-        Activate a list of items.
-        Call this BEFORE .tick().
+        :param: with_suppression
+            Prevents onward propagation from this activation.
         :raises ItemNotFoundError
         """
         try:
             idxs = [self.label2idx[label] for label in labels]
         except KeyError as e:
             raise ItemNotFoundError() from e
-        self.activate_items_with_idxs(idxs, activation)
+        for idx in idxs:
+            self.activate_item_with_idx(idx, activation, with_suppression=with_suppression)
 
-    def activate_item_with_label(self, label: ItemLabel, activation: ActivationValue):
+    def activate_item_with_label(self, label: ItemLabel, activation: ActivationValue,
+                                 with_suppression: bool = False):
         """
         Activate an item.
         Call this BEFORE .tick().
+        :param: with_suppression
+            Prevents onward propagation from this activation.
         :raises ItemNotFoundError
         """
         try:
             idx = self.label2idx[label]
         except KeyError as e:
             raise ItemNotFoundError(label) from e
-        self.activate_item_with_idx(idx, activation)
+        self.activate_item_with_idx(idx, activation, with_suppression=with_suppression)
 
-    def _schedule_activation_of_item_with_idx(self, idx: ItemIdx, activation: ActivationValue, arrival_time: int):
+    def _schedule_activation_of_item_with_idx(self, idx: ItemIdx, activation: ActivationValue, arrival_time: int,
+                                              with_suppression: bool = False):
         """
         Schedule an item to receive activation at a future time.
         Call this BEFORE .tick().
+        :param: with_suppression
+            Prevents onward propagation from this activation.
         """
-        self._scheduled_activations[arrival_time][idx] += activation
+        if with_suppression:
+            self._scheduled_activations_suppressed[arrival_time][idx] += activation
+        else:
+            self._scheduled_activations[arrival_time][idx] += activation
 
-    def schedule_activation_of_item_with_label(self, label: ItemLabel, activation: ActivationValue, arrival_time: int):
+    def schedule_activation_of_item_with_label(self, label: ItemLabel, activation: ActivationValue, arrival_time: int,
+                                               with_suppression: bool = False):
         """
         Schedule an item to receive activation at a future time.
         Call this BEFORE .tick().
+        :param: with_suppression
+            Prevents onward propagation from this activation.
         :raises: ItemNotFoundError
         """
         try:
             idx = self.label2idx[label]
         except KeyError as e:
             raise ItemNotFoundError(label) from e
-        self._schedule_activation_of_item_with_idx(idx=idx, activation=activation, arrival_time=arrival_time)
+        self._schedule_activation_of_item_with_idx(idx=idx, activation=activation, arrival_time=arrival_time,
+                                                   with_suppression=with_suppression)
 
     # endregion
 
