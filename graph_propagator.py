@@ -258,14 +258,14 @@ class GraphPropagator(ABC):
         """
 
         # Do the work
-        events = self._evolve_model()
+        events = self._evolve_propagator()
 
         # Advance the clock
         self.clock += 1
 
         return events
 
-    def _evolve_model(self) -> List[ModelEvent]:
+    def _evolve_propagator(self) -> List[ModelEvent]:
         """
         Do the work of tick() before the clock is advanced.
         Override this instead of .tick()
@@ -321,7 +321,7 @@ class GraphPropagator(ABC):
         # Check if something will prevent the activation from occurring
         for guard in self.presynaptic_guards:
             if not guard(idx, current_activation):
-                # If activation was blocked, node didn't activate or fire
+                # If activation was blocked, node didn't activate (or fire)
                 return None
 
         # Otherwise, we proceed with the activation:

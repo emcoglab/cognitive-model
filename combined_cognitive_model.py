@@ -298,7 +298,12 @@ class InteractiveCombinedCognitiveModel:
 
     @property
     def clock(self) -> int:
-        assert self.linguistic_component.propagator.clock == self.sensorimotor_component.propagator.clock
+        try:
+            assert self.linguistic_component.propagator.clock == self.sensorimotor_component.propagator.clock
+        except AssertionError as e:
+            e.args += (f"linguistic clock: {self.linguistic_component.propagator.clock}",
+                       f"sensorimotor clock: {self.sensorimotor_component.propagator.clock}")
+            raise
         return self.linguistic_component.propagator.clock
 
     def reset(self):

@@ -87,7 +87,7 @@ def _load_graph(n_words, length_factor, distributional_model, distance_type, edg
     # Load graph
     if edge_pruning is None:
         logger.info(f"Loading graph from {graph_file_name}")
-        graph = Graph.load_from_edgelist(file_path=path.join(Preferences.graphs_dir, graph_file_name))
+        graph = Graph.load_from_edgelist(file_path=path.join(Preferences.graphs_dir, graph_file_name), with_feedback=True)
 
     elif edge_pruning_type is EdgePruningType.Length:
         logger.info(f"Loading graph from {graph_file_name}, pruning any edge longer than {edge_pruning}")

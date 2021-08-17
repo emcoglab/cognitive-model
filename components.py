@@ -14,6 +14,7 @@ caiwingfield.net
 2020
 ---------------------------
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -52,7 +53,8 @@ class ModelComponent(ABC):
         time_at_start_of_tick = self.propagator.clock
         pre_tick_events = self._pre_tick()
         propagator_events = self.propagator.tick()
-        tick_events = self._post_tick(pre_tick_events=pre_tick_events, propagator_events=propagator_events,
+        tick_events = self._post_tick(pre_tick_events=pre_tick_events,
+                                      propagator_events=propagator_events,
                                       time_at_start_of_tick=time_at_start_of_tick)
         return tick_events
 
