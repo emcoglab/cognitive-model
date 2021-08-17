@@ -476,7 +476,9 @@ class GraphPropagator(ABC):
         Schedule an item to receive activation at a future time.
         Call this BEFORE .tick().
         """
-        if (self._shelf_life is not None) and (arrival_time >= self._shelf_life):
+        # Inequality here because the clock hasn't advanced yet for this .tick().
+        # We want to be able to schedule activations for the final tick of the shelf life.
+        if (self._shelf_life is not None) and (arrival_time > self._shelf_life):
             return
         self._scheduled_activations[arrival_time][idx] += activation
 
