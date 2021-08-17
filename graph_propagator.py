@@ -14,6 +14,7 @@ caiwingfield.net
 2019
 ---------------------------
 """
+
 import json
 from abc import ABC
 from collections import namedtuple, defaultdict, deque
@@ -25,8 +26,14 @@ from .graph import Graph
 from .utils.exceptions import ItemNotFoundError
 from .utils.maths import make_decay_function_constant
 
+
+# Maps an item and its activation to a new, modulated activation
 Modulation = Callable[[ItemIdx, ActivationValue], ActivationValue]
+# Maps an item and its activation to whether something is permitted to happen,
+# i.e. whether the guard is passed
+# (True => it is allowed to happen; False => it is not allowed to happen)
 Guard = Callable[[ItemIdx, ActivationValue], bool]
+# Maps an elapsed time and and initial activation to a final activation
 DecayFunction = Callable[[int, ActivationValue], ActivationValue]
 
 IMPULSE_PRUNING_THRESHOLD = 0.05
@@ -142,7 +149,7 @@ class GraphPropagator(ABC):
         # :param activation:
         #     The activation level of the item before accumulation.
         # :return:
-        #     True if the node should be allowed fire, else False.
+        #     True if the node should be allowed accumulate, else False.
         self.presynaptic_guards: Deque[Guard] = deque()
         # postsynaptic_modulations:
         #     Modulates the activations of items after accumulation, but before firing.
@@ -204,11 +211,6 @@ class GraphPropagator(ABC):
                 lambda: ActivationValue(0)
             ))
 
-        # Sometimes we want to be able to externally apply an activation without generating further propagation.
-        # These are stored in the same way as self._scheduled_activations, here.
-        self._scheduled_activations_suppressed: DefaultDict[int, DefaultDict[ItemIdx, ActivationValue]] = defaultdict(
-            lambda: defaultdict(lambda: ActivationValue(0)))
-
         self.component: Component = component
 
         # endregion
@@ -218,7 +220,6 @@ class GraphPropagator(ABC):
         self.clock = 0
         self._activation_records = defaultdict(blank_node_activation_record)
         self._scheduled_activations = defaultdict(lambda: defaultdict(lambda: ActivationValue(0)))
-        self._scheduled_activations_suppressed = defaultdict(lambda: defaultdict(lambda: ActivationValue(0)))
 
     # region tick()
 
@@ -260,11 +261,8 @@ class GraphPropagator(ABC):
     def _evolve_model(self) -> List[ModelEvent]:
         """
         Do the work of tick() before the clock is advanced.
-        Override this intead of .tick()
+        Override this instead of .tick()
         """
-        # Apply suppressed activations first, in case this changes the firing behaviour of other activations applied
-        # this tick.
-        self.__apply_suppressed_activations()
         events = self.__apply_activations()
 
         # There will be at most one event for each item which has an event
@@ -298,22 +296,7 @@ class GraphPropagator(ABC):
                         activation_events.append(activation_event)
         return activation_events
 
-    def __apply_suppressed_activations(self):
-        """
-        Apply scheduled activations which won't produce ongoing propagations.
-        """
-        if self.clock in self._scheduled_activations_suppressed:
-            scheduled_activations: DefaultDict[ItemIdx, ActivationValue] = self._scheduled_activations_suppressed.pop(self.clock)
-            if len(scheduled_activations) > 0:
-                for destination_item, activation in scheduled_activations.items():
-                    if activation == 0:
-                        continue
-                    self.__apply_activation_to_item_with_idx(destination_item, activation,
-                                                             suppress_ongoing_propagation=True)
-
-    def __apply_activation_to_item_with_idx(self, idx: ItemIdx, activation: ActivationValue,
-                                            suppress_ongoing_propagation: bool = False,
-                                            ) -> Optional[ItemActivatedEvent]:
+    def __apply_activation_to_item_with_idx(self, idx: ItemIdx, activation: ActivationValue) -> Optional[ItemActivatedEvent]:
         """
         Apply (scheduled) activation to an item.
         :param idx:
@@ -360,10 +343,6 @@ class GraphPropagator(ABC):
 
         # Record the activation
         self._activation_records[idx] = ActivationRecord(new_activation, self.clock)
-
-        # If we're suppressing ongoing propagation, we stop here
-        if suppress_ongoing_propagation:
-            return event
 
         # Check if the postsynaptic firing guard is passed
         for guard in self.postsynaptic_guards:
@@ -453,23 +432,17 @@ class GraphPropagator(ABC):
 
     # region Set activations
 
-    def activate_item_with_idx(self, idx: ItemIdx, activation: ActivationValue,
-                               with_suppression: bool = False):
+    def activate_item_with_idx(self, idx: ItemIdx, activation: ActivationValue):
         """
         Activate an item.
         Call this BEFORE .tick().
-        :param: with_suppression
-            Prevents onward propagation from this activation.
         """
-        self._schedule_activation_of_item_with_idx(idx, activation, self.clock, with_suppression=with_suppression)
+        self._schedule_activation_of_item_with_idx(idx, activation, self.clock)
 
-    def activate_items_with_labels(self, labels: List[ItemLabel], activation: ActivationValue,
-                                   with_suppression: bool = False):
+    def activate_items_with_labels(self, labels: List[ItemLabel], activation: ActivationValue):
         """
         Activate a list of items.
         Call this BEFORE .tick().
-        :param: with_suppression
-            Prevents onward propagation from this activation.
         :raises ItemNotFoundError
         """
         try:
@@ -477,51 +450,38 @@ class GraphPropagator(ABC):
         except KeyError as e:
             raise ItemNotFoundError() from e
         for idx in idxs:
-            self.activate_item_with_idx(idx, activation, with_suppression=with_suppression)
+            self.activate_item_with_idx(idx, activation)
 
-    def activate_item_with_label(self, label: ItemLabel, activation: ActivationValue,
-                                 with_suppression: bool = False):
+    def activate_item_with_label(self, label: ItemLabel, activation: ActivationValue):
         """
         Activate an item.
         Call this BEFORE .tick().
-        :param: with_suppression
-            Prevents onward propagation from this activation.
         :raises ItemNotFoundError
         """
         try:
             idx = self.label2idx[label]
         except KeyError as e:
             raise ItemNotFoundError(label) from e
-        self.activate_item_with_idx(idx, activation, with_suppression=with_suppression)
+        self.activate_item_with_idx(idx, activation)
 
-    def _schedule_activation_of_item_with_idx(self, idx: ItemIdx, activation: ActivationValue, arrival_time: int,
-                                              with_suppression: bool = False):
+    def _schedule_activation_of_item_with_idx(self, idx: ItemIdx, activation: ActivationValue, arrival_time: int):
         """
         Schedule an item to receive activation at a future time.
         Call this BEFORE .tick().
-        :param: with_suppression
-            Prevents onward propagation from this activation.
         """
-        if with_suppression:
-            self._scheduled_activations_suppressed[arrival_time][idx] += activation
-        else:
-            self._scheduled_activations[arrival_time][idx] += activation
+        self._scheduled_activations[arrival_time][idx] += activation
 
-    def schedule_activation_of_item_with_label(self, label: ItemLabel, activation: ActivationValue, arrival_time: int,
-                                               with_suppression: bool = False):
+    def schedule_activation_of_item_with_label(self, label: ItemLabel, activation: ActivationValue, arrival_time: int):
         """
         Schedule an item to receive activation at a future time.
         Call this BEFORE .tick().
-        :param: with_suppression
-            Prevents onward propagation from this activation.
         :raises: ItemNotFoundError
         """
         try:
             idx = self.label2idx[label]
         except KeyError as e:
             raise ItemNotFoundError(label) from e
-        self._schedule_activation_of_item_with_idx(idx=idx, activation=activation, arrival_time=arrival_time,
-                                                   with_suppression=with_suppression)
+        self._schedule_activation_of_item_with_idx(idx=idx, activation=activation, arrival_time=arrival_time)
 
     # endregion
 
