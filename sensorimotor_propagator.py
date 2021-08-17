@@ -113,7 +113,8 @@ def _load_graph(distance_type, length_factor, max_sphere_radius, use_prepruned, 
         logger.info(f"Loading sensorimotor graph ({edgelist_filename})")
         sensorimotor_graph: Graph = Graph.load_from_edgelist(
             file_path=edgelist_path,
-            ignore_edges_longer_than=max_sphere_radius * length_factor)
+            ignore_edges_longer_than=max_sphere_radius * length_factor,
+            with_feedback=True)
 
     return sensorimotor_graph
 
@@ -123,3 +124,5 @@ def _load_graph(distance_type, length_factor, max_sphere_radius, use_prepruned, 
 #
 #     _first_tick: Guard = lambda idx, activation: model.clock == 0
 #     model.propagator.postsynaptic_guards.appendleft(_first_tick)
+#     (Don't forget that if you're using a combined model, model.clock gets evaluated lazily, so might be in an
+#     inconsistent state. Maybe set t=model.clock and use that in the lambda instead.)

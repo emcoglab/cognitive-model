@@ -87,13 +87,15 @@ def _load_graph(n_words, length_factor, distributional_model, distance_type, edg
     # Load graph
     if edge_pruning is None:
         logger.info(f"Loading graph from {graph_file_name}")
-        graph = Graph.load_from_edgelist(file_path=path.join(Preferences.graphs_dir, graph_file_name), with_feedback=True)
+        graph = Graph.load_from_edgelist(file_path=path.join(Preferences.graphs_dir, graph_file_name),
+                                         with_feedback=True)
 
     elif edge_pruning_type is EdgePruningType.Length:
         logger.info(f"Loading graph from {graph_file_name}, pruning any edge longer than {edge_pruning}")
         graph = Graph.load_from_edgelist(file_path=path.join(Preferences.graphs_dir, graph_file_name),
                                          ignore_edges_longer_than=edge_pruning,
-                                         keep_at_least_n_edges=Preferences.min_edges_per_node)
+                                         keep_at_least_n_edges=Preferences.min_edges_per_node,
+                                         with_feedback=True)
 
     elif edge_pruning_type is EdgePruningType.Percent:
         quantile_file_name = f"{distributional_model.name} {distance_type.name} {n_words} words length {length_factor} edge length quantiles.csv"
@@ -106,7 +108,8 @@ def _load_graph(n_words, length_factor, distributional_model, distance_type, edg
         logger.info(f"Loading graph from {graph_file_name}, pruning longest {edge_pruning}% of edges (anything over {pruning_length})")
         graph = Graph.load_from_edgelist(file_path=path.join(Preferences.graphs_dir, graph_file_name),
                                          ignore_edges_longer_than=edge_pruning,
-                                         keep_at_least_n_edges=Preferences.min_edges_per_node)
+                                         keep_at_least_n_edges=Preferences.min_edges_per_node,
+                                         with_feedback=True)
 
     elif edge_pruning_type is EdgePruningType.Importance:
         logger.info(
@@ -127,3 +130,5 @@ def _load_graph(n_words, length_factor, distributional_model, distance_type, edg
 #
 #     _first_tick: Guard = lambda idx, activation: model.clock == 0
 #     model.propagator.postsynaptic_guards.appendleft(_first_tick)
+#     (Don't forget that if you're using a combined model, model.clock gets evaluated lazily, so might be in an
+#     inconsistent state. Maybe set t=model.clock and use that in the lambda instead.)
