@@ -68,6 +68,7 @@ class GraphPropagator(ABC):
                  node_decay_function: Optional[DecayFunction],
                  edge_decay_function: Optional[DecayFunction],
                  component: Component,
+                 shelf_life: Optional[int],
                  ):
         """
         Underlying shared code between model components which operate via propagation of activation on a graph.
@@ -90,6 +91,10 @@ class GraphPropagator(ABC):
             A function governing the decay of activations in connections.
             Use the decay_function_*_with_* methods to create these.
             If None is supplied, a constant function will be used by default (i.e. no decay).
+        :param shelf_life:
+            For optimisation purposes only!
+            If supplied and not None, any activations which would have been scheduled after this point are ignored.
+            Use ONLY when you know output won't be examined after this point in time.
         """
 
         # region Set once
@@ -212,6 +217,8 @@ class GraphPropagator(ABC):
             ))
 
         self.component: Component = component
+
+        self._shelf_life: Optional[int] = shelf_life
 
         # endregion
 
@@ -469,6 +476,8 @@ class GraphPropagator(ABC):
         Schedule an item to receive activation at a future time.
         Call this BEFORE .tick().
         """
+        if (self._shelf_life is not None) and (arrival_time >= self._shelf_life):
+            return
         self._scheduled_activations[arrival_time][idx] += activation
 
     def schedule_activation_of_item_with_label(self, label: ItemLabel, activation: ActivationValue, arrival_time: int):

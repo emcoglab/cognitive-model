@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from os import path
-from typing import Dict
+from typing import Dict, Optional
 
 from .ldm.utils.maths import DistanceType
 from .sensorimotor_norms.breng_translation.dictionary.version import VERSION as SM_BRENG_VERSION
@@ -30,6 +30,7 @@ class SensorimotorPropagator(GraphPropagator):
                  node_decay_lognormal_sigma: float,
                  use_breng_translation: bool,
                  use_prepruned: bool = False,
+                 shelf_life: Optional[int] = None,
                  ):
         """
         :param distance_type:
@@ -78,6 +79,7 @@ class SensorimotorPropagator(GraphPropagator):
             # However we add a minute threshold here in case activation has been modulated down to zero
             impulse_pruning_threshold=IMPULSE_PRUNING_THRESHOLD,
             component=Component.sensorimotor,
+            shelf_life=shelf_life,
         )
 
 

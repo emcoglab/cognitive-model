@@ -29,6 +29,7 @@ class LinguisticPropagator(GraphPropagator):
                  edge_decay_sd: float,
                  edge_pruning_type: Optional[EdgePruningType],
                  edge_pruning: Optional[Length],
+                 shelf_life: Optional[int] = None,
                  ):
         """
         :param n_words:
@@ -65,6 +66,7 @@ class LinguisticPropagator(GraphPropagator):
             edge_decay_function=make_decay_function_gaussian_with_sd(
                 sd=edge_decay_sd * length_factor),
             component=Component.linguistic,
+            shelf_life=shelf_life
         )
 
 
