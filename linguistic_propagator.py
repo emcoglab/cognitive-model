@@ -1,14 +1,13 @@
 from os import path
-from typing import Dict, Optional, List
+from typing import Dict, Optional
 
 from pandas import DataFrame
 
 from .ldm.corpus.corpus import CorpusMetadata
 from .ldm.model.base import DistributionalSemanticModel
 from .ldm.utils.maths import DistanceType
-from .basic_types import Length, ItemIdx, ItemLabel, ActivationValue, Component
+from .basic_types import Length, ItemIdx, ItemLabel, Component
 from .utils.logging import logger
-from .events import ModelEvent
 from .graph import Graph, EdgePruningType
 from .graph_propagator import GraphPropagator, _load_labels, IMPULSE_PRUNING_THRESHOLD
 from .utils.maths import make_decay_function_exponential_with_decay_factor, make_decay_function_gaussian_with_sd
@@ -57,7 +56,7 @@ class LinguisticPropagator(GraphPropagator):
 
         # Load graph
         idx2label = _load_labels_from_corpus(distributional_model.corpus_meta, n_words)
-        super(LinguisticPropagator, self).__init__(
+        super().__init__(
             graph=_load_graph(n_words, length_factor, distributional_model, distance_type, edge_pruning_type, edge_pruning),
             idx2label=idx2label,
             impulse_pruning_threshold=IMPULSE_PRUNING_THRESHOLD,
@@ -121,49 +120,8 @@ def _load_graph(n_words, length_factor, distributional_model, distance_type, edg
     return graph
 
 
-# TODO: essentially repeated code
-class LinguisticOneHopPropagator(LinguisticPropagator):
-    """A LinguisticPropagator which allows only hops from the initial nodes."""
-    def __init__(self,
-                 length_factor: int,
-                 n_words: int,
-                 distributional_model: DistributionalSemanticModel,
-                 distance_type: Optional[DistanceType],
-                 node_decay_factor: float,
-                 edge_decay_sd: float,
-                 edge_pruning_type: Optional[EdgePruningType],
-                 edge_pruning: Optional[Length],
-                 ):
-
-        super().__init__(
-            length_factor=length_factor,
-            n_words=n_words,
-            distributional_model=distributional_model,
-            distance_type=distance_type,
-            node_decay_factor=node_decay_factor,
-            edge_decay_sd=edge_decay_sd,
-            edge_pruning_type=edge_pruning_type,
-            edge_pruning=edge_pruning,
-            )
-
-        # region Resettable
-
-        # Prevent additional impulses being created
-        self._block_firing: bool = False
-
-        # endregion
-
-    def reset(self):
-        super().reset()
-        self._block_firing = False
-
-    def _schedule_activation_of_item_with_idx(self, idx: ItemIdx, activation: ActivationValue, arrival_time: int):
-        if self._block_firing:
-            return
-        else:
-            super()._schedule_activation_of_item_with_idx(idx, activation, arrival_time)
-
-    def _evolve_model(self) -> List[ModelEvent]:
-        model_events = super()._evolve_model()
-        self._block_firing = True
-        return model_events
+# OneHopPropagators can be easily produced from main propagators by adding
+# postsynaptic guards:
+#
+#     _first_tick: Guard = lambda idx, activation: model.clock == 0
+#     model.propagator.postsynaptic_guards.appendleft(_first_tick)

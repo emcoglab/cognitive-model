@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 from os import path
-from typing import Dict, List
+from typing import Dict
 
 from .ldm.utils.maths import DistanceType
 from .sensorimotor_norms.breng_translation.dictionary.version import VERSION as SM_BRENG_VERSION
-from .basic_types import ItemIdx, ItemLabel, Node, ActivationValue, Component
-from .events import ModelEvent
+from .basic_types import ItemIdx, ItemLabel, Node, Component
 from .graph import Graph
 from .graph_propagator import GraphPropagator, _load_labels, IMPULSE_PRUNING_THRESHOLD
 from .utils.logging import logger
@@ -117,46 +116,8 @@ def _load_graph(distance_type, length_factor, max_sphere_radius, use_prepruned, 
     return sensorimotor_graph
 
 
-class SensorimotorOneHopPropagator(SensorimotorPropagator):
-    """A SensorimotorPropagator which allows only hops from the initial nodes."""
-    def __init__(self,
-                 distance_type: DistanceType,
-                 length_factor: int,
-                 max_sphere_radius: int,
-                 node_decay_lognormal_median: float,
-                 node_decay_lognormal_sigma: float,
-                 use_breng_translation: bool = False,
-                 use_prepruned: bool = False,
-                 ):
-
-        super().__init__(
-            distance_type=distance_type,
-            length_factor=length_factor,
-            max_sphere_radius=max_sphere_radius,
-            node_decay_lognormal_median=node_decay_lognormal_median,
-            node_decay_lognormal_sigma=node_decay_lognormal_sigma,
-            use_prepruned=use_prepruned,
-            use_breng_translation=use_breng_translation,
-            )
-
-        # region Resettable
-
-        # Prevent additional impulses being created
-        self._block_firing: bool = False
-
-        # endregion
-
-    def reset(self):
-        super().reset()
-        self._block_firing = False
-
-    def _schedule_activation_of_item_with_idx(self, idx: ItemIdx, activation: ActivationValue, arrival_time: int):
-        if self._block_firing:
-            return
-        else:
-            super()._schedule_activation_of_item_with_idx(idx, activation, arrival_time)
-
-    def _evolve_model(self) -> List[ModelEvent]:
-        model_events = super()._evolve_model()
-        self._block_firing = True
-        return model_events
+# OneHopPropagators can be easily produced from main propagators by adding
+# postsynaptic guards:
+#
+#     _first_tick: Guard = lambda idx, activation: model.clock == 0
+#     model.propagator.postsynaptic_guards.appendleft(_first_tick)
