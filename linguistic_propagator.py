@@ -84,6 +84,18 @@ def _load_graph(n_words, length_factor, distributional_model, distance_type, edg
         assert distance_type is not None
         graph_file_name = f"{distributional_model.name} {distance_type.name} {n_words} words length {length_factor}.edgelist"
 
+    # First try pickle
+    import pickle
+    pickle_filename = f"{graph_file_name[:-9]}.pickle"  # swap .edgelist for .pickle
+    pickle_path = path.join(Preferences.graphs_dir, pickle_filename)
+    try:
+        logger.info(f"Attempting to load picked graph from {pickle_path}")
+        return Graph.load_from_pickle(pickle_path)
+    except FileNotFoundError:
+        logger.warning(f"Couldn't find pickle file, falling back to edgelist [{pickle_path}]")
+    except pickle.UnpicklingError:
+        logger.warning(f"Pickled graph appears to be broken. Consider deleting it. Falling back to edgelist [{pickle_path}]")
+
     # Load graph
     if edge_pruning is None:
         logger.info(f"Loading graph from {graph_file_name}")
@@ -121,6 +133,10 @@ def _load_graph(n_words, length_factor, distributional_model, distance_type, edg
 
     else:
         raise NotImplementedError()
+
+    if not path.isfile(pickle_path):
+        logger.info(f"Saving pickled version for faster loading next time")
+        graph.save_as_pickle(pickle_path)
 
     return graph
 

@@ -71,6 +71,7 @@ def gaussian_pdf(x: cython.float, mu: cython.float, sd: cython.float) -> cython.
 
     return e_term / sd
 
+
 def lognormal_sf(x: cython.float, mu: cython.float = 0, sigma: cython.float = 1) -> cython.float:
     """
     Cythonised approximation of the lognormal sf.

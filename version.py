@@ -7,7 +7,7 @@
 #            to organisationally separate output.
 #
 # Major changes should be accompanied by a Git tag (and LNB write-up); minor ones can be but it's not necessary.
-VERSION = "1.6.4"
+VERSION = "1.6.5"
 
 # Any code change which doesn't change the output of the model will still alter the Git commit hash, so this can be used
 # for tracking changes in output and bug-finding.

@@ -5,7 +5,7 @@ from typing import Dict, Optional
 
 from .ldm.utils.maths import DistanceType
 from .sensorimotor_norms.breng_translation.dictionary.version import VERSION as SM_BRENG_VERSION
-from .basic_types import ItemIdx, ItemLabel, Node, Component
+from .basic_types import ItemIdx, ItemLabel, Component
 from .graph import Graph
 from .graph_propagator import GraphPropagator, _load_labels, IMPULSE_PRUNING_THRESHOLD
 from .utils.logging import logger
@@ -29,7 +29,6 @@ class SensorimotorPropagator(GraphPropagator):
                  node_decay_lognormal_median: float,
                  node_decay_lognormal_sigma: float,
                  use_breng_translation: bool,
-                 use_prepruned: bool = False,
                  shelf_life: Optional[int] = None,
                  ):
         """
@@ -47,9 +46,6 @@ class SensorimotorPropagator(GraphPropagator):
             The node_decay_sigma parameter for the lognormal decay.
         :param use_breng_translation:
             Whether to use the BrEng-translated form of the sensorimotor norms.
-        :param use_prepruned:
-            Whether to use the pre-pruned graphs or do pruning on load.
-            Only to be used for testing purposes.
         """
 
         # region Validation
@@ -66,7 +62,7 @@ class SensorimotorPropagator(GraphPropagator):
         # Load graph
         idx2label = _load_labels_from_sensorimotor(use_breng_translation)
         super().__init__(
-            graph=_load_graph(distance_type, length_factor, max_sphere_radius, use_prepruned, idx2label),
+            graph=_load_graph(distance_type, length_factor, max_sphere_radius),
             idx2label=idx2label,
             node_decay_function=make_decay_function_lognormal(median=node_decay_lognormal_median * length_factor,
                                                               sigma=node_decay_lognormal_sigma),
@@ -92,29 +88,32 @@ def _load_labels_from_sensorimotor(use_breng_translation: bool) -> Dict[ItemIdx,
     return _load_labels(path.join(Preferences.graphs_dir, nodelabels_filename))
 
 
-def _load_graph(distance_type, length_factor, max_sphere_radius, use_prepruned, node_labelling_dictionary) -> Graph:
-    if use_prepruned:
-        logger.warning("Using pre-pruned graph. THIS SHOULD BE USED FOR TESTING PURPOSES ONLY!")
+def _load_graph(distance_type, length_factor, max_sphere_radius) -> Graph:
 
-        edgelist_filename = f"sensorimotor for testing only {distance_type.name} distance length {length_factor} pruned {max_sphere_radius}.edgelist"
-        edgelist_path = path.join(Preferences.graphs_dir, edgelist_filename)
+    # First try pickle
+    import pickle
+    pickle_filename = f"sensorimotor {distance_type.name} distance length {length_factor} pruned {max_sphere_radius}.pickle"
+    pickle_path = path.join(Preferences.graphs_dir, pickle_filename)
+    try:
+        logger.info(f"Attempting to load picked graph from {pickle_path}")
+        return Graph.load_from_pickle(pickle_path)
+    except FileNotFoundError:
+        logger.warning(f"Couldn't find pickle file, falling back to edgelist [{pickle_path}]")
+    except pickle.UnpicklingError:
+        logger.warning(f"Pickled graph appears to be broken. Consider deleting it. Falling back to edgelist [{pickle_path}]")
 
-        logger.info(f"Loading sensorimotor graph ({edgelist_filename})")
-        sensorimotor_graph: Graph = Graph.load_from_edgelist(file_path=edgelist_path, with_feedback=True)
+    edgelist_filename = f"sensorimotor {distance_type.name} distance length {length_factor}.edgelist"
+    edgelist_path = path.join(Preferences.graphs_dir, edgelist_filename)
 
-        # nodes which got removed from the edgelist because all their edges got pruned
-        for i, w in node_labelling_dictionary.items():
-            sensorimotor_graph.add_node(Node(i))
+    logger.info(f"Loading sensorimotor graph ({edgelist_filename})")
+    sensorimotor_graph: Graph = Graph.load_from_edgelist(
+        file_path=edgelist_path,
+        ignore_edges_longer_than=max_sphere_radius * length_factor,
+        with_feedback=True)
 
-    else:
-        edgelist_filename = f"sensorimotor {distance_type.name} distance length {length_factor}.edgelist"
-        edgelist_path = path.join(Preferences.graphs_dir, edgelist_filename)
-
-        logger.info(f"Loading sensorimotor graph ({edgelist_filename})")
-        sensorimotor_graph: Graph = Graph.load_from_edgelist(
-            file_path=edgelist_path,
-            ignore_edges_longer_than=max_sphere_radius * length_factor,
-            with_feedback=True)
+    if not path.isfile(pickle_path):
+        logger.info(f"Saving pickled version for faster loading next time")
+        sensorimotor_graph.save_as_pickle(pickle_path)
 
     return sensorimotor_graph
 

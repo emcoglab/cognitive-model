@@ -14,6 +14,7 @@ caiwingfield.net
 2018
 ---------------------------
 """
+
 from typing import Sequence, Tuple, Callable
 
 from numpy import percentile, float_power, pi, sqrt, log

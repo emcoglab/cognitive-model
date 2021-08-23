@@ -138,6 +138,20 @@ class Graph:
 
     # region IO
 
+    def save_as_pickle(self, file_path: str):
+        """Pickles this Graph object."""
+        import pickle
+        with open(file_path, mode="wb") as file:
+            pickle.dump(self, file, protocol=pickle.HIGHEST_PROTOCOL)
+
+    @classmethod
+    def load_from_pickle(cls, file_path: str) -> Graph:
+        """Unpickles a Graph object."""
+        import pickle
+        with open(file_path, mode="rb") as file:
+            graph = pickle.load(file)
+        return graph
+
     def save_as_edgelist(self, file_path: str):
         """Saves a Graph as an edgelist. Disconnected nodes will not be included."""
         with open(file_path, mode="w", encoding="utf-8") as edgelist_file:
