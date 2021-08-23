@@ -89,7 +89,7 @@ def _load_graph(n_words, length_factor, distributional_model, distance_type, edg
     pickle_filename = f"{graph_file_name[:-9]}.pickle"  # swap .edgelist for .pickle
     pickle_path = path.join(Preferences.graphs_dir, pickle_filename)
     try:
-        logger.info(f"Attempting to load picked graph from {pickle_path}")
+        logger.info(f"Attempting to load pickled graph from {pickle_path}")
         return Graph.load_from_pickle(pickle_path)
     except FileNotFoundError:
         logger.warning(f"Couldn't find pickle file, falling back to edgelist [{pickle_path}]")
