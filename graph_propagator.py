@@ -319,16 +319,13 @@ class GraphPropagator(ABC):
         current_activation = self.activation_of_item_with_idx(idx)
 
         # Check if something will prevent the activation from occurring
-        for guard in self.presynaptic_guards:
-            if not guard(idx, current_activation):
-                # If activation was blocked, node didn't activate (or fire)
-                return None
+        if not self.__apply_presynaptic_guards(idx, current_activation):
+            # If activation was blocked, node didn't activate (or fire)
+            return None
 
         # Otherwise, we proceed with the activation:
 
-        # Apply presynaptic modulations
-        for modulation in self.presynaptic_modulations:
-            activation = modulation(idx, activation)
+        activation = self.__apply_presynaptic_modulation(idx, activation)
 
         # We don't check for resultant activation beneath self.impulse_pruning_threshold here, as it would prevent
         # manual external activation beneath the threshold. Instead we must rely on the threshold being applied when
@@ -340,8 +337,7 @@ class GraphPropagator(ABC):
         new_activation = current_activation + activation
 
         # Apply postsynaptic modulations to accumulated value
-        for modulation in self.postsynaptic_modulations:
-            new_activation = modulation(idx, new_activation)
+        new_activation = self.__apply_postsynaptic_modulation(idx, new_activation)
 
         # The item activated, so an activation event occurs
         event = ItemActivatedEvent(time=self.clock, item=Item(idx=idx, component=self.component),
@@ -352,20 +348,41 @@ class GraphPropagator(ABC):
         self._activation_records[idx] = ActivationRecord(new_activation, self.clock)
 
         # Check if the postsynaptic firing guard is passed
-        for guard in self.postsynaptic_guards:
-            if not guard(idx, new_activation):
-                # If not, stop here
-                return event
+        if not self.__apply_postsynaptic_guards(idx, new_activation):
+            # If not, stop here
+            return event
 
-        # If we did, not only did this node activated, it fired as well, so we upgrade the event
+        # If we did, not only did this node activate, it fired as well, so we upgrade the event
         event.fired = True
+        self.__fire_node(source_idx=idx, source_activation=new_activation)
 
-        #########################
-        # Fire and rebroadcast! #
-        #########################
+        return event
 
-        source_idx = idx
+    # Separated out from __apply_activation_to_item_with_idx for profiling purposes
 
+    def __apply_presynaptic_guards(self, idx, activation):
+        for guard in self.presynaptic_guards:
+            if not guard(idx, activation):
+                return False
+        return True
+
+    def __apply_postsynaptic_guards(self, idx, activation):
+        for guard in self.postsynaptic_guards:
+            if not guard(idx, activation):
+                return False
+        return True
+
+    def __apply_presynaptic_modulation(self, idx, activation):
+        for modulation in self.presynaptic_modulations:
+            activation = modulation(idx, activation)
+        return activation
+
+    def __apply_postsynaptic_modulation(self, idx, activation):
+        for modulation in self.postsynaptic_modulations:
+            activation = modulation(idx, activation)
+        return activation
+
+    def __fire_node(self, source_idx, source_activation):
         # For each incident edge
         for edge in self.graph.incident_edges(source_idx):
 
@@ -375,7 +392,7 @@ class GraphPropagator(ABC):
 
             length = self.graph.edge_lengths[edge]
 
-            arrival_activation = self.edge_decay_function(length, new_activation)
+            arrival_activation = self.edge_decay_function(length, source_activation)
 
             # Skip any impulses which will be too small on arrival
             if arrival_activation < self.impulse_pruning_threshold:
@@ -384,8 +401,6 @@ class GraphPropagator(ABC):
             # Accumulate activation at target node at time when it's due to arrive
             self._schedule_activation_of_item_with_idx(idx=target_idx, activation=arrival_activation,
                                                        arrival_time=self.clock + length)
-
-        return event
 
     # endregion
 
