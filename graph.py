@@ -80,10 +80,11 @@ class Graph:
         # The length associated with each edge.
         # If modifying this, you must also modify ._incident_edges, which caches incidence information.
         self.edge_lengths: Dict[Edge, Length] = dict()
-        # Node-keyed dict of sets of incident edges
+        # Node-keyed dict of lists of incident edges
         # Redundant cache for fast lookup.
         # Gets updated by calls to self.add_edge
-        self._incident_edges: DefaultDict[Node, Set[Edge]] = defaultdict(set)
+        # We use lists for fast lookup, which means we have to verify non-duplicates on modification
+        self._incident_edges: DefaultDict[Node, List[Edge]] = defaultdict(list)
 
         if nodes is not None:
             for node in nodes:
@@ -115,14 +116,16 @@ class Graph:
         self.edge_lengths[edge] = length
         # Add incident edges information
         for node in edge:
-            self._incident_edges[node].add(edge)
+            # Ensure no duplicates
+            if edge not in self._incident_edges[node]:
+                self._incident_edges[node].append(edge)
 
     def add_node(self, node: Node):
         """Add a bare node to the graph if it's not already there."""
         if node not in self.nodes:
             self.nodes.add(node)
 
-    def incident_edges(self, node: Node) -> Set[Edge]:
+    def incident_edges(self, node: Node) -> List[Edge]:
         """The edges which have `node` as an endpoint."""
         return self._incident_edges[node]
 
@@ -289,7 +292,7 @@ class Graph:
             # So we first forget to add any edges the node already has...
             forget = []
             for edge, length in edges_to_keep_this_node:
-                if edge in self.incident_edges(node):
+                if edge in self._incident_edges[node]:
                     forget.append((edge, length))
             for f in forget:
                 edges_to_keep_this_node.remove(f)
@@ -495,6 +498,7 @@ class Graph:
         self.edge_lengths.pop(edge)
         # Remove from redundant adjacency dictionary
         n1, n2 = edge
+        # These can be assumed to have no duplicates
         self._incident_edges[n1].remove(edge)
         self._incident_edges[n2].remove(edge)
 
