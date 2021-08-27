@@ -384,7 +384,7 @@ class GraphPropagator(ABC):
 
     def __fire_node(self, source_idx, source_activation):
         # For each incident edge
-        for edge in self.graph.incident_edges(source_idx):
+        for edge in self.graph.edges_incident_to(source_idx):
 
             # Find which node in the edge is the source node and which is the target
             n1, n2 = edge

@@ -162,7 +162,7 @@ class TestGraphPruning(unittest.TestCase):
         )
         self.assertFalse(wide_graph.has_orphaned_nodes())
         for node in wide_graph.nodes:
-            self.assertGreaterEqual(len(wide_graph.incident_edges(node)), 3)
+            self.assertGreaterEqual(len(wide_graph.edges_incident_to(node)), 3)
 
     def test_pruning_keeping_enough_edges(self):
         wide_graph = Graph.from_distance_matrix(
@@ -173,13 +173,13 @@ class TestGraphPruning(unittest.TestCase):
         wide_graph.prune_longest_edges_by_length(length_threshold=5, keep_at_least_n_edges=3)
         self.assertFalse(wide_graph.has_orphaned_nodes())
         for node in wide_graph.nodes:
-            self.assertGreaterEqual(len(wide_graph.incident_edges(node)), 3)
+            self.assertGreaterEqual(len(wide_graph.edges_incident_to(node)), 3)
 
     def test_loading_keeping_enough_edges(self):
         wide_graph: Graph = Graph.load_from_edgelist(file_path=test_graph_file_path, ignore_edges_longer_than=3, keep_at_least_n_edges=2)
         self.assertFalse(wide_graph.has_orphaned_nodes())
         for node in wide_graph.nodes:
-            self.assertGreaterEqual(len(wide_graph.incident_edges(node)), 2)
+            self.assertGreaterEqual(len(wide_graph.edges_incident_to(node)), 2)
 
 
 class TestGraphTopology(unittest.TestCase):

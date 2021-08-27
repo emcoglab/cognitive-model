@@ -80,11 +80,11 @@ class Graph:
         # The length associated with each edge.
         # If modifying this, you must also modify ._incident_edges, which caches incidence information.
         self.edge_lengths: Dict[Edge, Length] = dict()
-        # Node-keyed dict of lists of incident edges
-        # Redundant cache for fast lookup.
-        # Gets updated by calls to self.add_edge
-        # We use lists for fast lookup, which means we have to verify non-duplicates on modification
-        self._incident_edges: DefaultDict[Node, List[Edge]] = defaultdict(list)
+        # Cache of Node-keyed dict of lists of incident edges.
+        # When modifying the graph using add_edge or remove_edge this will become invalid and must be rebuilt before use
+        # So it's a good idea to batch modifications.
+        self.__incident_edges: DefaultDict[Node, List[Edge]] = defaultdict(list)  # Backing for self._incident_edges
+        self.__incident_edges_cache_is_valid: bool = False
 
         if nodes is not None:
             for node in nodes:
@@ -93,6 +93,34 @@ class Graph:
             for edge, length in edges.items():
                 self.add_edge(edge, length)
 
+        self.__rebuild_incident_edges_cache()
+
+    @property
+    def _incident_edges(self) -> DefaultDict[Node, List[Edge]]:
+        """Prefer to use self.edges_incident_to(node)."""
+        if not self.__incident_edges_cache_is_valid:
+            self.__rebuild_incident_edges_cache()
+        return self.__incident_edges
+
+    def edges_incident_to(self, node: Node) -> List[Edge]:
+        """The edges which have `node` as an endpoint."""
+        return self._incident_edges[node]
+
+    def __rebuild_incident_edges_cache(self):
+        logger.info("Rebuilding incident edge cache")
+        # Use sets for quick deduplication
+        incident_edges = defaultdict(set)
+        for edge in self.edges:
+            # Add incident edges information
+            for node in edge:
+                incident_edges[node].add(edge)
+        # Convert back to list
+        self.__incident_edges = defaultdict(list, {
+            node: list(edges)
+            for node, edges in incident_edges.items()
+        })
+        self.__incident_edges_cache_is_valid = True
+
     @property
     def edges(self):
         return self.edge_lengths.keys()
@@ -100,11 +128,13 @@ class Graph:
     def add_edge(self, edge: Edge, length: Length = None):
         """
         Add an edge to the graph, and endpoint nodes.
+        Invalidates the cache.
         :param edge:
         :param length:
         :raises EdgeExistsError if edge already exists in graph.
         :return:
         """
+        self.__incident_edges_cache_is_valid = False
         # Check if edge already added
         if edge in self.edges:
             raise EdgeExistsError(f"Edge {edge} already exists!")
@@ -114,25 +144,17 @@ class Graph:
                 self.add_node(node)
         # Add edge
         self.edge_lengths[edge] = length
-        # Add incident edges information
-        for node in edge:
-            # Ensure no duplicates
-            if edge not in self._incident_edges[node]:
-                self._incident_edges[node].append(edge)
 
     def add_node(self, node: Node):
         """Add a bare node to the graph if it's not already there."""
+        # Adding a node does not itself invalidate the cache
         if node not in self.nodes:
             self.nodes.add(node)
-
-    def incident_edges(self, node: Node) -> List[Edge]:
-        """The edges which have `node` as an endpoint."""
-        return self._incident_edges[node]
 
     def neighbourhood(self, node: Node) -> Iterator[Node]:
         """The nodes which are connected to `node` by exactly one edge."""
         assert node in self.nodes
-        for edge in self._incident_edges[node]:
+        for edge in self.edges_incident_to(node):
             for n in edge:
                 # Skip the source node
                 if n == node:
@@ -141,8 +163,10 @@ class Graph:
 
     # region IO
 
-    def save_as_pickle(self, file_path: str):
+    def save_as_pickle(self, file_path: str, validate_cache: bool = False):
         """Pickles this Graph object."""
+        if validate_cache and not self.__incident_edges_cache_is_valid:
+            self.__rebuild_incident_edges_cache()
         import pickle
         with open(file_path, mode="wb") as file:
             pickle.dump(self, file, protocol=pickle.HIGHEST_PROTOCOL)
@@ -221,6 +245,8 @@ class Graph:
         if keep_at_least_n_edges:
             graph.__add_kept_edges(edges_to_keep, keep_at_least_n_edges)
 
+        graph.__rebuild_incident_edges_cache()
+
         return graph
 
     @classmethod
@@ -275,6 +301,8 @@ class Graph:
         if keep_at_least_n_edges:
             graph.__add_kept_edges(edges_to_keep, keep_at_least_n_edges)
 
+        graph.__rebuild_incident_edges_cache()
+
         return graph
 
     def __add_kept_edges(self, edges_to_keep_buffer: DefaultDict[Node, SortedSet], keep_at_least_n_edges: int):
@@ -292,12 +320,12 @@ class Graph:
             # So we first forget to add any edges the node already has...
             forget = []
             for edge, length in edges_to_keep_this_node:
-                if edge in self._incident_edges[node]:
+                if edge in self.edges_incident_to(node):
                     forget.append((edge, length))
             for f in forget:
                 edges_to_keep_this_node.remove(f)
             # ... and then forget as many others as necessary.
-            n_excess_kept_edges = (len(self._incident_edges[node])
+            n_excess_kept_edges = (len(self.edges_incident_to(node))
                                    + len(edges_to_keep_this_node)
                                    - keep_at_least_n_edges)
             for _ in range(n_excess_kept_edges):
@@ -385,6 +413,8 @@ class Graph:
         if keep_at_least_n_edges:
             graph.__add_kept_edges(edges_to_keep, keep_at_least_n_edges)
 
+        graph.__rebuild_incident_edges_cache()
+
         return graph
 
     @classmethod
@@ -401,6 +431,8 @@ class Graph:
                         graph.add_edge(Edge((n1, n2)), length)
                     else:
                         graph.add_edge(Edge((n1, n2)))
+
+        graph.__rebuild_incident_edges_cache()
 
         return graph
 
@@ -419,7 +451,7 @@ class Graph:
         search_queue.add(starting_node)
         while len(search_queue) > 0:
             current_node = search_queue.pop()
-            neighbouring_nodes = set(node for edge in self._incident_edges[current_node] for node in edge)
+            neighbouring_nodes = set(node for edge in self.edges_incident_to(current_node) for node in edge)
             for node in neighbouring_nodes:
                 if node not in visited_nodes:
                     visited_nodes.add(node)
@@ -431,7 +463,7 @@ class Graph:
             return False
 
     def _is_orphaned(self, node: Node) -> bool:
-        return len(self._incident_edges[node]) == 0
+        return len(self.edges_incident_to(node)) == 0
 
     def _iter_orphaned_nodes(self) -> Iterator[Node]:
         """Iterator of orphaned nodes."""
@@ -485,22 +517,21 @@ class Graph:
         if keep_at_least_n_edges:
             self.__add_kept_edges(edges_to_keep, keep_at_least_n_edges)
 
+        self.__rebuild_incident_edges_cache()
+
     def remove_edge(self, edge: Edge):
         """
         Remove an edge from the graph. Does not remove endpoint nodes.
+        Invalidates the cache
         :param edge:
         :raises EdgeNotExistsError if edge does not exist in the graph.
         :return:
         """
+        self.__incident_edges_cache_is_valid = False
         if edge not in self.edges:
             raise EdgeNotExistsError(f"Edge {edge} does not exist.")
         # Remove from edge dictionary
         self.edge_lengths.pop(edge)
-        # Remove from redundant adjacency dictionary
-        n1, n2 = edge
-        # These can be assumed to have no duplicates
-        self._incident_edges[n1].remove(edge)
-        self._incident_edges[n2].remove(edge)
 
     def prune_longest_edges_by_quantile(self, quantile: float, keep_at_least_n_edges: int = 0):
         """
