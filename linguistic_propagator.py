@@ -92,7 +92,7 @@ def _load_graph(n_words, length_factor, distributional_model, distance_type, edg
         logger.info(f"Attempting to load pickled graph from {pickle_path}")
         return Graph.load_from_pickle(pickle_path)
     except FileNotFoundError:
-        logger.warning(f"Couldn't find pickle file, falling back to edgelist [{pickle_path}]")
+        logger.info(f"Couldn't find pickle file, falling back to edgelist [{pickle_path}]")
     except pickle.UnpicklingError:
         logger.warning(f"Pickled graph appears to be broken. Consider deleting it. Falling back to edgelist [{pickle_path}]")
 
