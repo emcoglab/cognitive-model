@@ -73,9 +73,8 @@ class GraphPropagator(ABC):
         """
         Underlying shared code between model components which operate via propagation of activation on a graph.
         :param graph:
-            `graph` should be an undirected, weighted graph with the following data:
+            `graph` should be an undirected graph with the following data:
                 On Edges:
-                    weight
                     length
         :param idx2label:
             A dictionary whose keys are item indexes, and whose values are item labels.
