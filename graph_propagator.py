@@ -391,6 +391,9 @@ class GraphPropagator(ABC):
 
             length = self.graph.edge_lengths[edge]
 
+            # 2022-01-10: You might think that this line is where this function spends all its time, but when I wrap it
+            #             in a method call it takes around 1/3 of the time spent in this function, with __fire_node
+            #             taking a total of 39% of the the entire run.
             arrival_activation = self.edge_decay_function(length, source_activation)
 
             # Skip any impulses which will be too small on arrival
