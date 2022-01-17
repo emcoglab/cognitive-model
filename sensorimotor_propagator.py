@@ -99,8 +99,8 @@ def _load_graph(distance_type, length_factor, max_sphere_radius) -> Graph:
         return Graph.load_from_pickle(pickle_path)
     except FileNotFoundError:
         logger.info(f"Couldn't find pickle file, falling back to edgelist [{pickle_path}]")
-    except pickle.UnpicklingError:
-        logger.warning(f"Pickled graph appears to be broken. Consider deleting it. Falling back to edgelist [{pickle_path}]")
+    except pickle.UnpicklingError as e:
+        logger.warning(f"Pickled graph appears to be broken. Consider deleting it. Falling back to edgelist [{pickle_path}]: {repr(e)}")
 
     edgelist_filename = f"sensorimotor {distance_type.name} distance length {length_factor}.edgelist"
     edgelist_path = path.join(Preferences.graphs_dir, edgelist_filename)
