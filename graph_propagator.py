@@ -132,17 +132,6 @@ class GraphPropagator(ABC):
         # none, no modulation is applied.
         # If any guard in the sequence returns False, the sequence terminates with False; else we get True.
 
-        # presynaptic_modulations:
-        #     Modulates the incoming activations to items. E.g. by scaling incoming activation by some property of the
-        #     item. Applies to the sum total of all converging activation, not to each individual incoming activation
-        #     (this isn't the same unless the modulation is linear).
-        # :param idx:
-        #     The item receiving the activation.
-        # :param activation:
-        #     The unmodified presynaptic activation.
-        # :return:
-        #     The modified presynaptic activation.
-        self.presynaptic_modulations: Deque[Modulation] = deque()
         # presynaptic_guards:
         #     Guards a node's accumulation (and hence also its firing) based on its activation before incoming
         #     activation has accumulated.  (E.g. making sufficiently-activated nodes into sinks until they decay.)
@@ -155,6 +144,17 @@ class GraphPropagator(ABC):
         # :return:
         #     True if the node should be allowed accumulate, else False.
         self.presynaptic_guards: Deque[Guard] = deque()
+        # presynaptic_modulations:
+        #     Modulates the incoming activations to items. E.g. by scaling incoming activation by some property of the
+        #     item. Applies to the sum total of all converging activation, not to each individual incoming activation
+        #     (this isn't the same unless the modulation is linear).
+        # :param idx:
+        #     The item receiving the activation.
+        # :param activation:
+        #     The unmodified presynaptic activation.
+        # :return:
+        #     The modified presynaptic activation.
+        self.presynaptic_modulations: Deque[Modulation] = deque()
         # postsynaptic_modulations:
         #     Modulates the activations of items after accumulation, but before firing.
         #     (E.g. applying an activation cap).
