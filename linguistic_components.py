@@ -18,9 +18,10 @@ from __future__ import annotations
 
 from typing import Optional
 
-from .basic_types import ActivationValue, ItemIdx
+from .basic_types import ActivationValue
 from .components import ModelComponentWithAccessibleSet
-from .graph_propagator import Guard
+from .guards import under_firing_threshold_guard_for, exceeds_firing_threshold_guard_for
+from .modulations import apply_activation_cap_modulation_for
 from .linguistic_propagator import LinguisticPropagator
 
 
@@ -59,27 +60,16 @@ class LinguisticComponent(ModelComponentWithAccessibleSet):
         self.propagator.presynaptic_guards.extend([
             # If this node is currently suprathreshold, it acts as activation sink.
             # It doesn't accumulate new activation and cannot fire.
-            self._under_firing_threshold(self.firing_threshold)
+            under_firing_threshold_guard_for(self.firing_threshold)
         ])
         # No pre-synaptic modulation
         if activation_cap is not None:
             self.propagator.postsynaptic_modulations.extend([
                 # Cap on a node's total activation after receiving incoming activations
-                self._apply_activation_cap(activation_cap)
+                apply_activation_cap_modulation_for(activation_cap)
             ])
         self.propagator.postsynaptic_guards.extend([
             # Activation must exceed a firing threshold to cause further propagation.
-            self._exceeds_firing_threshold(self.firing_threshold)
+            exceeds_firing_threshold_guard_for(self.firing_threshold)
         ])
 
-    @staticmethod
-    def _exceeds_firing_threshold(firing_threshold: ActivationValue) -> Guard:
-        def guard(idx: ItemIdx, activation: ActivationValue) -> bool:
-            return activation >= firing_threshold
-        return guard
-
-    @staticmethod
-    def _under_firing_threshold(firing_threshold: ActivationValue) -> Guard:
-        def guard(idx: ItemIdx, activation: ActivationValue) -> bool:
-            return activation < firing_threshold
-        return guard

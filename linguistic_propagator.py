@@ -10,7 +10,7 @@ from .basic_types import Length, ItemIdx, ItemLabel, Component
 from .utils.logging import logger
 from .graph import Graph, EdgePruningType
 from .graph_propagator import GraphPropagator, _load_labels, IMPULSE_PRUNING_THRESHOLD
-from .utils.maths import make_decay_function_exponential_with_decay_factor, make_decay_function_gaussian_with_sd
+from .decay_functions import make_decay_function_exponential_with_decay_factor, make_decay_function_gaussian_with_sd
 from .preferences.preferences import Preferences
 
 

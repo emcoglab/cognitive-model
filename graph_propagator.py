@@ -18,23 +18,15 @@ caiwingfield.net
 import json
 from abc import ABC
 from collections import namedtuple, defaultdict, deque
-from typing import Dict, DefaultDict, Optional, List, Callable, Deque
+from typing import Dict, DefaultDict, Optional, List, Deque
 
 from .basic_types import ActivationValue, ItemIdx, ItemLabel, Item, Component
+from .decay_functions import DecayFunction, make_decay_function_constant
 from .events import ModelEvent, ItemActivatedEvent
 from .graph import Graph
+from .guards import Guard
+from .modulations import Modulation
 from .utils.exceptions import ItemNotFoundError
-from .utils.maths import make_decay_function_constant
-
-
-# Maps an item and its activation to a new, modulated activation
-Modulation = Callable[[ItemIdx, ActivationValue], ActivationValue]
-# Maps an item and its activation to whether something is permitted to happen,
-# i.e. whether the guard is passed
-# (True => it is allowed to happen; False => it is not allowed to happen)
-Guard = Callable[[ItemIdx, ActivationValue], bool]
-# Maps an elapsed time and and initial activation to a final activation
-DecayFunction = Callable[[int, ActivationValue], ActivationValue]
 
 IMPULSE_PRUNING_THRESHOLD = 0.05
 
