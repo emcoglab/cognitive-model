@@ -24,7 +24,7 @@ class SensorimotorComponent(ModelComponentWithAccessibleSet):
                  use_breng_translation: bool,
                  ):
 
-        sensorimotor_norms = SensorimotorNorms(use_breng_translation=use_breng_translation)
+        self.sensorimotor_norms = SensorimotorNorms(use_breng_translation=use_breng_translation)
 
         super().__init__(propagator, accessible_set_threshold, accessible_set_capacity)
         assert isinstance(self.propagator, SensorimotorPropagator)
@@ -39,11 +39,11 @@ class SensorimotorComponent(ModelComponentWithAccessibleSet):
             """Gets the correct statistic for an item."""
             if attenuation_statistic is AttenuationStatistic.FractionKnown:
                 # Fraction known will all be in the range [0, 1], so we can use it as a scaling factor directly
-                return sensorimotor_norms.fraction_known(self.propagator.idx2label[idx])
+                return self.sensorimotor_norms.fraction_known(self.propagator.idx2label[idx])
             elif attenuation_statistic is AttenuationStatistic.Prevalence:
                 # Brysbaert et al.'s (2019) prevalence has a defined range, so we can affine-scale it into [0, 1] for
                 # the purposes of attenuating the activation
-                return scale_prevalence_01(prevalence_from_fraction_known(sensorimotor_norms.fraction_known(self.propagator.idx2label[idx])))
+                return scale_prevalence_01(prevalence_from_fraction_known(self.sensorimotor_norms.fraction_known(self.propagator.idx2label[idx])))
             else:
                 raise NotImplementedError()
 
