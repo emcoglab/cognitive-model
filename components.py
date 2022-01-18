@@ -92,12 +92,22 @@ class ModelComponent(ABC):
         """
         raise NotImplementedError()
 
+    # Modulations
+
+    # This isn't actually a modulation, but creates a modulation
     @staticmethod
     def _apply_activation_cap(activation_cap: ActivationValue) -> Modulation:
         def modulation(idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
             """If accumulated activation is over the cap, apply the cap."""
             return activation if activation <= activation_cap else activation_cap
         return modulation
+
+    # Guards
+
+    @staticmethod
+    def just_no(idx: ItemIdx, activation: ActivationValue) -> bool:
+        """Slot this guard into place to deny whatever is being guarded against."""
+        return False
 
 
 class ModelComponentWithAccessibleSet(ModelComponent, ABC):

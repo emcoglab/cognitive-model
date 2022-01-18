@@ -124,4 +124,4 @@ def _load_graph(distance_type, length_factor, max_sphere_radius) -> Graph:
 #     _first_tick: Guard = lambda idx, activation: model.clock == 0
 #     model.propagator.postsynaptic_guards.appendleft(_first_tick)
 #     (Don't forget that if you're using a combined model, model.clock gets evaluated lazily, so might be in an
-#     inconsistent state. Maybe set t=model.clock and use that in the lambda instead.)
+#     inconsistent state, so be careful with that.)
