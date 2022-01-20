@@ -34,14 +34,13 @@ def just_no_guard(idx: ItemIdx, activation: ActivationValue) -> bool:
 
 # Functions to create guards
 
-
-def under_firing_threshold_guard_for(firing_threshold: ActivationValue) -> Guard:
-    def guard(idx: ItemIdx, activation: ActivationValue) -> bool:
+def make_under_firing_threshold_guard_for(firing_threshold: ActivationValue) -> Guard:
+    def under_firing_threshold_guard(idx: ItemIdx, activation: ActivationValue) -> bool:
         return activation < firing_threshold
-    return guard
+    return under_firing_threshold_guard
 
 
-def exceeds_firing_threshold_guard_for(firing_threshold: ActivationValue) -> Guard:
-    def guard(idx: ItemIdx, activation: ActivationValue) -> bool:
+def make_exceeds_firing_threshold_guard_for(firing_threshold: ActivationValue) -> Guard:
+    def exceeds_firing_threshold_guard(idx: ItemIdx, activation: ActivationValue) -> bool:
         return activation >= firing_threshold
-    return guard
+    return exceeds_firing_threshold_guard

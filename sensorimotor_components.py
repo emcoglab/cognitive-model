@@ -5,7 +5,7 @@ from typing import Optional, List, Dict
 from .basic_types import ActivationValue, ItemIdx
 from .buffer import WorkingMemoryBuffer
 from .components import ModelComponentWithAccessibleSet
-from .modulations import apply_activation_cap_modulation_for, attenuate_by_statistic_modulation_for
+from .modulations import make_apply_activation_cap_modulation_for, make_attenuate_by_statistic_modulation_for
 from .events import ModelEvent, ItemActivatedEvent
 from .attenuation_statistic import AttenuationStatistic
 from .sensorimotor_propagator import SensorimotorPropagator
@@ -57,17 +57,17 @@ class SensorimotorComponent(ModelComponentWithAccessibleSet):
 
         # No pre-synaptic guards
         self.propagator.presynaptic_modulations.appendleft(
-            attenuate_by_statistic_modulation_for(self._attenuation_statistic)
+            make_attenuate_by_statistic_modulation_for(self._attenuation_statistic)
         )
         if activation_cap is not None:
             # Apply cap before attenuations
             self.propagator.presynaptic_modulations.appendleft(
-                apply_activation_cap_modulation_for(activation_cap)
+                make_apply_activation_cap_modulation_for(activation_cap)
             )
         if activation_cap is not None:
             self.propagator.postsynaptic_modulations.extend([
                 # Cap on a node's total activation after receiving incoming activations
-                apply_activation_cap_modulation_for(activation_cap)
+                make_apply_activation_cap_modulation_for(activation_cap)
             ])
         # No post-synaptic guards
 

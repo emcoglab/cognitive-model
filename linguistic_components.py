@@ -20,8 +20,8 @@ from typing import Optional
 
 from .basic_types import ActivationValue
 from .components import ModelComponentWithAccessibleSet
-from .guards import under_firing_threshold_guard_for, exceeds_firing_threshold_guard_for
-from .modulations import apply_activation_cap_modulation_for
+from .guards import make_under_firing_threshold_guard_for, make_exceeds_firing_threshold_guard_for
+from .modulations import make_apply_activation_cap_modulation_for
 from .linguistic_propagator import LinguisticPropagator
 
 
@@ -60,16 +60,16 @@ class LinguisticComponent(ModelComponentWithAccessibleSet):
         self.propagator.presynaptic_guards.extend([
             # If this node is currently suprathreshold, it acts as activation sink.
             # It doesn't accumulate new activation and cannot fire.
-            under_firing_threshold_guard_for(self.firing_threshold)
+            make_under_firing_threshold_guard_for(self.firing_threshold)
         ])
         # No pre-synaptic modulation
         if activation_cap is not None:
             self.propagator.postsynaptic_modulations.extend([
                 # Cap on a node's total activation after receiving incoming activations
-                apply_activation_cap_modulation_for(activation_cap)
+                make_apply_activation_cap_modulation_for(activation_cap)
             ])
         self.propagator.postsynaptic_guards.extend([
             # Activation must exceed a firing threshold to cause further propagation.
-            exceeds_firing_threshold_guard_for(self.firing_threshold)
+            make_exceeds_firing_threshold_guard_for(self.firing_threshold)
         ])
 

@@ -214,7 +214,10 @@ class GraphPropagator(ABC):
         # endregion
 
     def reset(self):
-        """Resets the spreading to its initial state without having to reload any data."""
+        """
+        Resets the spreading to its initial state without having to reload any data.
+        (!) Note that this will not reset any externally applied modifications, e.g. to guards or modulations! (!)
+        """
         self.clock = 0
         self._activation_records = defaultdict(blank_node_activation_record)
         self._scheduled_activations = defaultdict(lambda: defaultdict(lambda: ActivationValue(0)))

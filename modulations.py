@@ -25,15 +25,15 @@ Modulation = Callable[[ItemIdx, ActivationValue], ActivationValue]
 
 # Functions to create modulations
 
-def apply_activation_cap_modulation_for(activation_cap: ActivationValue) -> Modulation:
-    def modulation(idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
+def make_apply_activation_cap_modulation_for(activation_cap: ActivationValue) -> Modulation:
+    def apply_activation_cap_modulation(idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
         """If accumulated activation is over the cap, apply the cap."""
         return activation if activation <= activation_cap else activation_cap
-    return modulation
+    return apply_activation_cap_modulation
 
 
-def attenuate_by_statistic_modulation_for(statistic: Dict[ItemIdx, float]) -> Modulation:
-    def modulation(idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
+def make_attenuate_by_statistic_modulation_for(statistic: Dict[ItemIdx, float]) -> Modulation:
+    def attenuate_by_statistic_modulation(idx: ItemIdx, activation: ActivationValue) -> ActivationValue:
         """Scale an item's activation by a statistic for the item."""
         return activation * statistic[idx]
-    return modulation
+    return attenuate_by_statistic_modulation
