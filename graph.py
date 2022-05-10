@@ -559,8 +559,7 @@ class Graph:
 
 
 def length_from_distance(distance: float, length_factor: int) -> Length:
-    length = Length(ceil(distance * length_factor))
-    return length
+    return Length(ceil(distance * length_factor))
 
 
 def save_edgelist_from_distance_matrix(file_path: str,
@@ -644,7 +643,8 @@ def save_edgelist_from_similarity_matrix(file_path: str,
             # only want half of the symmetric matrix, and no diagonal
             if j <= i:
                 continue
-            length = Length(ceil(length_factor * distance_from_similarity(v, max_value, min_value)))
+            length: Length = length_from_distance(distance=distance_from_similarity(v, max_value, min_value),
+                                                  length_factor=length_factor)
             assert length > 0
             # Write edge to file
             temp_file.write(f"{i} {j} {length}\n")
