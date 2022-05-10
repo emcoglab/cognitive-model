@@ -4,7 +4,7 @@ from typing import Dict, Optional
 from pandas import DataFrame
 
 from .ldm.corpus.corpus import CorpusMetadata
-from .ldm.model.base import DistributionalSemanticModel
+from .ldm.model.base import LinguisticDistributionalModel
 from .ldm.utils.maths import DistanceType
 from .basic_types import Length, ItemIdx, ItemLabel, Component
 from .utils.logging import logger
@@ -23,7 +23,7 @@ class LinguisticPropagator(GraphPropagator):
     def __init__(self,
                  length_factor: int,
                  n_words: int,
-                 distributional_model: DistributionalSemanticModel,
+                 distributional_model: LinguisticDistributionalModel,
                  distance_type: Optional[DistanceType],
                  node_decay_factor: float,
                  edge_decay_sd: float,
@@ -77,7 +77,7 @@ def _load_labels_from_corpus(corpus: CorpusMetadata, n_words: int) -> Dict[ItemI
 def _load_graph(n_words, length_factor, distributional_model, distance_type, edge_pruning_type, edge_pruning: Length) -> Graph:
 
     # Check if distance_type is needed and get filename
-    if distributional_model.model_type.metatype is DistributionalSemanticModel.MetaType.ngram:
+    if distributional_model.model_type.metatype is LinguisticDistributionalModel.MetaType.ngram:
         assert distance_type is None
         graph_file_name = f"{distributional_model.name} {n_words} words length {length_factor}.edgelist"
     else:
