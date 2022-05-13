@@ -3,7 +3,7 @@ target_email_address: "c.wingfield@lancaster.ac.uk"
 email_connection_details: "/Users/caiwingfield/Resilio Sync/Resilio Sync Lancaster/notify@cwcomplex.net.txt"
 
 # Data directories
-graphs_dir:             "/Users/caiwingfield/Data/graphs"
+graphs_dir:             "/Volumes/Big Data/graphs"
 
 node_distributions_dir: "/Volumes/Big Data/node_distributions/"
 
