@@ -20,7 +20,7 @@ from __future__ import annotations
 from collections import defaultdict
 from functools import partial
 from pathlib import Path
-from typing import List, Optional, Set, Dict, DefaultDict, Tuple
+from typing import List, Optional, Set, Dict, DefaultDict
 from logging import getLogger
 
 from numpy import lcm
@@ -346,12 +346,8 @@ class InteractiveCombinedCognitiveModel:
         lc_events = self.linguistic_component.tick()
         smc_events = self.sensorimotor_component.tick()
 
-        self._apply_item_sizes(lc_events)
-        self._apply_item_sizes(smc_events)
-
         tick_events = self._post_tick(pre_tick_events=pre_tick_events,
-                                      sensorimotor_component_events=smc_events,
-                                      linguistic_component_events=lc_events,
+                                      model_events=lc_events + smc_events,
                                       time_at_start_of_tick=time_at_start_of_tick)
 
         return tick_events
@@ -364,57 +360,51 @@ class InteractiveCombinedCognitiveModel:
 
     def _post_tick(self,
                    pre_tick_events: List[ModelEvent],
-                   linguistic_component_events: List[ModelEvent],
-                   sensorimotor_component_events: List[ModelEvent],
+                   model_events: List[ModelEvent],
                    time_at_start_of_tick: int):
 
-        # Split off non-activation events
-        linguistic_activation_events, linguistic_other_events = partition(linguistic_component_events, lambda e: isinstance(e, ItemActivatedEvent))
-        sensorimotor_activation_events, sensorimotor_other_events = partition(sensorimotor_component_events, lambda e: isinstance(e, ItemActivatedEvent))
-        other_events = linguistic_other_events + sensorimotor_other_events
+        activation_events, other_events = partition(model_events, lambda e: isinstance(e, ItemActivatedEvent))
 
-        linguistic_buffer_events, sensorimotor_buffer_events = self._present_items_to_buffer(
-            linguistic_activation_events=linguistic_activation_events,
-            sensorimotor_activation_events=sensorimotor_activation_events,
+        buffer_events = self._present_items_to_buffer(
+            activation_events=activation_events,
             time_at_start_of_tick=time_at_start_of_tick)
 
-        # Split off new non-activation events
-        linguistic_activation_events, linguistic_other_events = partition(linguistic_buffer_events, lambda e: isinstance(e, ItemActivatedEvent))
-        sensorimotor_activation_events, sensorimotor_other_events = partition(sensorimotor_buffer_events, lambda e: isinstance(e, ItemActivatedEvent))
-        other_events += linguistic_other_events + sensorimotor_other_events
+        # Repartition events
+        buffer_activation_events, buffer_other_events = partition(buffer_events, lambda e: isinstance(e, ItemActivatedEvent))
+        other_events += buffer_other_events
 
         self._handle_inter_component_activity(
-            linguistic_activation_events=linguistic_activation_events,
-            sensorimotor_activation_events=sensorimotor_activation_events,
+            activation_events=buffer_activation_events,
             time_at_start_of_tick=time_at_start_of_tick)
 
         return (
             pre_tick_events
-            + linguistic_activation_events + sensorimotor_activation_events
+            + buffer_activation_events
             + other_events
         )
 
     def _present_items_to_buffer(self,
-                                 linguistic_activation_events: List[ItemActivatedEvent],
-                                 sensorimotor_activation_events: List[ItemActivatedEvent],
+                                 activation_events: List[ItemActivatedEvent],
                                  time_at_start_of_tick: int,
-                                 ) -> Tuple[List[ModelEvent], List[ModelEvent]]:
+                                 ) -> List[ModelEvent]:
         """Present activation events to buffer and upgrade as necessary."""
-        linguistic_buffer_events = self.buffer.present_items(
-            activation_events=linguistic_activation_events,
-            activation_lookup=partial(self._activation_of_item_at_time, time=time_at_start_of_tick),
-            time=time_at_start_of_tick)
-        sensorimotor_buffer_events = self.buffer.present_items(
-            activation_events=sensorimotor_activation_events,
+
+        self._apply_item_sizes(activation_events)
+
+        # Present all items together
+        buffer_events = self.buffer.present_items(
+            activation_events=activation_events,
             activation_lookup=partial(self._activation_of_item_at_time, time=time_at_start_of_tick),
             time=time_at_start_of_tick)
 
-        return linguistic_buffer_events, sensorimotor_buffer_events
+        return buffer_events
 
     def _handle_inter_component_activity(self,
-                                         linguistic_activation_events: List[ItemActivatedEvent],
-                                         sensorimotor_activation_events: List[ItemActivatedEvent],
+                                         activation_events: List[ItemActivatedEvent],
                                          time_at_start_of_tick: int):
+
+        linguistic_activation_events, sensorimotor_activation_events = partition(activation_events, lambda e: e.item.component == Component.linguistic)
+        assert all(e.item.component == Component.sensorimotor for e in sensorimotor_activation_events)
 
         # Check for suppressed items
         try:
