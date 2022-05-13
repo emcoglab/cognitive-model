@@ -330,11 +330,9 @@ class InteractiveCombinedCognitiveModel:
         for e in events:
             if isinstance(e, ItemEvent):
                 if e.item.component == Component.linguistic:
-                    e.item = SizedItem(idx=e.item.idx, component=e.item.component,
-                                       size=self._lc_item_size)
+                    e.item = SizedItem(idx=e.item.idx, component=e.item.component, size=self._lc_item_size)
                 elif e.item.component == Component.sensorimotor:
-                    e.item = SizedItem(idx=e.item.idx, component=e.item.component,
-                                       size=self._smc_item_size)
+                    e.item = SizedItem(idx=e.item.idx, component=e.item.component, size=self._smc_item_size)
 
     def tick(self):
         time_at_start_of_tick = self.clock
@@ -363,7 +361,7 @@ class InteractiveCombinedCognitiveModel:
                    model_events: List[ModelEvent],
                    time_at_start_of_tick: int):
 
-        activation_events, other_events = partition(model_events, lambda e: isinstance(e, ItemActivatedEvent))
+        activation_events, model_other_events = partition(model_events, lambda e: isinstance(e, ItemActivatedEvent))
 
         buffer_events = self._present_items_to_buffer(
             activation_events=activation_events,
@@ -371,7 +369,6 @@ class InteractiveCombinedCognitiveModel:
 
         # Repartition events
         buffer_activation_events, buffer_other_events = partition(buffer_events, lambda e: isinstance(e, ItemActivatedEvent))
-        other_events += buffer_other_events
 
         self._handle_inter_component_activity(
             activation_events=buffer_activation_events,
@@ -380,7 +377,7 @@ class InteractiveCombinedCognitiveModel:
         return (
             pre_tick_events
             + buffer_activation_events
-            + other_events
+            + model_other_events + buffer_other_events
         )
 
     def _present_items_to_buffer(self,

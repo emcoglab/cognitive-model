@@ -76,10 +76,11 @@ class LimitedCapacityItemSet(ABC):
 
     @staticmethod
     def _aggregate_size(items: Iterable[Item]) -> Size:
-        return Size(sum(
+        current_size = sum(
             (i.size if isinstance(i, SizedItem) else 1)
             for i in items
-        ))
+        )
+        return Size(current_size)
 
     @property
     def over_capacity(self) -> bool:
