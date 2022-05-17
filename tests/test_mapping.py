@@ -25,7 +25,7 @@ class TestMapping(unittest.TestCase):
     def test_no_choices_example(self):
         sensorimotor_vocab = {"caramel", "caramelise"}
         linguistic_vocab   = {"caramel", "caramelise"}
-        mapping = InterComponentMapping(linguistic_vocab=linguistic_vocab, sensorimotor_vocab=sensorimotor_vocab, ignore_identity_mapping=False)
+        mapping = InterComponentMapping.from_vocabs(linguistic_vocab=linguistic_vocab, sensorimotor_vocab=sensorimotor_vocab, ignore_identity_mapping=False)
         self.assertDictEqual(
             mapping.sensorimotor_to_linguistic,
             {
@@ -42,7 +42,7 @@ class TestMapping(unittest.TestCase):
     def test_single_sensorimotor_multiple_linguistic_with_preference(self):
         sensorimotor_vocab = {"colour"}
         linguistic_vocab   = {"colour", "color"}
-        mapping = InterComponentMapping(linguistic_vocab=linguistic_vocab, sensorimotor_vocab=sensorimotor_vocab, ignore_identity_mapping=False)
+        mapping = InterComponentMapping.from_vocabs(linguistic_vocab=linguistic_vocab, sensorimotor_vocab=sensorimotor_vocab, ignore_identity_mapping=False)
         self.assertDictEqual(
             mapping.sensorimotor_to_linguistic,
             {
@@ -60,7 +60,7 @@ class TestMapping(unittest.TestCase):
     def test_single_sensorimotor_multiple_linguistic_with_no_preference(self):
         sensorimotor_vocab = {"judgement"}
         linguistic_vocab   = {"judgement", "judgment"}
-        mapping = InterComponentMapping(linguistic_vocab=linguistic_vocab, sensorimotor_vocab=sensorimotor_vocab, ignore_identity_mapping=False)
+        mapping = InterComponentMapping.from_vocabs(linguistic_vocab=linguistic_vocab, sensorimotor_vocab=sensorimotor_vocab, ignore_identity_mapping=False)
         self.assertDictEqual(
             mapping.sensorimotor_to_linguistic,
             {
@@ -82,7 +82,7 @@ class TestMapping(unittest.TestCase):
     def test_multiple_norms_multiple_linguistic_with_preference(self):
         sensorimotor_vocab = {"anaesthetise", "anesthetise"}
         linguistic_vocab   = {"anaesthetise", "anesthetise", "anaesthetize", "anesthetize"}
-        mapping = InterComponentMapping(linguistic_vocab=linguistic_vocab, sensorimotor_vocab=sensorimotor_vocab,
+        mapping = InterComponentMapping.from_vocabs(linguistic_vocab=linguistic_vocab, sensorimotor_vocab=sensorimotor_vocab,
                                         ignore_identity_mapping=False)
         self.assertDictEqual(
             mapping.sensorimotor_to_linguistic,
@@ -107,7 +107,7 @@ class TestMapping(unittest.TestCase):
     def test_lemmatisation(self):
         sensorimotor_vocab = {"cat", "run"}
         linguistic_vocab = {"cat", "cats", "run", "running"}
-        mapping = InterComponentMapping(linguistic_vocab=linguistic_vocab, sensorimotor_vocab=sensorimotor_vocab, ignore_identity_mapping=False)
+        mapping = InterComponentMapping.from_vocabs(linguistic_vocab=linguistic_vocab, sensorimotor_vocab=sensorimotor_vocab, ignore_identity_mapping=False)
         self.assertDictEqual(
             mapping.sensorimotor_to_linguistic,
             {
@@ -128,7 +128,7 @@ class TestMapping(unittest.TestCase):
     def test_tokenisation(self):
         sensorimotor_vocab = {"part of a pharmacy"}
         linguistic_vocab = {"part", "of", "a", "pharmacy", "chemist"}
-        mapping = InterComponentMapping(linguistic_vocab=linguistic_vocab, sensorimotor_vocab=sensorimotor_vocab, ignore_identity_mapping=True)
+        mapping = InterComponentMapping.from_vocabs(linguistic_vocab=linguistic_vocab, sensorimotor_vocab=sensorimotor_vocab, ignore_identity_mapping=True)
         self.assertDictEqual(
             mapping.sensorimotor_to_linguistic,
             {
