@@ -54,11 +54,25 @@ class InterComponentMapping:
         ".",
     }
 
+    # Don't reference these externally, use InterComponentMapping.load_from(directory=) on the parent directory
+    _lts_filename = " mapping_linguistic_to_sensorimotor.yaml"
+    _stl_filename = " mapping_sensorimotor_to_linguistic.yaml"
+
+    _Mapping = Dict[ItemLabel, Set[ItemLabel]]
+
     def __init__(self,
-                 linguistic_vocab: Set[str],
-                 sensorimotor_vocab: Set[str],
-                 ignore_identity_mapping: bool = True,
-                 ):
+                 linguistic_to_sensorimotor: _Mapping,
+                 sensorimotor_to_linguistic: _Mapping):
+        self.linguistic_to_sensorimotor: InterComponentMapping._Mapping = linguistic_to_sensorimotor
+        self.sensorimotor_to_linguistic: InterComponentMapping._Mapping = sensorimotor_to_linguistic
+
+    # Alternative constructor
+    @classmethod
+    def from_vocabs(cls,
+                    linguistic_vocab: Set[str],
+                    sensorimotor_vocab: Set[str],
+                    ignore_identity_mapping: bool = True,
+                    ):
 
         _logger.info("Setting up inter-component mapping")
 
@@ -212,28 +226,56 @@ class InterComponentMapping:
             forget_keys_for_values_satisfying(sensorimotor_to_linguistic, lambda source, targets: targets == {source})
 
         # Freeze and set
-        self.linguistic_to_sensorimotor: Dict[ItemLabel, Set[ItemLabel]] = dict(linguistic_to_sensorimotor)
-        self.sensorimotor_to_linguistic: Dict[ItemLabel, Set[ItemLabel]] = dict(sensorimotor_to_linguistic)
+        return InterComponentMapping(
+            linguistic_to_sensorimotor=dict(linguistic_to_sensorimotor),
+            sensorimotor_to_linguistic=dict(sensorimotor_to_linguistic),
+        )
 
     def save_to(self, directory: Path):
-        _logger.info(f"Saving mapping to {directory}...")
         import yaml
-        lts_filename = " mapping_linguistic_to_sensorimotor.yaml"
-        stl_filename = " mapping_sensorimotor_to_linguistic.yaml"
-        with Path(directory, lts_filename).open(mode="w", encoding="utf-8") as lts_file:
+        _logger.info(f"Saving mapping to {directory}...")
+        with Path(directory, InterComponentMapping._lts_filename).open(mode="w", encoding="utf-8") as lts_file:
             yaml.dump(
                 {
                     source: sorted(targets)
                     for source, targets in self.linguistic_to_sensorimotor.items()
                 },
-                lts_file)
-        with Path(directory, stl_filename).open(mode="w", encoding="utf-8") as stl_file:
+                lts_file,
+                yaml.SafeDumper,
+                indent=2,
+            )
+        with Path(directory, InterComponentMapping._stl_filename).open(mode="w", encoding="utf-8") as stl_file:
             yaml.dump(
                 {
                     source: sorted(targets)
                     for source, targets in self.sensorimotor_to_linguistic.items()
                 },
-                stl_file)
+                stl_file,
+                yaml.SafeDumper,
+                indent=2,
+            )
+
+    @classmethod
+    def load_from(cls, directory: Path) -> InterComponentMapping:
+        """
+        :raises: FileNotFoundError
+        """
+        import yaml
+        _logger.info(f"Loading mapping from {directory.name}")
+        with Path(directory, InterComponentMapping._lts_filename).open("r", encoding="utf-8") as lts_file:
+            lts: cls._Mapping = yaml.load(lts_file, yaml.SafeLoader)
+        with Path(directory, InterComponentMapping._stl_filename).open("r", encoding="utf-8") as stl_file:
+            stl: cls._Mapping = yaml.load(stl_file, yaml.SafeLoader)
+        return InterComponentMapping(
+            linguistic_to_sensorimotor={
+                k: set(v)
+                for k, v in lts.items()
+            },
+            sensorimotor_to_linguistic={
+                k: set(v)
+                for k, v in stl.items()
+            }
+        )
 
 
 class InteractiveCombinedCognitiveModel:
@@ -248,7 +290,14 @@ class InteractiveCombinedCognitiveModel:
                  cross_component_attenuation: float,
                  buffer_capacity_linguistic_items: Optional[int],
                  buffer_capacity_sensorimotor_items: Optional[int],
+                 with_mapping: Optional[InterComponentMapping] = None
                  ):
+        """
+        :param: with_mapping:
+            Allows the mapping to be supplied (e.g. if it has been loaded).
+            If missing or None, it will be recreated from scratch, which takes
+            some time.
+        """
 
         # Inter-component delays, thresholds and dampening
         self._lc_to_smc_delay: int = lc_to_smc_delay
@@ -284,10 +333,14 @@ class InteractiveCombinedCognitiveModel:
         self.sensorimotor_component.propagator.postsynaptic_guards.extend([])
 
         # Inter-component mapping logic
-        self.mapping = InterComponentMapping(
-            linguistic_vocab=self.linguistic_component.available_labels,
-            sensorimotor_vocab=self.sensorimotor_component.available_labels,
-        )
+        self.mapping: InterComponentMapping
+        if with_mapping is not None:
+            self.mapping = with_mapping
+        else:
+            self.mapping = InterComponentMapping.from_vocabs(
+                linguistic_vocab=self.linguistic_component.available_labels,
+                sensorimotor_vocab=self.sensorimotor_component.available_labels,
+            )
 
         # To prevent cat -> CAT producing an automatic CAT -> cat activation a few ticks down the line, we suppress that
         # here. When cat -> CAT is scheduled, we remember to ignore the activation coming back from CAT on the tick it
