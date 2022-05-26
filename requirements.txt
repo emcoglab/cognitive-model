@@ -1,5 +1,6 @@
 -r ldm/requirements.txt
 -r sensorimotor_norms/requirements.txt
+-r prevalence/requirements.txt
 cython
 gitpython
 nltk
