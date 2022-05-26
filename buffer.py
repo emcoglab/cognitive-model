@@ -135,11 +135,26 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
     def __init__(self,
                  threshold: ActivationValue,
                  capacity: Optional[Size],
-                 items: FrozenSet[SizedItem] = None):
+                 items: FrozenSet[SizedItem] = None,
+                 tiebreaker_lookup: Optional[Callable[[Item], float]] = None,
+                 ):
+        """
+        :param tiebreaker_lookup:
+            Optional function which gives items a value used to break ties for purposes of determining entry.
+            Larger values result in increased precedence for entry.
+            A value of None results in no additional precedence being applied when sorting.
+        """
         super().__init__(threshold=threshold,
                          capacity=capacity,
                          enforce_capacity=True,
                          items=items)
+
+        self._tiebreaker_lookup: Optional[Callable[[Item], float]] = (
+            tiebreaker_lookup
+            if tiebreaker_lookup is not None
+            # If None supplied, don't do any extra tie-breaking
+            else lambda item: 0
+        )
 
     def prune_decayed_items(self,
                             activation_lookup: Callable[[Item], ActivationValue],
@@ -193,7 +208,8 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
         new_buffer_items: Dict[Item: WorkingMemoryBuffer._SortingData] = {
             item: WorkingMemoryBuffer._SortingData(activation=activation_lookup(item),
                                                    # These items already in the buffer were not presented
-                                                   being_presented=False)
+                                                   being_presented=False,
+                                                   tiebreaker=self._tiebreaker_lookup(item))
             for item in self.items
         }
         # ...plus everything above threshold.
@@ -202,29 +218,40 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
             event.item: WorkingMemoryBuffer._SortingData(activation=event.activation,
                                                          # We've already worked out whether items are potentially
                                                          # entering the buffer
-                                                         being_presented=event.item in presented_items)
+                                                         being_presented=event.item in presented_items,
+                                                         tiebreaker=self._tiebreaker_lookup(event.item))
             for event in activation_events
             if event.activation >= self.threshold
         })
 
         # Convert to a list of key-value pairs, sorted by activation, descending.
-        # We want the order to be by activation, but with ties broken by recency, i.e. items being presented to the
-        # buffer precede those already in the buffer.  Python's sorting is stable, meaning if we sort by recency first,
-        # and then by activation, we get what we want [0].
+
+        # We want a cascading set of tie-breakers in case of equal activation. Python's sorting is stable, meaning we
+        # successively sort by the cascading list of tie-breakers *in reverse order* to get what we want [0].
         #
-        # So first we sort by recency (i.e. whether they were presented), descending
-        # (i.e. .presented==1 comes before .presented==0)
+        # The order of sorting (in forward order) is:
+        #
+        #  1. Sort by activation, descending.
+        #  2. In case of ties, sort by recency — i.e. items being presented to the buffer precede those already in the
+        #     buffer, descending (i.e. .presented==1 comes before .presented==0).
+        #  3. An externally provided tiebreaker lookup.
+        #
+        # In case we STILL have remaining ties (i.e. equal activation, both being presented or not), ties are broken by
+        # existing orders of events:
+        #
+        #  4. Emission order.
+        #  5. Alphabetically by alphabetically earliest edge endpoint.
         #
         #     [0]: https://wiki.python.org/moin/HowTo/Sorting#Sort_Stability_and_Complex_Sorts
-        #
-        # TODO: Just freakin' randomise it!!!!!!!!
-        # In case of remaining ties (i.e. equal activation, both being presented or not), ties are broken by existing
-        # orders of events:
-        #     3. Emission order
-        #     4. Alphabetically by alphabetically earliest edge endpoint
-        new_buffer_items = sorted(new_buffer_items.items(), key=lambda kv: kv[1].being_presented, reverse=True)
-        # Then we sort by activation, descending (larger activation first)
+        #     [1]: Brysbaert et al., 2019.
+
+        # So sort in reverse order:
+        # Final tiebreaker first, descending
+        new_buffer_items = sorted(new_buffer_items.items(), key=lambda kv: kv[1].tiebreaker, reverse=True)
+        # Then recency (i.e. whether they were presented), descending
         # Also new_buffer_items is now a list of kv pairs, not a dictionary, so we don't need to use .items()
+        new_buffer_items = sorted(new_buffer_items, key=lambda kv: kv[1].being_presented, reverse=True)
+        # Then we activation, descending (larger activation first)
         new_buffer_items = sorted(new_buffer_items, key=lambda kv: kv[1].activation, reverse=True)
 
         # Trim down to size if necessary
@@ -269,6 +296,7 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
         """
         activation: ActivationValue
         being_presented: bool
+        tiebreaker: float
 
 
 class AccessibleSet(LimitedCapacityItemSet):

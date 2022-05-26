@@ -23,18 +23,21 @@ from pathlib import Path
 from typing import List, Optional, Set, Dict, DefaultDict
 from logging import getLogger
 
-from numpy import lcm
+from numpy import lcm, inf
 from nltk.stem import WordNetLemmatizer
 from nltk.corpus.reader.wordnet import NOUN as POS_NOUN, VERB as POS_VERB
 
 from .components import ModelComponent
 from .ldm.corpus.tokenising import modified_word_tokenize
+from .prevalence.brysbaert_prevalence import BrysbaertPrevalence
 from .sensorimotor_norms.breng_translation.dictionary.dialect_dictionary import ameng_to_breng, breng_to_ameng
 from .basic_types import ActivationValue, Component, Size, Item, SizedItem, ItemLabel
 from .buffer import WorkingMemoryBuffer
 from .events import ItemActivatedEvent, ItemEvent, ModelEvent
 from .linguistic_components import LinguisticComponent
 from .sensorimotor_components import SensorimotorComponent
+from .utils.decorators import cached
+from .utils.maths import prevalence_from_fraction_known
 from .utils.dictionary import forget_keys_for_values_satisfying
 from .utils.iterable import partition
 
@@ -278,6 +281,7 @@ class InterComponentMapping:
         )
 
 
+
 class InteractiveCombinedCognitiveModel:
     def __init__(self,
                  linguistic_component: LinguisticComponent,
@@ -320,10 +324,29 @@ class InteractiveCombinedCognitiveModel:
         assert total_capacity / buffer_capacity_linguistic_items == total_capacity // buffer_capacity_linguistic_items
         assert total_capacity / buffer_capacity_sensorimotor_items == total_capacity // buffer_capacity_sensorimotor_items
 
-        self.buffer = WorkingMemoryBuffer(threshold=buffer_threshold, capacity=total_capacity)
-
         self.linguistic_component: LinguisticComponent = linguistic_component
         self.sensorimotor_component: SensorimotorComponent = sensorimotor_component
+
+        bp = BrysbaertPrevalence()
+
+        @cached
+        def prevalence_lookup(item: Item) -> float:
+            try:
+                if item.component == Component.sensorimotor:
+                    label = self.sensorimotor_component.propagator.idx2label[item.idx]
+                    return prevalence_from_fraction_known(self.sensorimotor_component.sensorimotor_norms.fraction_known(label))
+                elif item.component == Component.linguistic:
+                    label = self.linguistic_component.propagator.idx2label[item.idx]
+                    return bp.prevalence_for(label)
+                else:
+                    raise NotImplementedError()
+            except LookupError:
+                # Item missing
+                return -inf
+
+        self.buffer = WorkingMemoryBuffer(threshold=buffer_threshold,
+                                          capacity=total_capacity,
+                                          tiebreaker_lookup=prevalence_lookup)
 
         assert self.buffer.threshold >= self.sensorimotor_component.accessible_set.threshold >= 0
         assert self.buffer.threshold >= self.linguistic_component.accessible_set.threshold >= 0

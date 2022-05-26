@@ -7,3 +7,6 @@
 [submodule "sensorimotor_norms"]
 	path = sensorimotor_norms
 	url = git@github.com:emcoglab/sensorimotor-norms.git
+[submodule "prevalence"]
+	path = prevalence
+	url = git@github.com:emcoglab/brysbaert-prevalence.git
