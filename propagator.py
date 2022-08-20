@@ -531,3 +531,20 @@ def _load_labels(node_label_path: str) -> Dict[ItemIdx, ItemLabel]:
     for k, v in node_relabelling_dictionary_json.items():
         node_labelling_dictionary[ItemIdx(k)] = v
     return node_labelling_dictionary
+
+
+# OneHopPropagators can be easily produced from main propagators by adding
+# postsynaptic guards:
+#
+#     _first_tick: Guard = lambda idx, activation: model.clock == 0
+#     model.propagator.postsynaptic_guards.appendleft(_first_tick)
+#
+# (Don't forget that if you're using a combined model, model.clock gets evaluated
+# lazily, so might be in an inconsistent state, so be careful with that.)
+#
+# Alternatively wait until after the initial activation on the first tick and then
+# just deny future activations
+#
+#   model.tick()
+#   from framework.cognitive_model.guards import just_no_guard
+#   model.propagator.postsynaptic_guards.append_left(just_no_guard)

@@ -23,7 +23,7 @@ from typing import Set, List, Optional
 from .basic_types import ActivationValue, ItemIdx, ItemLabel
 from .buffer import AccessibleSet
 from .events import ModelEvent, ItemActivatedEvent
-from .graph_propagator import GraphPropagator
+from .propagator import GraphPropagator
 from .utils.iterable import partition
 
 FULL_ACTIVATION = ActivationValue(1.0)
@@ -152,5 +152,3 @@ class ModelComponentWithAccessibleSet(ModelComponent, ABC):
             time=time_at_start_of_tick)
 
         return pre_tick_events + activation_events + other_events
-
-

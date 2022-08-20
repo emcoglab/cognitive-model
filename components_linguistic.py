@@ -22,7 +22,7 @@ from .basic_types import ActivationValue
 from .components import ModelComponentWithAccessibleSet
 from .guards import make_under_firing_threshold_guard_for, make_exceeds_firing_threshold_guard_for
 from .modulations import make_apply_activation_cap_modulation_for
-from .linguistic_propagator import LinguisticPropagator
+from .propagator_linguistic import LinguisticPropagator
 
 
 class LinguisticComponent(ModelComponentWithAccessibleSet):

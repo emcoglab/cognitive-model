@@ -9,7 +9,7 @@ from .ldm.utils.maths import DistanceType
 from .basic_types import Length, ItemIdx, ItemLabel, Component
 from .utils.logging import logger
 from .graph import Graph, EdgePruningType
-from .graph_propagator import GraphPropagator, _load_labels, IMPULSE_PRUNING_THRESHOLD
+from .propagator import GraphPropagator, _load_labels, IMPULSE_PRUNING_THRESHOLD
 from .decay_functions import make_decay_function_exponential_with_decay_factor, make_decay_function_gaussian_with_sd
 from .preferences.preferences import Preferences
 
@@ -139,12 +139,3 @@ def _load_graph(n_words, length_factor, distributional_model, distance_type, edg
         graph.save_as_pickle(pickle_path)
 
     return graph
-
-
-# OneHopPropagators can be easily produced from main propagators by adding
-# postsynaptic guards:
-#
-#     _first_tick: Guard = lambda idx, activation: model.clock == 0
-#     model.propagator.postsynaptic_guards.appendleft(_first_tick)
-#     (Don't forget that if you're using a combined model, model.clock gets evaluated lazily, so might be in an
-#     inconsistent state, so be careful with that.)

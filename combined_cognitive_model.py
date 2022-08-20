@@ -34,8 +34,8 @@ from .sensorimotor_norms.breng_translation.dictionary.dialect_dictionary import 
 from .basic_types import ActivationValue, Component, Size, Item, SizedItem, ItemLabel
 from .buffer import WorkingMemoryBuffer
 from .events import ItemActivatedEvent, ItemEvent, ModelEvent
-from .linguistic_components import LinguisticComponent
-from .sensorimotor_components import SensorimotorComponent
+from .components_linguistic import LinguisticComponent
+from .components_sensorimotor import SensorimotorComponent
 from .utils.decorators import cached
 from .utils.maths import prevalence_from_fraction_known
 from .utils.dictionary import forget_keys_for_values_satisfying

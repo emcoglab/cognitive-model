@@ -8,7 +8,7 @@ from .components import ModelComponentWithAccessibleSet
 from .modulations import make_apply_activation_cap_modulation_for, make_attenuate_by_statistic_modulation_for
 from .events import ModelEvent, ItemActivatedEvent
 from .attenuation_statistic import AttenuationStatistic
-from .sensorimotor_propagator import SensorimotorPropagator
+from .propagator_sensorimotor import SensorimotorPropagator
 from .utils.iterable import partition
 from .utils.maths import prevalence_from_fraction_known, scale_prevalence_01
 from .sensorimotor_norms.sensorimotor_norms import SensorimotorNorms
