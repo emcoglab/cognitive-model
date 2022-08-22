@@ -352,8 +352,8 @@ class InteractiveCombinedCognitiveModel:
         assert self.buffer.threshold >= self.linguistic_component.accessible_set.threshold >= 0
 
         # The shared buffer does not affect the activity within either component or between them.
-        self.linguistic_component.propagator.postsynaptic_guards.extend([])
-        self.sensorimotor_component.propagator.postsynaptic_guards.extend([])
+        self.linguistic_component.propagator.firing_guards.extend([])
+        self.sensorimotor_component.propagator.firing_guards.extend([])
 
         # Inter-component mapping logic
         self.mapping: InterComponentMapping

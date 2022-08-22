@@ -106,10 +106,10 @@ class ModelComponentWithAccessibleSet(ModelComponent, ABC):
         # The set of items which are "accessible to conscious awareness"
         self.accessible_set: AccessibleSet = AccessibleSet(threshold=accessible_set_threshold, capacity=accessible_set_capacity)
 
-        self.propagator.presynaptic_modulations.extend([
+        self.propagator.activation_modulations.extend([
             self._apply_memory_pressure,
         ])
-        self.propagator.postsynaptic_guards.extend([
+        self.propagator.firing_guards.extend([
             # Only allow firing until the item is sufficiently activated to be in the accessible set.
             # Items are presented to the accessible set after tick(), so this will only apply if the item was already in
             # the accessible set at the start of this tick.
