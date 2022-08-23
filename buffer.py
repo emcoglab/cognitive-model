@@ -15,9 +15,11 @@ caiwingfield.net
 ---------------------------
 """
 
+from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, Dict, List, Callable, FrozenSet, Iterable, Collection
+from typing import Optional, Dict, List, Callable, FrozenSet, Iterable, \
+    Collection
 
 from .ldm.utils.maths import clamp01
 from .basic_types import ActivationValue, Size, SizedItem, Item
@@ -59,8 +61,9 @@ class LimitedCapacityItemSet(ABC):
 
     @property
     def items(self) -> FrozenSet[Item]:
-        # Since self.__items is a frozenset, we don't need to check for capacity after getting (in a finally block)
-        # because the item isn't mutated, even by -=, it's just replaced.
+        # Since self.__items is a frozenset, we don't need to check for capacity
+        # after getting (in a finally block) because the item isn't mutated,
+        # even by -=, it's just replaced.
         return self.__items
 
     @items.setter
@@ -72,10 +75,10 @@ class LimitedCapacityItemSet(ABC):
 
     @property
     def total_size(self) -> Size:
-        return self._aggregate_size(self.items)
+        return self.aggregate_size(self.items)
 
     @staticmethod
-    def _aggregate_size(items: Iterable[Item]) -> Size:
+    def aggregate_size(items: Iterable[Item]) -> Size:
         current_size = sum(
             (i.size if isinstance(i, SizedItem) else 1)
             for i in items
@@ -188,94 +191,117 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
             May also return a BufferFlood event if that is detected.
         """
 
-        if len(activation_events) == 0:
-            return []
+        # First build a new staged buffer out of everything which *could* end up
+        # in the buffer, then cut out things which don't belong there
 
-        # At this point self.working_memory_buffer is still the old buffer (after decayed items have been removed)
-        presented_items = frozenset(e.item for e in activation_events)
+        eligible_items = self.eligible_items(
+            from_activation_events=activation_events,
+            activation_lookup=activation_lookup)
+        buffer_events = self.commit_buffer_items(
+            eligible_items=eligible_items,
+            activation_events=activation_events,
+            time=time)
+        return buffer_events
 
-        # Don't present items already in the buffer
-        items_already_in_buffer = self.items & presented_items
-        presented_items -= items_already_in_buffer
+    def eligible_items(self,
+                       from_activation_events: List[ItemActivatedEvent],
+                       activation_lookup: Callable[[Item], ActivationValue],
+                       ) -> List[Item]:
+        """
+        //!\\ ============================================================ //!\\
+              Unless you have a good reason not to, use .present_items()
+              instead.
+        //!\\ ============================================================ //!\\
 
-        # region New buffer items
+        Given a list of items activated this tick, returns a list of items which
+        could be eligible for buffer entry.
 
-        # First build a new buffer out of everything which *could* end up in the buffer, then cut out things which don't
-        # belong there
+        These items will be sorted appropriately, so that .pop() can be used to
+        trim the list if it is too long.
+        """
+
+        if len(from_activation_events) == 0:
+            # If nothing's been activated this turn, we just sort the items by
+            # their activations
+            return self.__buffer_sort({
+                item: WorkingMemoryBuffer._SortingData(
+                    activation=activation_lookup(item),
+                    freshly_activated=False,
+                    tiebreaker=self._tiebreaker_lookup(item))
+                for item in self.items
+            })
 
         # We will sort items in the buffer based on various bits of data.
-        # The new buffer is everything in the current working_memory_buffer...
-        new_buffer_items: Dict[Item: WorkingMemoryBuffer._SortingData] = {
-            item: WorkingMemoryBuffer._SortingData(activation=activation_lookup(item),
-                                                   # These items already in the buffer were not presented
-                                                   being_presented=False,
-                                                   tiebreaker=self._tiebreaker_lookup(item))
+        # We build the list of potential new items in two steps.
+
+        # First everything which is in the current buffer (decayed items have
+        # already been removed at this point).
+        potential_new_buffer_items: Dict[Item, WorkingMemoryBuffer._SortingData] = {
+            item: WorkingMemoryBuffer._SortingData(
+                activation=activation_lookup(item),
+                # These items already in teh buffer were not presented
+                freshly_activated=False,
+                tiebreaker=self._tiebreaker_lookup(item))
             for item in self.items
         }
-        # ...plus everything above threshold.
-        # We use a dictionary with .update() here to overwrite the activation of anything already in the buffer.
-        new_buffer_items.update({
-            event.item: WorkingMemoryBuffer._SortingData(activation=event.activation,
-                                                         # We've already worked out whether items are potentially
-                                                         # entering the buffer
-                                                         being_presented=event.item in presented_items,
-                                                         tiebreaker=self._tiebreaker_lookup(event.item))
-            for event in activation_events
+
+        # To this we add everything currently above threshold.
+        # We use a dictionary with .update() here to overwrite the activation of
+        # anything already in the buffer.
+        potential_new_buffer_items.update({
+            event.item: WorkingMemoryBuffer._SortingData(
+                activation=event.activation,
+                # TWe've already worked out whether items are potentially
+                # entering the buffer
+                freshly_activated=event.item not in self.items,
+                tiebreaker=self._tiebreaker_lookup(event.item))
+            for event in from_activation_events
             if event.activation >= self.threshold
         })
 
-        # Convert to a list of key-value pairs, sorted by activation, descending.
+        eligible_items = self.__buffer_sort(potential_new_buffer_items)
 
-        # We want a cascading set of tie-breakers in case of equal activation. Python's sorting is stable, meaning we
-        # successively sort by the cascading list of tie-breakers *in reverse order* to get what we want [0].
-        #
-        # The order of sorting (in forward order) is:
-        #
-        #  1. Sort by activation, descending.
-        #  2. In case of ties, sort by recency — i.e. items being presented to the buffer precede those already in the
-        #     buffer, descending (i.e. .presented==1 comes before .presented==0).
-        #  3. An externally provided tiebreaker lookup.
-        #
-        # In case we STILL have remaining ties (i.e. equal activation, both being presented or not), ties are broken by
-        # existing orders of events:
-        #
-        #  4. Emission order.
-        #  5. Alphabetically by alphabetically earliest edge endpoint.
-        #
-        #     [0]: https://wiki.python.org/moin/HowTo/Sorting#Sort_Stability_and_Complex_Sorts
-        #     [1]: Brysbaert et al., 2019.
+        return eligible_items
 
-        # So sort in reverse order:
-        # Final tiebreaker first, descending
-        new_buffer_items = sorted(new_buffer_items.items(), key=lambda kv: kv[1].tiebreaker, reverse=True)
-        # Then recency (i.e. whether they were presented), descending
-        # Also new_buffer_items is now a list of kv pairs, not a dictionary, so we don't need to use .items()
-        new_buffer_items = sorted(new_buffer_items, key=lambda kv: kv[1].being_presented, reverse=True)
-        # Then we activation, descending (larger activation first)
-        new_buffer_items = sorted(new_buffer_items, key=lambda kv: kv[1].activation, reverse=True)
+    def commit_buffer_items(self,
+                            eligible_items: List[Item],
+                            activation_events: List[ItemActivatedEvent],
+                            time: int,
+                            ) -> List[ModelEvent]:
+        """
+        //!\\ ============================================================ //!\\
+              Unless you have a good reason not to, use .present_items()
+              instead.
+        //!\\ ============================================================ //!\\
 
-        # Trim down to size if necessary
+        Takes a set of eligible buffer items, such as that returned by
+        .eligible_items(), and commits them to the buffer, trimming and
+        squeezing them into the appropriate size.
+        """
+
+        items_already_in_buffer = self.items & frozenset(eligible_items)
+
+        # Trim down if necessary
         if self.capacity is not None:
-            while self._aggregate_size([i for i, _ in new_buffer_items]) > self.capacity:
-                new_buffer_items.pop()
+            while self.aggregate_size(eligible_items) > self.capacity:
+                eligible_items.pop()
 
-        # endregion
-
-        new_buffer = frozenset(item for item, _ in new_buffer_items)
+        new_buffer_items = frozenset(eligible_items)
 
         # For returning additional BufferEvents
-        displaced_items = self.items - new_buffer
+        displaced_items = self.items - new_buffer_items
         whole_buffer_replaced = displaced_items == self.items
 
         # Update buffer
-        self.items = new_buffer
+        self.items = new_buffer_items
         fresh_items = self.items - items_already_in_buffer
 
         # Upgrade events
         upgraded_events = [
             # Upgrade only those events which newly entered the buffer
             (
-                ItemEnteredBufferEvent(time=e.time, item=e.item, activation=e.activation, fired=e.fired)
+                ItemEnteredBufferEvent(time=e.time, item=e.item,
+                                       activation=e.activation, fired=e.fired)
                 if e.item in fresh_items
                 else e
             )
@@ -283,7 +309,8 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
         ]
 
         # Add extra events if necessary
-        buffer_events: List[BufferEvent] = [ItemLeftBufferEvent(time=time, item=i) for i in displaced_items]
+        buffer_events: List[BufferEvent] = [
+            ItemLeftBufferEvent(time=time, item=i) for i in displaced_items]
         if whole_buffer_replaced:
             buffer_events.append(BufferFloodEvent(time=time))
 
@@ -295,8 +322,54 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
         For sorting items before entry to the buffer.
         """
         activation: ActivationValue
-        being_presented: bool
+        freshly_activated: bool
         tiebreaker: float
+
+    @classmethod
+    def __buffer_sort(cls,
+                      buffer_items: Dict[Item, WorkingMemoryBuffer._SortingData]
+                      ) -> List[Item]:
+        # Convert to a list of key-value pairs, sorted by activation, descending.
+
+        # We want a cascading set of tie-breakers in case of equal activation.
+        # Python's sorting is stable, meaning wesuccessively sort by the
+        # cascading list of tie-breakers *in reverse order* to get what we want
+        # [0].
+        #
+        # The order of sorting (in forward order) is:
+        #
+        #  1. Sort by activation, descending.
+        #  2. In case of ties, sort by recency — i.e. items being presented to
+        #     the buffer precede those already in the buffer, descending (i.e.
+        #     .presented==1 comes before .presented==0).
+        #  3. An externally provided tiebreaker lookup.
+        #
+        # In case we STILL have remaining ties (i.e. equal activation, both
+        # being presented or not), ties are broken by existing orders of events:
+        #
+        #  4. Emission order.
+        #  5. Alphabetically by alphabetically earliest edge endpoint.
+        #
+        # [0]: https://wiki.python.org/moin/HowTo/Sorting#Sort_Stability_and_Complex_Sorts
+        # [1]: Brysbaert et al., 2019.
+
+        # So sort in reverse order of criteria:
+
+        # Final tiebreaker first, descending
+        sorted_buffer_items: List[Item] = sorted(buffer_items.items(),
+                                                 key=lambda kv: kv[1].tiebreaker,
+                                                 reverse=True)
+        # Then recency (i.e. whether they were presented for the first time just
+        # now), descending
+        sorted_buffer_items = sorted(sorted_buffer_items,
+                                     key=lambda kv: kv[1].freshly_activated,
+                                     reverse=True)
+        # Then we sort by activation, descending (larger activation first)
+        sorted_buffer_items = sorted(sorted_buffer_items,
+                                     key=lambda kv: kv[1].activation,
+                                     reverse=True)
+
+        return sorted_buffer_items
 
 
 class AccessibleSet(LimitedCapacityItemSet):
@@ -313,7 +386,7 @@ class AccessibleSet(LimitedCapacityItemSet):
 
     # Don't care about sizes
     @staticmethod
-    def _aggregate_size(items: Collection[Item]) -> Size:
+    def aggregate_size(items: Collection[Item]) -> Size:
         return Size(len(items))
 
     @property
