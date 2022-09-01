@@ -16,10 +16,11 @@ caiwingfield.net
 """
 
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional, Dict, List, Callable, FrozenSet, Iterable, \
-    Collection
+    Collection, Tuple
 
 from .ldm.utils.maths import clamp01
 from .basic_types import ActivationValue, Size, SizedItem, Item
@@ -29,6 +30,21 @@ from .events import ItemLeftBufferEvent, ItemActivatedEvent, ModelEvent, ItemEnt
 
 class OverCapacityError(Exception):
     pass
+
+
+@dataclass
+class _SortingData:
+    """
+    For sorting items before entry to the buffer.
+    """
+    activation: ActivationValue
+    freshly_activated: bool
+    tiebreaker: float
+
+
+_SortableItems = List[Tuple[Item, _SortingData]]
+_ItemActivationLookup = Callable[[Item], ActivationValue]
+_ItemValueLookup = Callable[[Item], float]
 
 
 class LimitedCapacityItemSet(ABC):
@@ -69,27 +85,39 @@ class LimitedCapacityItemSet(ABC):
     @items.setter
     def items(self, value: FrozenSet[Item]):
         self.__items = value
-        if self._enforce_capacity and self.over_capacity:
-            # TODO: raise error, or just prune?
+        if self._enforce_capacity and self._over_capacity:
             raise OverCapacityError()
 
     @property
-    def total_size(self) -> Size:
-        return self.aggregate_size(self.items)
+    def _over_capacity(self) -> bool:
+        if self.capacity is None:
+            return False
+        return self.aggregate_size(self.items) > self.capacity
 
-    @staticmethod
-    def aggregate_size(items: Iterable[Item]) -> Size:
+    @classmethod
+    def aggregate_size(cls, items: Iterable[Item]) -> Size:
         current_size = sum(
             (i.size if isinstance(i, SizedItem) else 1)
             for i in items
         )
         return Size(current_size)
 
-    @property
-    def over_capacity(self) -> bool:
+    def _truncate_items_list_to_fit(self, items: List[Item]) -> None:
+        """
+        Trims a list to fit within the buffer.
+        
+        Assumes that the list is sorted in descending order of importance for
+        remaining in the set.
+        
+        Use for example on a list of candidate items to ensure that it will fit 
+        within the set.
+        
+        Mutates input list.
+        """
         if self.capacity is None:
-            return False
-        return self.total_size > self.capacity
+            return
+        while self.aggregate_size(items) > self.capacity:
+            items.pop()
 
     def clear(self):
         """Empties the set of items."""
@@ -103,7 +131,7 @@ class LimitedCapacityItemSet(ABC):
 
     @abstractmethod
     def prune_decayed_items(self,
-                            activation_lookup: Callable[[Item], ActivationValue],
+                            activation_lookup: _ItemActivationLookup,
                             time: int):
         """
         Removes items from the distinguished set which have dropped below threshold.
@@ -117,7 +145,7 @@ class LimitedCapacityItemSet(ABC):
     @abstractmethod
     def present_items(self,
                       activation_events: List[ItemActivatedEvent],
-                      activation_lookup: Callable[[Item], ActivationValue],
+                      activation_lookup: _ItemActivationLookup,
                       time: int):
         """
         Present a list of item activations to the set, and upgrades those which entered.
@@ -139,20 +167,22 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
                  threshold: ActivationValue,
                  capacity: Optional[Size],
                  items: FrozenSet[SizedItem] = None,
-                 tiebreaker_lookup: Optional[Callable[[Item], float]] = None,
+                 tiebreaker_lookup: Optional[_ItemValueLookup] = None,
                  ):
         """
         :param tiebreaker_lookup:
-            Optional function which gives items a value used to break ties for purposes of determining entry.
-            Larger values result in increased precedence for entry.
-            A value of None results in no additional precedence being applied when sorting.
+            Optional function which gives items a value used to break ties for
+            purposes of determining entry. Larger values result in increased
+            precedence for entry.
+            A value of None results in no additional precedence being applied
+            when sorting.
         """
         super().__init__(threshold=threshold,
                          capacity=capacity,
                          enforce_capacity=True,
                          items=items)
 
-        self._tiebreaker_lookup: Optional[Callable[[Item], float]] = (
+        self._tiebreaker_lookup: _ItemValueLookup = (
             tiebreaker_lookup
             if tiebreaker_lookup is not None
             # If None supplied, don't do any extra tie-breaking
@@ -160,7 +190,7 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
         )
 
     def prune_decayed_items(self,
-                            activation_lookup: Callable[[Item], ActivationValue],
+                            activation_lookup: _ItemActivationLookup,
                             time: int) -> List[ItemLeftBufferEvent]:
         """
         Removes items from the buffer which have dropped below threshold.
@@ -181,7 +211,7 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
 
     def present_items(self,
                       activation_events: List[ItemActivatedEvent],
-                      activation_lookup: Callable[[Item], ActivationValue],
+                      activation_lookup: _ItemActivationLookup,
                       time: int) -> List[ModelEvent]:
         """
         Present a list of item activations to the buffer, and upgrades those which entered the buffer.
@@ -192,52 +222,50 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
         """
 
         # First build a new staged buffer out of everything which *could* end up
-        # in the buffer, then cut out things which don't belong there
+        # in the buffer, then cut out things which don't belong there.
 
-        eligible_items = self.eligible_items(
-            from_activation_events=activation_events,
+        eligible_items_sortable = self._collect_eligible_items(
+            from_new_activations=activation_events,
             activation_lookup=activation_lookup)
-        buffer_events = self.commit_buffer_items(
+        eligible_items_sortable = self._sort_eligible_items(
+            sortable_items=eligible_items_sortable)
+        eligible_items = [i for i, _ in eligible_items_sortable]
+        self._truncate_items_list_to_fit(eligible_items)
+        buffer_events = self._commit_buffer_items(
             eligible_items=eligible_items,
             activation_events=activation_events,
             time=time)
         return buffer_events
 
-    def eligible_items(self,
-                       from_activation_events: List[ItemActivatedEvent],
-                       activation_lookup: Callable[[Item], ActivationValue],
-                       ) -> List[Item]:
+    def _collect_eligible_items(self,
+                                from_new_activations: List[ItemActivatedEvent],
+                                activation_lookup: _ItemActivationLookup,
+                                ) -> _SortableItems:
         """
-        //!\\ ============================================================ //!\\
-              Unless you have a good reason not to, use .present_items()
-              instead.
-        //!\\ ============================================================ //!\\
-
         Given a list of items activated this tick, returns a list of items which
         could be eligible for buffer entry.
-
-        These items will be sorted appropriately, so that .pop() can be used to
-        trim the list if it is too long.
+        
+        Returns a dict which maps items to some sorting data.
         """
 
-        if len(from_activation_events) == 0:
+        if len(from_new_activations) == 0:
             # If nothing's been activated this turn, we just sort the items by
             # their activations
-            return self.__buffer_sort({
-                item: WorkingMemoryBuffer._SortingData(
+            return [
+                (item, _SortingData(
                     activation=activation_lookup(item),
                     freshly_activated=False,
-                    tiebreaker=self._tiebreaker_lookup(item))
+                    tiebreaker=self._tiebreaker_lookup(item)))
                 for item in self.items
-            })
+            ]
 
         # We will sort items in the buffer based on various bits of data.
         # We build the list of potential new items in two steps.
 
         # First everything which is in the current buffer (decayed items have
         # already been removed at this point).
-        potential_new_buffer_items: Dict[Item, WorkingMemoryBuffer._SortingData] = {
-            item: WorkingMemoryBuffer._SortingData(
+        potential_new_buffer_items: Dict[Item, _SortingData] = {
+            item: _SortingData(
                 activation=activation_lookup(item),
                 # These items already in teh buffer were not presented
                 freshly_activated=False,
@@ -249,44 +277,32 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
         # We use a dictionary with .update() here to overwrite the activation of
         # anything already in the buffer.
         potential_new_buffer_items.update({
-            event.item: WorkingMemoryBuffer._SortingData(
+            event.item: _SortingData(
                 activation=event.activation,
                 # TWe've already worked out whether items are potentially
                 # entering the buffer
                 freshly_activated=event.item not in self.items,
                 tiebreaker=self._tiebreaker_lookup(event.item))
-            for event in from_activation_events
+            for event in from_new_activations
             if event.activation >= self.threshold
         })
 
-        eligible_items = self.__buffer_sort(potential_new_buffer_items)
+        return [(i, sd) for i, sd in potential_new_buffer_items.items()]
 
-        return eligible_items
-
-    def commit_buffer_items(self,
-                            eligible_items: List[Item],
-                            activation_events: List[ItemActivatedEvent],
-                            time: int,
-                            ) -> List[ModelEvent]:
+    def _commit_buffer_items(self,
+                             eligible_items: List[Item],
+                             activation_events: List[ItemActivatedEvent],
+                             time: int,
+                             ) -> List[ModelEvent]:
         """
-        //!\\ ============================================================ //!\\
-              Unless you have a good reason not to, use .present_items()
-              instead.
-        //!\\ ============================================================ //!\\
-
         Takes a set of eligible buffer items, such as that returned by
-        .eligible_items(), and commits them to the buffer, trimming and
-        squeezing them into the appropriate size.
+        ._collect_eligible_items(), and commits them to the buffer.
+
+        Must be of the appropriate size.
         """
-
-        items_already_in_buffer = self.items & frozenset(eligible_items)
-
-        # Trim down if necessary
-        if self.capacity is not None:
-            while self.aggregate_size(eligible_items) > self.capacity:
-                eligible_items.pop()
 
         new_buffer_items = frozenset(eligible_items)
+        items_already_in_buffer = self.items & new_buffer_items
 
         # For returning additional BufferEvents
         displaced_items = self.items - new_buffer_items
@@ -316,19 +332,8 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
 
         return upgraded_events + buffer_events
 
-    @dataclass
-    class _SortingData:
-        """
-        For sorting items before entry to the buffer.
-        """
-        activation: ActivationValue
-        freshly_activated: bool
-        tiebreaker: float
-
     @classmethod
-    def __buffer_sort(cls,
-                      buffer_items: Dict[Item, WorkingMemoryBuffer._SortingData]
-                      ) -> List[Item]:
+    def _sort_eligible_items(cls, sortable_items: _SortableItems) -> _SortableItems:
         # Convert to a list of key-value pairs, sorted by activation, descending.
 
         # We want a cascading set of tie-breakers in case of equal activation.
@@ -356,17 +361,17 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
         # So sort in reverse order of criteria:
 
         # Final tiebreaker first, descending
-        sorted_buffer_items: List[Item] = sorted(buffer_items.items(),
-                                                 key=lambda kv: kv[1].tiebreaker,
-                                                 reverse=True)
+        sorted_buffer_items: _SortableItems = sorted(sortable_items,
+                                                     key=lambda i_s: i_s[1].tiebreaker,
+                                                     reverse=True)
         # Then recency (i.e. whether they were presented for the first time just
         # now), descending
         sorted_buffer_items = sorted(sorted_buffer_items,
-                                     key=lambda kv: kv[1].freshly_activated,
+                                     key=lambda i_s: i_s[1].freshly_activated,
                                      reverse=True)
         # Then we sort by activation, descending (larger activation first)
         sorted_buffer_items = sorted(sorted_buffer_items,
-                                     key=lambda kv: kv[1].activation,
+                                     key=lambda i_s: i_s[1].activation,
                                      reverse=True)
 
         return sorted_buffer_items
@@ -384,9 +389,12 @@ class AccessibleSet(LimitedCapacityItemSet):
             enforce_capacity=False,
             items=items)
 
-    # Don't care about sizes
-    @staticmethod
-    def aggregate_size(items: Collection[Item]) -> Size:
+    @classmethod
+    def aggregate_size(cls, items: Collection[Item]) -> Size:
+        """
+        Here we don't care about sizes, so the combined size of a list of items 
+        is just the number of items.
+        """
         return Size(len(items))
 
     @property
@@ -413,7 +421,7 @@ class AccessibleSet(LimitedCapacityItemSet):
 
     def present_items(self,
                       activation_events: List[ItemActivatedEvent],
-                      activation_lookup: Callable[[Item], ActivationValue],
+                      activation_lookup: _ItemActivationLookup,
                       time: int):
         if len(activation_events) == 0:
             return
@@ -428,7 +436,7 @@ class AccessibleSet(LimitedCapacityItemSet):
         })
 
     def prune_decayed_items(self,
-                            activation_lookup: Callable[[Item], ActivationValue],
+                            activation_lookup: _ItemActivationLookup,
                             time: int):
         self.items -= {
             item
