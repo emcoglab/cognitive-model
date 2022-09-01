@@ -19,8 +19,8 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, Dict, List, Callable, FrozenSet, Iterable, \
-    Collection, Tuple, Set
+from typing import Optional, Dict, List, Callable, FrozenSet, Iterable, Tuple, \
+    Collection, Set
 
 from .ldm.utils.maths import clamp01
 from .basic_types import ActivationValue, Size, SizedItem, Item
@@ -33,7 +33,7 @@ class OverCapacityError(Exception):
 
 
 @dataclass
-class _SortingData:
+class ItemSortingData:
     """
     For sorting items before entry to the buffer.
     """
@@ -42,9 +42,9 @@ class _SortingData:
     tiebreaker: float
 
 
-_SortableItems = List[Tuple[Item, _SortingData]]
-_ItemActivationLookup = Callable[[Item], ActivationValue]
-_ItemValueLookup = Callable[[Item], float]
+SortableItems = List[Tuple[Item, ItemSortingData]]
+ItemActivationLookup = Callable[[Item], ActivationValue]
+ItemValueLookup = Callable[[Item], float]
 
 
 class LimitedCapacityItemSet(ABC):
@@ -131,7 +131,7 @@ class LimitedCapacityItemSet(ABC):
 
     @abstractmethod
     def prune_decayed_items(self,
-                            activation_lookup: _ItemActivationLookup,
+                            activation_lookup: ItemActivationLookup,
                             time: int):
         """
         Removes items from the distinguished set which have dropped below threshold.
@@ -145,7 +145,7 @@ class LimitedCapacityItemSet(ABC):
     @abstractmethod
     def present_items(self,
                       activation_events: List[ItemActivatedEvent],
-                      activation_lookup: _ItemActivationLookup,
+                      activation_lookup: ItemActivationLookup,
                       time: int):
         """
         Present a list of item activations to the set.
@@ -167,7 +167,7 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
                  threshold: ActivationValue,
                  capacity: Optional[Size],
                  items: FrozenSet[SizedItem] = None,
-                 tiebreaker_lookup: Optional[_ItemValueLookup] = None,
+                 tiebreaker_lookup: Optional[ItemValueLookup] = None,
                  ):
         """
         :param tiebreaker_lookup:
@@ -183,7 +183,7 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
                          enforce_capacity=True,
                          items=items)
 
-        self._tiebreaker_lookup: _ItemValueLookup = (
+        self._tiebreaker_lookup: ItemValueLookup = (
             tiebreaker_lookup
             if tiebreaker_lookup is not None
             # If None supplied, don't do any extra tie-breaking
@@ -191,7 +191,7 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
         )
 
     def prune_decayed_items(self,
-                            activation_lookup: _ItemActivationLookup,
+                            activation_lookup: ItemActivationLookup,
                             time: int) -> List[ItemLeftBufferEvent]:
         """
         Removes items from the buffer which have dropped below threshold.
@@ -212,7 +212,7 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
 
     def present_items(self,
                       activation_events: List[ItemActivatedEvent],
-                      activation_lookup: _ItemActivationLookup,
+                      activation_lookup: ItemActivationLookup,
                       time: int,
                       ) -> List[BufferEvent]:
         """
@@ -240,8 +240,8 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
 
     def _collect_eligible_items(self,
                                 from_new_activations: List[ItemActivatedEvent],
-                                activation_lookup: _ItemActivationLookup,
-                                ) -> _SortableItems:
+                                activation_lookup: ItemActivationLookup,
+                                ) -> SortableItems:
         """
         Given a list of items activated this tick, returns a list of items which
         could be eligible for buffer entry.
@@ -253,7 +253,7 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
             # If nothing's been activated this turn, we just sort the items by
             # their activations
             return [
-                (item, _SortingData(
+                (item, ItemSortingData(
                     activation=activation_lookup(item),
                     freshly_activated=False,
                     tiebreaker=self._tiebreaker_lookup(item)))
@@ -265,8 +265,8 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
 
         # First everything which is in the current buffer (decayed items have
         # already been removed at this point).
-        potential_new_buffer_items: Dict[Item, _SortingData] = {
-            item: _SortingData(
+        potential_new_buffer_items: Dict[Item, ItemSortingData] = {
+            item: ItemSortingData(
                 activation=activation_lookup(item),
                 # These items already in teh buffer were not presented
                 freshly_activated=False,
@@ -278,7 +278,7 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
         # We use a dictionary with .update() here to overwrite the activation of
         # anything already in the buffer.
         potential_new_buffer_items.update({
-            event.item: _SortingData(
+            event.item: ItemSortingData(
                 activation=event.activation,
                 # TWe've already worked out whether items are potentially
                 # entering the buffer
@@ -337,7 +337,7 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
         return upgraded_events
 
     @classmethod
-    def _sort_eligible_items(cls, sortable_items: _SortableItems) -> _SortableItems:
+    def _sort_eligible_items(cls, sortable_items: SortableItems) -> SortableItems:
         # Convert to a list of key-value pairs, sorted by activation, descending.
 
         # We want a cascading set of tie-breakers in case of equal activation.
@@ -365,9 +365,9 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
         # So sort in reverse order of criteria:
 
         # Final tiebreaker first, descending
-        sorted_buffer_items: _SortableItems = sorted(sortable_items,
-                                                     key=lambda i_s: i_s[1].tiebreaker,
-                                                     reverse=True)
+        sorted_buffer_items: SortableItems = sorted(sortable_items,
+                                                    key=lambda i_s: i_s[1].tiebreaker,
+                                                    reverse=True)
         # Then recency (i.e. whether they were presented for the first time just
         # now), descending
         sorted_buffer_items = sorted(sorted_buffer_items,
@@ -425,7 +425,7 @@ class AccessibleSet(LimitedCapacityItemSet):
 
     def present_items(self,
                       activation_events: List[ItemActivatedEvent],
-                      activation_lookup: _ItemActivationLookup,
+                      activation_lookup: ItemActivationLookup,
                       time: int):
         if len(activation_events) == 0:
             return
@@ -441,7 +441,7 @@ class AccessibleSet(LimitedCapacityItemSet):
         })
 
     def prune_decayed_items(self,
-                            activation_lookup: _ItemActivationLookup,
+                            activation_lookup: ItemActivationLookup,
                             time: int):
         self.items -= {
             item
