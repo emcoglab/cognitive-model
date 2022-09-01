@@ -20,12 +20,12 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional, Dict, List, Callable, FrozenSet, Iterable, \
-    Collection, Tuple
+    Collection, Tuple, Set
 
 from .ldm.utils.maths import clamp01
 from .basic_types import ActivationValue, Size, SizedItem, Item
-from .events import ItemLeftBufferEvent, ItemActivatedEvent, ModelEvent, ItemEnteredBufferEvent, BufferFloodEvent, \
-    BufferEvent
+from .events import ItemLeftBufferEvent, ItemActivatedEvent, BufferEvent, \
+    ItemEnteredBufferEvent, BufferFloodEvent
 
 
 class OverCapacityError(Exception):
@@ -148,7 +148,7 @@ class LimitedCapacityItemSet(ABC):
                       activation_lookup: _ItemActivationLookup,
                       time: int):
         """
-        Present a list of item activations to the set, and upgrades those which entered.
+        Present a list of item activations to the set.
         :param activation_events:
             All activation events.
         :param activation_lookup:
@@ -174,6 +174,7 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
             Optional function which gives items a value used to break ties for
             purposes of determining entry. Larger values result in increased
             precedence for entry.
+
             A value of None results in no additional precedence being applied
             when sorting.
         """
@@ -212,12 +213,13 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
     def present_items(self,
                       activation_events: List[ItemActivatedEvent],
                       activation_lookup: _ItemActivationLookup,
-                      time: int) -> List[ModelEvent]:
+                      time: int,
+                      ) -> List[BufferEvent]:
         """
-        Present a list of item activations to the buffer, and upgrades those which entered the buffer.
+        Present a list of item activations to the buffer.
+
         :return:
-            The same events, with some upgraded to buffer entry events.
-            Plus events for items which left the buffer through displacement.
+            Events for items which left the buffer through displacement.
             May also return a BufferFlood event if that is detected.
         """
 
@@ -233,7 +235,6 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
         self._truncate_items_list_to_fit(eligible_items)
         buffer_events = self._commit_buffer_items(
             eligible_items=eligible_items,
-            activation_events=activation_events,
             time=time)
         return buffer_events
 
@@ -291,9 +292,8 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
 
     def _commit_buffer_items(self,
                              eligible_items: List[Item],
-                             activation_events: List[ItemActivatedEvent],
                              time: int,
-                             ) -> List[ModelEvent]:
+                             ) -> List[BufferEvent]:
         """
         Takes a set of eligible buffer items, such as that returned by
         ._collect_eligible_items(), and commits them to the buffer.
@@ -302,7 +302,6 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
         """
 
         new_buffer_items = frozenset(eligible_items)
-        items_already_in_buffer = self.items & new_buffer_items
 
         # For returning additional BufferEvents
         displaced_items = self.items - new_buffer_items
@@ -310,11 +309,23 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
 
         # Update buffer
         self.items = new_buffer_items
-        fresh_items = self.items - items_already_in_buffer
 
-        # Upgrade events
+        buffer_events: List[BufferEvent] = [
+            ItemLeftBufferEvent(time=time, item=i) for i in displaced_items]
+        if whole_buffer_replaced:
+            buffer_events.append(BufferFloodEvent(time=time))
+
+        return buffer_events
+
+    @classmethod
+    def upgrade_events(cls,
+                       old_items: Set[Item],
+                       new_items: Set[Item],
+                       activation_events: List[ItemActivatedEvent],
+                       ) -> List[ItemActivatedEvent]:
+        fresh_items = new_items - old_items
         upgraded_events = [
-            # Upgrade only those events which newly entered the buffer
+            # Upgrade only those which newly entered the buffer
             (
                 ItemEnteredBufferEvent(time=e.time, item=e.item,
                                        activation=e.activation, fired=e.fired)
@@ -323,14 +334,7 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
             )
             for e in activation_events
         ]
-
-        # Add extra events if necessary
-        buffer_events: List[BufferEvent] = [
-            ItemLeftBufferEvent(time=time, item=i) for i in displaced_items]
-        if whole_buffer_replaced:
-            buffer_events.append(BufferFloodEvent(time=time))
-
-        return upgraded_events + buffer_events
+        return upgraded_events
 
     @classmethod
     def _sort_eligible_items(cls, sortable_items: _SortableItems) -> _SortableItems:
@@ -426,8 +430,9 @@ class AccessibleSet(LimitedCapacityItemSet):
         if len(activation_events) == 0:
             return
 
-        # Unlike the buffer, we're not returning any events, and the size limit is not enforced.  So we don't need to be
-        # so careful about confirming what's already in there and what's getting replaced, etc.
+        # Unlike the buffer, we're not returning any events, and the size limit
+        # is not enforced.  So we don't need to be so careful about confirming
+        # what's already in there and what's getting replaced, etc.
 
         self.items = self.items.union({
             e.item

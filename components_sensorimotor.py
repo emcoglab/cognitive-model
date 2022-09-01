@@ -142,14 +142,17 @@ class BufferedSensorimotorComponent(SensorimotorComponent):
         activation_events, other_events = partition(propagator_events, lambda e: isinstance(e, ItemActivatedEvent))
 
         # Update buffer
-        # Some events will get updated commensurately.
-        # `activation_events` may now contain some non-activation events.
-        activation_events = self.working_memory_buffer.present_items(
+        previous_buffer = self.working_memory_buffer.items
+        buffer_events = self.working_memory_buffer.present_items(
             activation_events=activation_events,
             activation_lookup=lambda item: self.propagator.activation_of_item_with_idx_at_time(item.idx, time=time_at_start_of_tick),
             time=time_at_start_of_tick)
+        activation_events = self.working_memory_buffer.upgrade_events(
+            old_items=set(previous_buffer),
+            new_items=set(self.working_memory_buffer.items),
+            activation_events=activation_events)
 
-        return pre_tick_events + activation_events + other_events
+        return pre_tick_events + activation_events + buffer_events + other_events
 
     def reset(self):
         super().reset()

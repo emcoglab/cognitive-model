@@ -18,7 +18,6 @@ caiwingfield.net
 from __future__ import annotations
 
 from collections import defaultdict
-from functools import partial
 from pathlib import Path
 from typing import List, Optional, Set, Dict, DefaultDict
 from logging import getLogger
@@ -398,10 +397,9 @@ class InteractiveCombinedCognitiveModel:
 
     def _apply_item_sizes(self, events: List[ModelEvent]) -> None:
         """
-        Converts Items in events to have SizedItems withe the appropriate size.
-        :param events:
-            List of events.
-            Gets mutated.
+        Converts Items in events to have SizedItems with the appropriate size.
+
+        Mutates the input list.
         """
         for e in events:
             if isinstance(e, ItemEvent):
@@ -464,13 +462,22 @@ class InteractiveCombinedCognitiveModel:
 
         self._apply_item_sizes(activation_events)
 
+        def activation_lookup(item: Item) -> ActivationValue:
+            return self._activation_of_item_at_time(
+                item=item, time=time_at_start_of_tick)
+
         # Present all items together
+        previous_buffer = self.buffer.items
         buffer_events = self.buffer.present_items(
             activation_events=activation_events,
-            activation_lookup=partial(self._activation_of_item_at_time, time=time_at_start_of_tick),
-            time=time_at_start_of_tick)
+            activation_lookup=activation_lookup,
+            time=time_at_start_of_tick,
+        )
+        activation_events = self.buffer.upgrade_events(
+            old_items=set(previous_buffer), new_items=set(self.buffer.items),
+            activation_events=activation_events)
 
-        return buffer_events
+        return activation_events + buffer_events
 
     def _handle_inter_component_activity(self,
                                          activation_events: List[ItemActivatedEvent],
