@@ -19,13 +19,13 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, Dict, List, Callable, FrozenSet, Iterable, Tuple, \
-    Collection, Set
+from typing import Optional, List, Callable, FrozenSet, Iterable, Tuple, \
+    Collection, Dict, Set
 
 from .ldm.utils.maths import clamp01
 from .basic_types import ActivationValue, Size, SizedItem, Item
-from .events import ItemLeftBufferEvent, ItemActivatedEvent, BufferEvent, \
-    ItemEnteredBufferEvent, BufferFloodEvent
+from .events import ItemActivatedEvent, ItemDecayedOutEvent, BufferEvent, \
+    ItemDisplacedEvent, BufferFloodEvent, ItemEnteredBufferEvent
 
 
 class OverCapacityError(Exception):
@@ -45,6 +45,27 @@ class ItemSortingData:
 SortableItems = List[Tuple[Item, ItemSortingData]]
 ItemActivationLookup = Callable[[Item], ActivationValue]
 ItemValueLookup = Callable[[Item], float]
+ItemListMutator = Callable[[SortableItems], None]
+
+
+def kick_item_from_sortable_list(sortable_list: SortableItems, *, item_to_kick: Item) -> None:
+    """
+    Removes all (Item, ItemSortingData) pairs from a SortableItems list where
+    the Item matches the supplied one.
+
+    If the item isn't matched, nothing happens.
+
+    Mutates input list.
+    """
+    while True:
+        for item, sorting_data in sortable_list:
+            if item == item_to_kick:
+                pair_to_kick = (item, sorting_data)
+                break
+        else:
+            # Item not there any more/ever
+            return
+        sortable_list.remove(pair_to_kick)
 
 
 class LimitedCapacityItemSet(ABC):
@@ -160,7 +181,6 @@ class LimitedCapacityItemSet(ABC):
         """
         raise NotImplementedError()
 
-
 class WorkingMemoryBuffer(LimitedCapacityItemSet):
 
     def __init__(self,
@@ -192,7 +212,7 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
 
     def prune_decayed_items(self,
                             activation_lookup: ItemActivationLookup,
-                            time: int) -> List[ItemLeftBufferEvent]:
+                            time: int) -> List[ItemDecayedOutEvent]:
         """
         Removes items from the buffer which have dropped below threshold.
         :return:
@@ -206,7 +226,7 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
         decayed_out = self.items - new_buffer_items
         self.items = new_buffer_items
         return [
-            ItemLeftBufferEvent(time=time, item=item)
+            ItemDecayedOutEvent(time=time, item=item)
             for item in decayed_out
         ]
 
@@ -214,10 +234,15 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
                       activation_events: List[ItemActivatedEvent],
                       activation_lookup: ItemActivationLookup,
                       time: int,
+                      eligible_items_list_mutator: Optional[ItemListMutator] = None,
                       ) -> List[BufferEvent]:
         """
         Present a list of item activations to the buffer.
 
+        :param eligible_items_list_mutator:
+            Optional function to mutate the list of items just prior to trimming
+            and committing.
+            None => do nothing.
         :return:
             Events for items which left the buffer through displacement.
             May also return a BufferFlood event if that is detected.
@@ -231,10 +256,12 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
             activation_lookup=activation_lookup)
         eligible_items_sortable = self._sort_eligible_items(
             sortable_items=eligible_items_sortable)
+        if eligible_items_list_mutator is not None:
+            eligible_items_list_mutator(eligible_items_sortable)
         eligible_items = [i for i, _ in eligible_items_sortable]
         self._truncate_items_list_to_fit(eligible_items)
         buffer_events = self._commit_buffer_items(
-            eligible_items=eligible_items,
+            items=eligible_items,
             time=time)
         return buffer_events
 
@@ -245,7 +272,7 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
         """
         Given a list of items activated this tick, returns a list of items which
         could be eligible for buffer entry.
-        
+
         Returns a dict which maps items to some sorting data.
         """
 
@@ -280,7 +307,7 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
         potential_new_buffer_items.update({
             event.item: ItemSortingData(
                 activation=event.activation,
-                # TWe've already worked out whether items are potentially
+                # We've already worked out whether items are potentially
                 # entering the buffer
                 freshly_activated=event.item not in self.items,
                 tiebreaker=self._tiebreaker_lookup(event.item))
@@ -291,7 +318,7 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
         return [(i, sd) for i, sd in potential_new_buffer_items.items()]
 
     def _commit_buffer_items(self,
-                             eligible_items: List[Item],
+                             items: List[Item],
                              time: int,
                              ) -> List[BufferEvent]:
         """
@@ -301,17 +328,17 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
         Must be of the appropriate size.
         """
 
-        new_buffer_items = frozenset(eligible_items)
+        new_buffer_items = frozenset(items)
 
         # For returning additional BufferEvents
-        displaced_items = self.items - new_buffer_items
-        whole_buffer_replaced = displaced_items == self.items
+        removed_items = self.items - new_buffer_items
+        whole_buffer_replaced = removed_items == self.items
 
         # Update buffer
         self.items = new_buffer_items
 
         buffer_events: List[BufferEvent] = [
-            ItemLeftBufferEvent(time=time, item=i) for i in displaced_items]
+            ItemDisplacedEvent(time=time, item=i) for i in removed_items]
         if whole_buffer_replaced:
             buffer_events.append(BufferFloodEvent(time=time))
 
@@ -341,7 +368,7 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
         # Convert to a list of key-value pairs, sorted by activation, descending.
 
         # We want a cascading set of tie-breakers in case of equal activation.
-        # Python's sorting is stable, meaning wesuccessively sort by the
+        # Python's sorting is stable, meaning we successively sort by the
         # cascading list of tie-breakers *in reverse order* to get what we want
         # [0].
         #
@@ -396,7 +423,7 @@ class AccessibleSet(LimitedCapacityItemSet):
     @classmethod
     def aggregate_size(cls, items: Collection[Item]) -> Size:
         """
-        Here we don't care about sizes, so the combined size of a list of items 
+        Here we don't care about sizes, so the combined size of a list of items
         is just the number of items.
         """
         return Size(len(items))

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Optional, List, Dict
 
 from .basic_types import ActivationValue, ItemIdx
-from .buffer import WorkingMemoryBuffer
+from .limited_capacity_item_sets import WorkingMemoryBuffer
 from .components import ModelComponentWithAccessibleSet
 from .modulations import make_apply_activation_cap_modulation_for, make_attenuate_by_statistic_modulation_for
 from .events import ModelEvent, ItemActivatedEvent
