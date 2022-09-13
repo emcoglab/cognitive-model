@@ -20,7 +20,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional, List, Callable, FrozenSet, Iterable, Tuple, \
-    Collection, Dict, Set
+    Collection, Dict, Set, overload
 
 from .ldm.utils.maths import clamp01
 from .basic_types import ActivationValue, Size, SizedItem, Item
@@ -46,6 +46,10 @@ SortableItems = List[Tuple[Item, ItemSortingData]]
 ItemActivationLookup = Callable[[Item], ActivationValue]
 ItemValueLookup = Callable[[Item], float]
 ItemListMutator = Callable[[SortableItems], None]
+
+
+def strip_sorting_data(sortable_items: SortableItems) -> List[Item]:
+    return [i for i, _ in sortable_items]
 
 
 def kick_item_from_sortable_list(sortable_list: SortableItems, *, item_to_kick: Item) -> None:
@@ -123,7 +127,13 @@ class LimitedCapacityItemSet(ABC):
         )
         return Size(current_size)
 
-    def _truncate_items_list_to_fit(self, items: List[Item]) -> None:
+    def items_would_fit(self, items: List[Item]) -> bool:
+        """Returns True iff the list of items would fit within the buffer."""
+        if self.capacity is None:
+            return True
+        return self.aggregate_size(items) <= self.capacity
+
+    def truncate_items_list_to_fit(self, items: List[Item]) -> List[Item]:
         """
         Trims a list to fit within the buffer.
         
@@ -132,13 +142,11 @@ class LimitedCapacityItemSet(ABC):
         
         Use for example on a list of candidate items to ensure that it will fit 
         within the set.
-        
-        Mutates input list.
         """
-        if self.capacity is None:
-            return
-        while self.aggregate_size(items) > self.capacity:
+        items = list(items)
+        while not self.items_would_fit(items):
             items.pop()
+        return items
 
     def clear(self):
         """Empties the set of items."""
@@ -210,6 +218,25 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
             else lambda item: 0
         )
 
+    def items_would_fit(self, items: List[Item] | SortableItems) -> bool:
+        if len(items) > 0 and isinstance(items[0], Item):
+            # If it's a list of Items, we know how to do that
+            return super().items_would_fit(items)
+        else:
+            return super().items_would_fit(strip_sorting_data(items))
+
+    @overload
+    def truncate_items_list_to_fit(self, items: SortableItems) -> SortableItems:
+        ...
+
+    @overload
+    def truncate_items_list_to_fit(self, items: List[Item]) -> List[Item]:
+        ...
+
+    # To support overloading
+    def truncate_items_list_to_fit(self, items: List[Item] | SortableItems) -> List[Item] | SortableItems:
+        return super().truncate_items_list_to_fit(items)
+
     def prune_decayed_items(self,
                             activation_lookup: ItemActivationLookup,
                             time: int) -> List[ItemDecayedOutEvent]:
@@ -258,8 +285,7 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
             sortable_items=eligible_items_sortable)
         if eligible_items_list_mutator is not None:
             eligible_items_list_mutator(eligible_items_sortable)
-        eligible_items = [i for i, _ in eligible_items_sortable]
-        self._truncate_items_list_to_fit(eligible_items)
+        eligible_items = self.truncate_items_list_to_fit(strip_sorting_data(eligible_items_sortable))
         buffer_events = self._commit_buffer_items(
             items=eligible_items,
             time=time)

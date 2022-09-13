@@ -519,9 +519,6 @@ class InteractiveCombinedCognitiveModel:
             # Items which will be kicked from the buffer
             kick_from_buffer: Set[Item] = set()
 
-            # TODO: This still has the problem that we will apply substitutions
-            #  in reverse order to the list of ELIGIBLE items, not to the list
-            #  of items which WOULD BE IN THE BUFFER BEFORE THE SUBSTITUTION
             def linguistic_placeholder_substitution_mutator(eligible_sortable_items: SortableItems) -> None:
                 """
                 TODO
@@ -537,11 +534,8 @@ class InteractiveCombinedCognitiveModel:
                 item *currently in the buffer* and replace it (if possible) with its
                 linguistic counterpart.
                 """
-                # Nothing to do if there is no competition for space
-                if self.buffer.capacity is None:
-                    return
 
-                # Items which could be substituted but for which no substitution
+                # Items which should be substituted but for which no substitution
                 # is available
                 no_substitutions_available: Set[Item] = set()
                 # Items which WILL be put into the buffer
@@ -552,11 +546,14 @@ class InteractiveCombinedCognitiveModel:
                 # remaining in the buffer until as much space is freed as
                 # required
 
-                while self.buffer.aggregate_size([i for i, s in eligible_sortable_items]) > self.buffer.capacity:
+                done_mutating = self.buffer.items_would_fit(eligible_sortable_items)
+                while not done_mutating:
 
                     # Apply the substitution to the least-activated sensorimotor
-                    # item in the buffer
-                    least_sm: Item = self.__get_least_sm_item(eligible_sortable_items, ignoring=no_substitutions_available)
+                    # item that would end up the buffer
+                    least_sm: Item = self.__get_least_sm_item(
+                        provisional_buffer_items=self.buffer.truncate_items_list_to_fit(eligible_sortable_items),
+                        ignoring=no_substitutions_available)
                     if least_sm is None:
                         # No sensorimotor items left to substitute
                         break
@@ -790,7 +787,7 @@ class InteractiveCombinedCognitiveModel:
                 suppressed_target_items_dict[arrival_time].append(target)
 
     @classmethod
-    def __get_least_sm_item(cls, sorted_items: SortableItems, *, ignoring: Set[Item]) -> Item | None:
+    def __get_least_sm_item(cls, provisional_buffer_items: SortableItems, *, ignoring: Set[Item]) -> Item | None:
         """
         Gets the least-activated sensorimotor item which would enter the buffer.
 
@@ -802,7 +799,7 @@ class InteractiveCombinedCognitiveModel:
         item: Item
         data: ItemSortingData
         # items are already sorted in reverse
-        for item, data in reversed(sorted_items):
+        for item, data in reversed(provisional_buffer_items):
             if item in ignoring:
                 continue
             if item.component == Component.linguistic:
