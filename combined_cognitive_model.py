@@ -492,19 +492,6 @@ class InteractiveCombinedCognitiveModel:
 
         if self._use_linguistic_placeholder:
 
-            # TODO: the challenge here is that we need to do multiple things at the
-            #  same time:
-            #  - The buffer will have a list of items going into it; we need to
-            #    apply the substitution to some of those items before they actually
-            #    make it to the buffer.
-            #  - We need to activate the new linguistic items which resulted from
-            #    the substitution.
-            #  - We need to deactivated the old sensorimotor items which resulted
-            #    from the substitution.
-            #  - We need to get the new items into the buffer.
-            #  - We ideally need a record of which items actually entered and left
-            #    the buffer, and why.
-
             # We'll pass these into the mutator as a closure, so we get back the
             # substitutions which were made therein
 
@@ -521,18 +508,15 @@ class InteractiveCombinedCognitiveModel:
 
             def linguistic_placeholder_substitution_mutator(eligible_sortable_items: SortableItems) -> None:
                 """
-                TODO
-
                 Apply the linguistic-placeholder substitution to the list of items
                 eligible for buffer entry.
-
 
                 ## The linguistic-placeholder substitution:
 
                 When items are competing for entry to the buffer (i.e. now), if the
                 buffer would become over-full, at that point we take every sensorimotor
-                item *currently in the buffer* and replace it (if possible) with its
-                linguistic counterpart.
+                item *which would enter the buffer* and replace it (if possible) with its
+                linguistic counterpart, to try and make more room for new items to enter.
                 """
 
                 # Items which should be substituted but for which no substitution
@@ -558,26 +542,27 @@ class InteractiveCombinedCognitiveModel:
                         # No sensorimotor items left to substitute
                         break
 
-                    ling_placeholder_for_buffer, other_ling_placeholders = self.__get_linguistic_placeholders(least_sm)
-                    if ling_placeholder_for_buffer is None:
+                    ling_preferred_placeholder_for_buffer, other_ling_placeholders = self.__get_linguistic_placeholders(least_sm)
+                    if ling_preferred_placeholder_for_buffer is None:
                         # No substitution available
                         no_substitutions_available.add(least_sm)
                         continue
 
                     # At this point a substitution will be made
 
-                    substitutions_made[least_sm] = ling_placeholder_for_buffer
+                    # Record it
+                    substitutions_made[least_sm] = ling_preferred_placeholder_for_buffer
 
                     activation_of_sensorimotor_item = activation_lookup(least_sm)
 
-                    # Only blessed placeholder gets presented to the buffer
+                    # Only the single preferred placeholder gets presented to the buffer
                     placeholders_for_buffer.add(
-                        (ling_placeholder_for_buffer, activation_of_sensorimotor_item))
+                        (ling_preferred_placeholder_for_buffer, activation_of_sensorimotor_item))
                     # All placeholders get activated by the appropriate amount
                     placeholders_for_activation.add((
                         # The blessed linguistic item will get the sensorimotor
                         # item's full activation
-                        ling_placeholder_for_buffer,
+                        ling_preferred_placeholder_for_buffer,
                         activation_of_sensorimotor_item))
                     placeholders_for_activation.update({
                         (
@@ -619,9 +604,11 @@ class InteractiveCombinedCognitiveModel:
                 eligible_items_list_mutator=linguistic_placeholder_substitution_mutator,
             )
 
+            # region: Substitution cleanup
+
             # Validate the closure-captured collections
             assert all(i.component == Component.sensorimotor for i in substituted_items_to_deactivate)
-            assert all(i.component == Component.linguistic for i, _ in placeholders_for_activation)
+            assert all(i.component == Component.linguistic for i, _a in placeholders_for_activation)
 
             # New events for items which were kicked
             for item in kick_from_buffer:
@@ -649,6 +636,8 @@ class InteractiveCombinedCognitiveModel:
             # Add the buffer substitution events
             for sm_item, ling_item in substitutions_made.items():
                 buffer_events.append(SubstitutionEvent(new_item=ling_item, displaced_item=sm_item, time=time_at_start_of_tick))
+
+            # endregion
 
         else:
             # Just present all items together
