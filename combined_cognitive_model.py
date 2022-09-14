@@ -417,7 +417,7 @@ class InteractiveCombinedCognitiveModel:
 
     def _pre_tick(self) -> List[ModelEvent]:
         decay_events = self.buffer.prune_decayed_items(
-            activation_lookup=self._activation_of_item_at_time,
+            activation_lookup=self._activation_of_item,
             time=self.clock)
         return decay_events
 
