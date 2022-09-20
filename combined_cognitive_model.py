@@ -43,6 +43,7 @@ from .utils.decorators import cached
 from .utils.maths import prevalence_from_fraction_known
 from .utils.dictionary import forget_keys_for_values_satisfying
 from .utils.iterable import partition
+from .version import VERSION
 
 _logger = getLogger(__name__)
 
@@ -285,6 +286,9 @@ class InterComponentMapping:
 
 
 class InteractiveCombinedCognitiveModel:
+
+    version: str = VERSION
+
     def __init__(self,
                  linguistic_component: LinguisticComponent,
                  sensorimotor_component: SensorimotorComponent,
