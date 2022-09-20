@@ -357,14 +357,14 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
         new_buffer_items = frozenset(items)
 
         # For returning additional BufferEvents
-        removed_items = self.items - new_buffer_items
-        whole_buffer_replaced = removed_items == self.items
+        displaced_items = self.items - new_buffer_items
+        whole_buffer_replaced = displaced_items == self.items
 
         # Update buffer
         self.items = new_buffer_items
 
         buffer_events: List[BufferEvent] = [
-            ItemDisplacedEvent(time=time, item=i) for i in removed_items]
+            ItemDisplacedEvent(time=time, item=i) for i in displaced_items]
         if whole_buffer_replaced:
             buffer_events.append(BufferFloodEvent(time=time))
 
