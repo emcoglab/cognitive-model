@@ -137,10 +137,25 @@ class LimitedCapacityItemSet(ABC):
         Use for example on a list of candidate items to ensure that it will fit 
         within the set.
         """
-        items = list(items)
-        while not self.items_would_fit(items):
-            items.pop()
-        return items
+        # One might think to have a simple trimming loop here like:
+        #   while not self.items_would_fit(items: items.pop()
+        # However it will often be the case that `items` is much longer than would fit, meaning that .items_would_fit()
+        # will get called many times, which can be costly in terms of performance.
+        # Therefore we do a single check to short-circuit...
+        if self.items_would_fit(items):
+            return items
+        # ...and then instead count up through the items that will fit.
+        # While this will be a little slower in cases where `items` is less than twice the size of `self.capacity`,
+        # it will tend to be faster in most real-world cases.
+        # If it turns out to be a problem in general, we could check for that threshold and then branch the logic to do
+        # an upward or downward aggregation.
+        items_to_return: List[Item] = []
+        for item in items:
+            if self.items_would_fit(items_to_return + [item]):
+                items_to_return.append(item)
+            else:
+                break
+        return items_to_return
 
     def clear(self):
         """Empties the set of items."""
