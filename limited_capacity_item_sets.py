@@ -19,13 +19,12 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, List, Callable, FrozenSet, Iterable, Tuple, \
-    Collection, Dict, Set, overload
+from typing import Optional, List, Callable, FrozenSet, Iterable, Tuple, Collection, Dict, Set, overload
 
 from .ldm.utils.maths import clamp01
 from .basic_types import ActivationValue, Size, SizedItem, Item
-from .events import ItemActivatedEvent, ItemDecayedOutEvent, BufferEvent, \
-    ItemDisplacedEvent, BufferFloodEvent, ItemEnteredBufferEvent
+from .events import ItemActivatedEvent, ItemDecayedOutEvent, BufferEvent, ItemDisplacedEvent, BufferFloodEvent, \
+    ItemEnteredBufferEvent
 
 
 class OverCapacityError(Exception):
@@ -115,19 +114,14 @@ class LimitedCapacityItemSet(ABC):
 
     @property
     def _over_capacity(self) -> bool:
-        if self.capacity is None:
-            return False
-        return self.aggregate_size(self.items) > self.capacity
+        return not self.items_would_fit(self.items)
 
     @classmethod
+    @abstractmethod
     def aggregate_size(cls, items: Iterable[Item]) -> Size:
-        current_size = sum(
-            (i.size if isinstance(i, SizedItem) else 1)
-            for i in items
-        )
-        return Size(current_size)
+        pass
 
-    def items_would_fit(self, items: List[Item]) -> bool:
+    def items_would_fit(self, items: Iterable[Item]) -> bool:
         """Returns True iff the list of items would fit within the buffer."""
         if self.capacity is None:
             return True
@@ -189,6 +183,7 @@ class LimitedCapacityItemSet(ABC):
         """
         raise NotImplementedError()
 
+
 class WorkingMemoryBuffer(LimitedCapacityItemSet):
 
     def __init__(self,
@@ -218,12 +213,16 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
             else lambda item: 0
         )
 
-    def items_would_fit(self, items: List[Item] | SortableItems) -> bool:
-        if len(items) > 0 and isinstance(items[0], Item):
+    def items_would_fit(self, items: List[SizedItem] | SortableItems) -> bool:
+        if len(items) > 0 and isinstance(items[0], SizedItem):
             # If it's a list of Items, we know how to do that
             return super().items_would_fit(items)
         else:
             return super().items_would_fit(strip_sorting_data(items))
+
+    @classmethod
+    def aggregate_size(cls, items: Iterable[SizedItem]) -> Size:
+        return Size(sum(i.size for i in items))
 
     @overload
     def truncate_items_list_to_fit(self, items: SortableItems) -> SortableItems:
@@ -432,6 +431,12 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
                                      reverse=True)
 
         return sorted_buffer_items
+
+
+class UnsizedWorkingMemoryBuffer(WorkingMemoryBuffer):
+    @classmethod
+    def aggregate_size(cls, items: Collection[Item]) -> Size:
+        return Size(len(items))
 
 
 class AccessibleSet(LimitedCapacityItemSet):
