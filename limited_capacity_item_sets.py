@@ -157,7 +157,7 @@ class LimitedCapacityItemSet(ABC):
                             activation_lookup: ItemActivationLookup,
                             time: int):
         """
-        Removes items from the distinguished set which have dropped below threshold.
+        Removes items from the distinguished set that have dropped below threshold.
         :param activation_lookup:
             Function mapping items to their current activation.
         :param time:
@@ -194,7 +194,7 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
                  ):
         """
         :param tiebreaker_lookup:
-            Optional function which gives items a value used to break ties for
+            Optional function that gives items a value used to break ties for
             purposes of determining entry. Larger values result in increased
             precedence for entry.
 
@@ -240,9 +240,9 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
                             activation_lookup: ItemActivationLookup,
                             time: int) -> List[ItemDecayedOutEvent]:
         """
-        Removes items from the buffer which have dropped below threshold.
+        Removes items from the buffer that have dropped below threshold.
         :return:
-            Events for items which left the buffer by decaying out.
+            Events for items that left the buffer by decaying out.
         """
         new_buffer_items = frozenset(
             item
