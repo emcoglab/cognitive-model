@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, List, Callable, FrozenSet, Iterable, Tuple, Collection, Dict, Set, overload
+from typing import Optional, List, Callable, FrozenSet, Tuple, Collection, Dict, Set, overload
 
 from .ldm.utils.maths import clamp01
 from .basic_types import ActivationValue, Size, SizedItem, Item
@@ -118,10 +118,10 @@ class LimitedCapacityItemSet(ABC):
 
     @classmethod
     @abstractmethod
-    def aggregate_size(cls, items: Iterable[Item]) -> Size:
+    def aggregate_size(cls, items: Collection[Item]) -> Size:
         pass
 
-    def items_would_fit(self, items: Iterable[Item]) -> bool:
+    def items_would_fit(self, items: Collection[Item]) -> bool:
         """Returns True iff the list of items would fit within the buffer."""
         if self.capacity is None:
             return True
@@ -228,7 +228,7 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
             else lambda item: 0
         )
 
-    def items_would_fit(self, items: List[SizedItem] | SortableItems) -> bool:
+    def items_would_fit(self, items: Collection[SizedItem] | SortableItems) -> bool:
         if len(items) > 0 and isinstance(items[0], SizedItem):
             # If it's a list of Items, we know how to do that
             return super().items_would_fit(items)
@@ -236,7 +236,7 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
             return super().items_would_fit(strip_sorting_data(items))
 
     @classmethod
-    def aggregate_size(cls, items: Iterable[SizedItem]) -> Size:
+    def aggregate_size(cls, items: Collection[SizedItem]) -> Size:
         return Size(sum(i.size for i in items))
 
     @overload
