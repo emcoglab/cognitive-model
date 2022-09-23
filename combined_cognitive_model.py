@@ -496,8 +496,7 @@ class InteractiveCombinedCognitiveModel:
 
         if self._use_linguistic_placeholder:
 
-            # We'll pass these into the mutator as a closure, so we get back the
-            # substitutions which were made therein
+            # We'll pass these into the mutator as a closure, so we get back the substitutions which were made therein
 
             # Dictionary of mapping substituted sensorimotor items to their
             # linguistic placeholders
@@ -508,7 +507,7 @@ class InteractiveCombinedCognitiveModel:
             # Items which need to be deactivated as the result of substitutions
             substituted_items_to_deactivate: Set[Item] = set()
             # Items which will be kicked from the buffer
-            kick_from_buffer: Set[Item] = set()
+            kicked_from_buffer: Set[Item] = set()
 
             def linguistic_placeholder_substitution_mutator(eligible_sortable_items: SortableItems) -> None:
                 """
@@ -526,9 +525,6 @@ class InteractiveCombinedCognitiveModel:
                 # Items which should be substituted but for which no substitution
                 # is available
                 no_substitutions_available: Set[Item] = set()
-                # Items which WILL be put into the buffer
-                # Stores the item together with the activation the WILL be given
-                placeholders_for_buffer: Set[Tuple[Item, ActivationValue]] = set()
 
                 # Recursively apply substitutions ot the least-activated item
                 # remaining in the buffer until as much space is freed as
@@ -537,11 +533,21 @@ class InteractiveCombinedCognitiveModel:
                 done_mutating = self.buffer.items_would_fit(strip_sorting_data(eligible_sortable_items))
                 while not done_mutating:
 
+                    # We store some items locally to do the actual mutation step, and will also feed them into the
+                    # captured variables for use elsewhere
+
+                    add_this_iteration: Set[Tuple[Item, ActivationValue]] = set()
+                    kick_this_iteration: Set[Item] = set()
+
                     # Apply the substitution to the least-activated sensorimotor
                     # item that would end up the buffer
                     least_sm: Item = self.__get_least_sm_item(
                         provisional_buffer_items=self.buffer.truncate_items_list_to_fit(strip_sorting_data(eligible_sortable_items)),
-                        ignoring=no_substitutions_available)
+                        ignoring=(
+                            # We ignore all items where we know there are no substitutions to be made...
+                            no_substitutions_available
+                            # ...and, since we actually make the substitutions at a later time
+                            | substitutions_made.keys()))
                     if least_sm is None:
                         # No sensorimotor items left to substitute
                         break
@@ -560,7 +566,7 @@ class InteractiveCombinedCognitiveModel:
                     activation_of_sensorimotor_item = activation_lookup(least_sm)
 
                     # Only the single preferred placeholder gets presented to the buffer
-                    placeholders_for_buffer.add(
+                    add_this_iteration.add(
                         (ling_preferred_placeholder_for_buffer, activation_of_sensorimotor_item))
                     # All placeholders get activated by the appropriate amount
                     placeholders_for_activation.add((
@@ -579,27 +585,37 @@ class InteractiveCombinedCognitiveModel:
                     })
 
                     # Then we can kick and deactivate the substituted item
-                    kick_from_buffer.add(least_sm)
+                    kick_this_iteration.add(least_sm)
                     substituted_items_to_deactivate.add(least_sm)
 
                     # Items not presented to the buffer also get kicked if
                     # they're already there
-                    kick_from_buffer.update(other_ling_placeholders)
+                    kick_this_iteration.update(other_ling_placeholders)
 
-                # Now do the actual mutation of the list
+                    # Make items operated on available to the environment
+                    kicked_from_buffer.update(kick_this_iteration)
 
-                # Kick items from buffer
-                for item in kick_from_buffer:
-                    kick_item_from_sortable_list(eligible_sortable_items, item_to_kick=item)
+                    # Now do the actual mutation of the list.
+                    #
+                    # We do mutation iteratively because we want to stop as soon as the resultant list would fit in the
+                    # buffer.
 
-                # Add new items to buffer
-                for item, activation in placeholders_for_buffer:
-                    eligible_sortable_items.append((
-                        item,
-                        ItemSortingData(activation=activation,
-                                        freshly_activated=True,
-                                        tiebreaker=self.__prevalence_lookup(item))
-                    ))
+                    # Kick items from buffer
+                    for item in kick_this_iteration:
+                        kick_item_from_sortable_list(eligible_sortable_items, item_to_kick=item)
+
+                    # Add new items to buffer
+                    for item, activation in add_this_iteration:
+                        eligible_sortable_items.append((
+                            item,
+                            ItemSortingData(activation=activation,
+                                            freshly_activated=True,
+                                            tiebreaker=self.__prevalence_lookup(item))
+                        ))
+
+                    # We will finish if we've run out of items to try substituting, but can also stop if the eligible
+                    # items would now fit in the buffer
+                    done_mutating = self.buffer.items_would_fit(strip_sorting_data(eligible_sortable_items))
 
             buffer_events = self.buffer.present_items(
                 activation_events=activation_events,
@@ -615,7 +631,7 @@ class InteractiveCombinedCognitiveModel:
             assert all(i.component == Component.linguistic for i, _a in placeholders_for_activation)
 
             # New events for items which were kicked
-            for item in kick_from_buffer:
+            for item in kicked_from_buffer:
                 buffer_events.append(ItemDisplacedEvent(
                     item=item,
                     time=time_at_start_of_tick))

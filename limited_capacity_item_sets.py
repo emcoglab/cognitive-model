@@ -31,7 +31,7 @@ class OverCapacityError(Exception):
     pass
 
 
-@dataclass
+@dataclass(eq=True, order=False)  # Sorting logic not stored with data
 class ItemSortingData:
     """
     For sorting items before entry to the buffer.
@@ -66,7 +66,7 @@ def kick_item_from_sortable_list(sortable_list: SortableItems, *, item_to_kick: 
                 pair_to_kick = (item, sorting_data)
                 break
         else:
-            # Item not there any more/ever
+            # Made it through the whole list and the item is not there any more/ever
             return
         sortable_list.remove(pair_to_kick)
 
