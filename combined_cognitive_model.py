@@ -466,17 +466,27 @@ class InteractiveCombinedCognitiveModel:
 
         Returns None in the first case where there is no substitution available.
         """
+
         sm_label: ItemLabel = self.sensorimotor_component.propagator.idx2label[sm_item.idx]
+
+        # Check first to see if the sensorimotor item has a simple available counterpart in the linguistic component
+        if sm_label in self.linguistic_component.available_labels:
+            ling_item = self._apply_item_size(Item(idx=self.linguistic_component.propagator.label2idx[sm_label],
+                                                   component=Component.linguistic))
+            return ling_item, set()
+
+        # If there's no direct counterpart, use the mapping
         try:
-            ling_items: List[Item] = [
-                Item(
-                    idx=self.linguistic_component.propagator.label2idx[ling_label],
-                    component=Component.linguistic)
-                for ling_label in self.mapping.sensorimotor_to_linguistic[sm_label]
-            ]
+            ling_labels = self.mapping.sensorimotor_to_linguistic[sm_label]
         except KeyError:
             # No substitution available
             return None, set()
+        ling_items: List[Item] = [
+            Item(
+                idx=self.linguistic_component.propagator.label2idx[ling_label],
+                component=Component.linguistic)
+            for ling_label in ling_labels
+        ]
 
         # Return the most prevalent and then the rest
         ling_items.sort(key=lambda item: self.__prevalence_lookup(item), reverse=True)
