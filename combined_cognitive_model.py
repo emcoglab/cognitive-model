@@ -78,8 +78,6 @@ class InterComponentMapping:
                     ignore_identity_mapping: bool = True,
                     ):
 
-        _logger.info("Setting up inter-component mapping")
-
         lemmatiser = WordNetLemmatizer()
 
         # linguistic --> sensorimotor direction
@@ -359,6 +357,8 @@ class InteractiveCombinedCognitiveModel:
         self.sensorimotor_component.propagator.firing_guards.extend([])
 
         # Inter-component mapping logic
+        _logger.info("Setting up inter-component mapping")
+        # Note that this mapping is NOT assumed to contain identity mappings
         self.mapping: InterComponentMapping
         if with_mapping is not None:
             self.mapping = with_mapping
@@ -366,6 +366,7 @@ class InteractiveCombinedCognitiveModel:
             self.mapping = InterComponentMapping.from_vocabs(
                 linguistic_vocab=self.linguistic_component.available_labels,
                 sensorimotor_vocab=self.sensorimotor_component.available_labels,
+                ignore_identity_mapping=True,
             )
 
         # To prevent cat -> CAT producing an automatic CAT -> cat activation a few ticks down the line, we suppress that
