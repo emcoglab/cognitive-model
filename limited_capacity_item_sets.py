@@ -51,7 +51,7 @@ def strip_sorting_data(sortable_items: SortableItems) -> List[Item]:
     return [i for i, _ in sortable_items]
 
 
-def kick_item_from_sortable_list(sortable_list: SortableItems, *, item_to_kick: Item) -> None:
+def kick_item_from_sortable_list(sortable_list: SortableItems, item_to_kick: Item) -> bool:
     """
     Removes all (Item, ItemSortingData) pairs from a SortableItems list where
     the Item matches the supplied one.
@@ -59,7 +59,10 @@ def kick_item_from_sortable_list(sortable_list: SortableItems, *, item_to_kick: 
     If the item isn't matched, nothing happens.
 
     Mutates input list.
+
+    Returns True if the item was actually kicked at least once, else False
     """
+    item_was_kicked: bool = False
     while True:
         for item, sorting_data in sortable_list:
             if item == item_to_kick:
@@ -67,8 +70,9 @@ def kick_item_from_sortable_list(sortable_list: SortableItems, *, item_to_kick: 
                 break
         else:
             # Made it through the whole list and the item is not there any more/ever
-            return
+            return item_was_kicked
         sortable_list.remove(pair_to_kick)
+        item_was_kicked = True
 
 
 class LimitedCapacityItemSet(ABC):
@@ -149,6 +153,8 @@ class LimitedCapacityItemSet(ABC):
         # it will tend to be faster in most real-world cases.
         # If it turns out to be a problem in general, we could check for that threshold and then branch the logic to do
         # an upward or downward aggregation.
+        # TODO: This could be optimised by just adding up the sizes with a counter and truncating there rather than
+        #  repeatedly calculating the sizes
         items_to_return: List[Item] = []
         for item in items:
             if self.items_would_fit(items_to_return + [item]):

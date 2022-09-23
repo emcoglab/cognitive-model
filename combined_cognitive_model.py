@@ -390,7 +390,7 @@ class InteractiveCombinedCognitiveModel:
         elif item.component == Component.linguistic:
             return self.linguistic_component.propagator.activation_of_item_with_idx_at_time(item.idx, time=time)
 
-    def _apply_item_sizes(self, events: List[ModelEvent]) -> None:
+    def _apply_item_sizes_in_events(self, events: List[ModelEvent]) -> None:
         """
         Converts Items in events to have SizedItems with the appropriate size.
 
@@ -398,10 +398,16 @@ class InteractiveCombinedCognitiveModel:
         """
         for e in events:
             if isinstance(e, ItemEvent):
-                if e.item.component == Component.linguistic:
-                    e.item = SizedItem(idx=e.item.idx, component=e.item.component, size=self._lc_item_size)
-                elif e.item.component == Component.sensorimotor:
-                    e.item = SizedItem(idx=e.item.idx, component=e.item.component, size=self._smc_item_size)
+                e.item = self._apply_item_size(e.item)
+
+    def _apply_item_size(self, item: Item) -> SizedItem:
+        """Converts items to their appropriate sizes."""
+        if item.component == Component.linguistic:
+            return SizedItem(idx=item.idx, component=item.component, size=self._lc_item_size)
+        elif item.component == Component.sensorimotor:
+            return SizedItem(idx=item.idx, component=item.component, size=self._smc_item_size)
+        else:
+            raise NotImplementedError()
 
     def tick(self):
         time_at_start_of_tick = self.clock
@@ -449,7 +455,7 @@ class InteractiveCombinedCognitiveModel:
             + model_other_events + buffer_other_events
         )
 
-    def __get_linguistic_placeholders(self, sm_item: Item) -> Tuple[Item | None, Set[Item]]:
+    def __get_linguistic_placeholders(self, sm_item: Item) -> Tuple[SizedItem | None, Set[SizedItem]]:
         """
         Given a sensorimotor item, returns the linguistic placeholder.
 
@@ -473,8 +479,8 @@ class InteractiveCombinedCognitiveModel:
 
         # Return the most prevalent and then the rest
         ling_items.sort(key=lambda item: self.__prevalence_lookup(item), reverse=True)
-        preferred_ling_item: Item = ling_items[0]
-        other_ling_items: Set[Item] = set(ling_items[1:])
+        preferred_ling_item: SizedItem = self._apply_item_size(ling_items[0])
+        other_ling_items: Set[SizedItem] = set(self._apply_item_size(i) for i in ling_items[1:])
 
         return preferred_ling_item, other_ling_items
 
@@ -486,7 +492,7 @@ class InteractiveCombinedCognitiveModel:
         Present activation events to buffer and upgrade as necessary.
         """
 
-        self._apply_item_sizes(activation_events)
+        self._apply_item_sizes_in_events(activation_events)
 
         def activation_lookup(item: Item) -> ActivationValue:
             return self._activation_of_item_at_time(
@@ -530,8 +536,7 @@ class InteractiveCombinedCognitiveModel:
                 # remaining in the buffer until as much space is freed as
                 # required
 
-                done_mutating = self.buffer.items_would_fit(strip_sorting_data(eligible_sortable_items))
-                while not done_mutating:
+                while not self.buffer.items_would_fit(strip_sorting_data(eligible_sortable_items)):
 
                     # We store some items locally to do the actual mutation step, and will also feed them into the
                     # captured variables for use elsewhere
@@ -592,9 +597,6 @@ class InteractiveCombinedCognitiveModel:
                     # they're already there
                     kick_this_iteration.update(other_ling_placeholders)
 
-                    # Make items operated on available to the environment
-                    kicked_from_buffer.update(kick_this_iteration)
-
                     # Now do the actual mutation of the list.
                     #
                     # We do mutation iteratively because we want to stop as soon as the resultant list would fit in the
@@ -602,7 +604,11 @@ class InteractiveCombinedCognitiveModel:
 
                     # Kick items from buffer
                     for item in kick_this_iteration:
-                        kick_item_from_sortable_list(eligible_sortable_items, item_to_kick=item)
+                        item_was_kicked = kick_item_from_sortable_list(eligible_sortable_items, item_to_kick=item)
+
+                        # Make items operated on available to the environment
+                        if item_was_kicked:
+                            kicked_from_buffer.add(item)
 
                     # Add new items to buffer
                     for item, activation in add_this_iteration:
@@ -612,10 +618,6 @@ class InteractiveCombinedCognitiveModel:
                                             freshly_activated=True,
                                             tiebreaker=self.__prevalence_lookup(item))
                         ))
-
-                    # We will finish if we've run out of items to try substituting, but can also stop if the eligible
-                    # items would now fit in the buffer
-                    done_mutating = self.buffer.items_would_fit(strip_sorting_data(eligible_sortable_items))
 
             buffer_events = self.buffer.present_items(
                 activation_events=activation_events,
