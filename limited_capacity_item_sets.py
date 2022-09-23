@@ -19,13 +19,12 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, List, Callable, FrozenSet, Iterable, Tuple, \
-    Collection, Dict, Set, overload
+from typing import Optional, List, Callable, FrozenSet, Tuple, Collection, Dict, Set
 
 from .ldm.utils.maths import clamp01
 from .basic_types import ActivationValue, Size, SizedItem, Item
-from .events import ItemActivatedEvent, ItemDecayedOutEvent, BufferEvent, \
-    ItemDisplacedEvent, BufferFloodEvent, ItemEnteredBufferEvent
+from .events import ItemActivatedEvent, ItemDecayedOutEvent, BufferEvent, ItemDisplacedEvent, BufferFloodEvent, \
+    ItemEnteredBufferEvent
 
 
 class OverCapacityError(Exception):
@@ -115,19 +114,14 @@ class LimitedCapacityItemSet(ABC):
 
     @property
     def _over_capacity(self) -> bool:
-        if self.capacity is None:
-            return False
-        return self.aggregate_size(self.items) > self.capacity
+        return not self.items_would_fit(self.items)
 
     @classmethod
-    def aggregate_size(cls, items: Iterable[Item]) -> Size:
-        current_size = sum(
-            (i.size if isinstance(i, SizedItem) else 1)
-            for i in items
-        )
-        return Size(current_size)
+    @abstractmethod
+    def aggregate_size(cls, items: Collection[Item]) -> Size:
+        pass
 
-    def items_would_fit(self, items: List[Item]) -> bool:
+    def items_would_fit(self, items: Collection[Item]) -> bool:
         """Returns True iff the list of items would fit within the buffer."""
         if self.capacity is None:
             return True
@@ -143,10 +137,25 @@ class LimitedCapacityItemSet(ABC):
         Use for example on a list of candidate items to ensure that it will fit 
         within the set.
         """
-        items = list(items)
-        while not self.items_would_fit(items):
-            items.pop()
-        return items
+        # One might think to have a simple trimming loop here like:
+        #   while not self.items_would_fit(items: items.pop()
+        # However it will often be the case that `items` is much longer than would fit, meaning that .items_would_fit()
+        # will get called many times, which can be costly in terms of performance.
+        # Therefore we do a single check to short-circuit...
+        if self.items_would_fit(items):
+            return items
+        # ...and then instead count up through the items that will fit.
+        # While this will be a little slower in cases where `items` is less than twice the size of `self.capacity`,
+        # it will tend to be faster in most real-world cases.
+        # If it turns out to be a problem in general, we could check for that threshold and then branch the logic to do
+        # an upward or downward aggregation.
+        items_to_return: List[Item] = []
+        for item in items:
+            if self.items_would_fit(items_to_return + [item]):
+                items_to_return.append(item)
+            else:
+                break
+        return items_to_return
 
     def clear(self):
         """Empties the set of items."""
@@ -163,7 +172,7 @@ class LimitedCapacityItemSet(ABC):
                             activation_lookup: ItemActivationLookup,
                             time: int):
         """
-        Removes items from the distinguished set which have dropped below threshold.
+        Removes items from the distinguished set that have dropped below threshold.
         :param activation_lookup:
             Function mapping items to their current activation.
         :param time:
@@ -189,6 +198,7 @@ class LimitedCapacityItemSet(ABC):
         """
         raise NotImplementedError()
 
+
 class WorkingMemoryBuffer(LimitedCapacityItemSet):
 
     def __init__(self,
@@ -199,7 +209,7 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
                  ):
         """
         :param tiebreaker_lookup:
-            Optional function which gives items a value used to break ties for
+            Optional function that gives items a value used to break ties for
             purposes of determining entry. Larger values result in increased
             precedence for entry.
 
@@ -218,32 +228,17 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
             else lambda item: 0
         )
 
-    def items_would_fit(self, items: List[Item] | SortableItems) -> bool:
-        if len(items) > 0 and isinstance(items[0], Item):
-            # If it's a list of Items, we know how to do that
-            return super().items_would_fit(items)
-        else:
-            return super().items_would_fit(strip_sorting_data(items))
-
-    @overload
-    def truncate_items_list_to_fit(self, items: SortableItems) -> SortableItems:
-        ...
-
-    @overload
-    def truncate_items_list_to_fit(self, items: List[Item]) -> List[Item]:
-        ...
-
-    # To support overloading
-    def truncate_items_list_to_fit(self, items: List[Item] | SortableItems) -> List[Item] | SortableItems:
-        return super().truncate_items_list_to_fit(items)
+    @classmethod
+    def aggregate_size(cls, items: Collection[SizedItem]) -> Size:
+        return Size(sum(i.size for i in items))
 
     def prune_decayed_items(self,
                             activation_lookup: ItemActivationLookup,
                             time: int) -> List[ItemDecayedOutEvent]:
         """
-        Removes items from the buffer which have dropped below threshold.
+        Removes items from the buffer that have dropped below threshold.
         :return:
-            Events for items which left the buffer by decaying out.
+            Events for items that left the buffer by decaying out.
         """
         new_buffer_items = frozenset(
             item
@@ -432,6 +427,12 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
                                      reverse=True)
 
         return sorted_buffer_items
+
+
+class UnsizedWorkingMemoryBuffer(WorkingMemoryBuffer):
+    @classmethod
+    def aggregate_size(cls, items: Collection[Item]) -> Size:
+        return Size(len(items))
 
 
 class AccessibleSet(LimitedCapacityItemSet):

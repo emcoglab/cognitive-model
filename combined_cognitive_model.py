@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from pathlib import Path
-from typing import List, Optional, Set, Dict, DefaultDict, Tuple
+from typing import List, Optional, Set, Dict, DefaultDict, Tuple, Sequence, Container
 from logging import getLogger
 
 from numpy import lcm, inf
@@ -35,7 +35,7 @@ from .events import ItemActivatedEvent, ItemEvent, ModelEvent, \
     ItemDisplacedEvent, SubstitutionEvent
 from .ldm.corpus.tokenising import modified_word_tokenize
 from .limited_capacity_item_sets import SortableItems, ItemSortingData, \
-    kick_item_from_sortable_list, WorkingMemoryBuffer
+    kick_item_from_sortable_list, WorkingMemoryBuffer, strip_sorting_data
 from .prevalence.brysbaert_prevalence import BrysbaertPrevalence
 from .sensorimotor_norms.breng_translation.dictionary.dialect_dictionary \
     import ameng_to_breng, breng_to_ameng
@@ -534,13 +534,13 @@ class InteractiveCombinedCognitiveModel:
                 # remaining in the buffer until as much space is freed as
                 # required
 
-                done_mutating = self.buffer.items_would_fit(eligible_sortable_items)
+                done_mutating = self.buffer.items_would_fit(strip_sorting_data(eligible_sortable_items))
                 while not done_mutating:
 
                     # Apply the substitution to the least-activated sensorimotor
                     # item that would end up the buffer
                     least_sm: Item = self.__get_least_sm_item(
-                        provisional_buffer_items=self.buffer.truncate_items_list_to_fit(eligible_sortable_items),
+                        provisional_buffer_items=self.buffer.truncate_items_list_to_fit(strip_sorting_data(eligible_sortable_items)),
                         ignoring=no_substitutions_available)
                     if least_sm is None:
                         # No sensorimotor items left to substitute
@@ -655,6 +655,7 @@ class InteractiveCombinedCognitiveModel:
             old_items=set(previous_buffer), new_items=set(self.buffer.items),
             activation_events=activation_events)
 
+        # noinspection PyTypeChecker
         return activation_events + buffer_events
 
     def __set_activation_of_item(self, item: Item, activation: ActivationValue, time_at_start_of_tick: int) -> List[ItemActivatedEvent]:
@@ -780,7 +781,7 @@ class InteractiveCombinedCognitiveModel:
                 suppressed_target_items_dict[arrival_time].append(target)
 
     @classmethod
-    def __get_least_sm_item(cls, provisional_buffer_items: SortableItems, *, ignoring: Set[Item]) -> Item | None:
+    def __get_least_sm_item(cls, provisional_buffer_items: Sequence[Item], *, ignoring: Container[Item]) -> Item | None:
         """
         Gets the least-activated sensorimotor item which would enter the buffer.
 
@@ -790,9 +791,8 @@ class InteractiveCombinedCognitiveModel:
         Assumes items are already sorted in descending order of precedence
         """
         item: Item
-        data: ItemSortingData
         # items are already sorted in reverse
-        for item, data in reversed(provisional_buffer_items):
+        for item in reversed(provisional_buffer_items):
             if item in ignoring:
                 continue
             if item.component == Component.linguistic:

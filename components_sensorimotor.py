@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Optional, List, Dict
 
 from .basic_types import ActivationValue, ItemIdx
-from .limited_capacity_item_sets import WorkingMemoryBuffer
+from .limited_capacity_item_sets import UnsizedWorkingMemoryBuffer
 from .components import ModelComponentWithAccessibleSet
 from .modulations import make_apply_activation_cap_modulation_for, make_attenuate_by_statistic_modulation_for
 from .events import ModelEvent, ItemActivatedEvent
@@ -122,7 +122,7 @@ class BufferedSensorimotorComponent(SensorimotorComponent):
         # decay sufficiently (self.buffer_pruning_threshold) or are displaced.
         #
         # This is updated each .tick() based on items which became activated (a prerequisite for entering the buffer)
-        self.working_memory_buffer: WorkingMemoryBuffer = WorkingMemoryBuffer(buffer_threshold, buffer_capacity)
+        self.working_memory_buffer: UnsizedWorkingMemoryBuffer = UnsizedWorkingMemoryBuffer(buffer_threshold, buffer_capacity)
 
         # endregion
 
