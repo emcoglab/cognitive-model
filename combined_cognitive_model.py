@@ -677,7 +677,7 @@ class InteractiveCombinedCognitiveModel:
         return activation_events + buffer_events
 
     def __set_activation_of_item(self, item: Item, activation: ActivationValue, time_at_start_of_tick: int) -> List[ItemActivatedEvent]:
-        from framework.cognitive_model.propagator import ActivationRecord
+        from framework.cognitive_model.propagator import ActivationRecord  # TODO: move this logic into the propagators?
         component: ModelComponent
         if item.component == Component.sensorimotor:
             component = self.sensorimotor_component
@@ -690,7 +690,12 @@ class InteractiveCombinedCognitiveModel:
         else:
             # Schedule and process activation
             component.propagator._schedule_activation_of_item_with_idx(item.idx, activation=activation, arrival_time=time_at_start_of_tick)
+            # We will have advanced the individual propagator as part of this .tick(), so we do a hair-raising rollback
+            # of the clock and re-propagate the newly added activations
+            clock_should_be = component.propagator.clock
+            component.propagator.clock = time_at_start_of_tick
             activation_events = component.propagator._evolve_propagator()
+            component.propagator.clock = clock_should_be
         return activation_events
 
     def _handle_inter_component_activity(self,
