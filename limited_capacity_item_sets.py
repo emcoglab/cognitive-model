@@ -411,7 +411,12 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
         # being presented or not), ties are broken by existing orders of events:
         #
         #  4. Emission order.
-        #  5. Alphabetically by alphabetically earliest edge endpoint.
+        #
+        #  5. After this, the order is *too difficult to determine*, as the list
+        #     may be mutated using the linguistic placeholder and contingently
+        #     re-sorted multiple times. If none of this happens, the order may
+        #     be alphabetically by alphabetically-earliest edge endpoint. But
+        #     being realistic, the order is not tractably determinable.
         #
         # [0]: https://wiki.python.org/moin/HowTo/Sorting#Sort_Stability_and_Complex_Sorts
         # [1]: Brysbaert et al., 2019.
