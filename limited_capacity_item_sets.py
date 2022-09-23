@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, List, Callable, FrozenSet, Tuple, Collection, Dict, Set, overload
+from typing import Optional, List, Callable, FrozenSet, Tuple, Collection, Dict, Set
 
 from .ldm.utils.maths import clamp01
 from .basic_types import ActivationValue, Size, SizedItem, Item
@@ -228,28 +228,9 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
             else lambda item: 0
         )
 
-    def items_would_fit(self, items: Collection[SizedItem] | SortableItems) -> bool:
-        if len(items) > 0 and isinstance(items[0], SizedItem):
-            # If it's a list of Items, we know how to do that
-            return super().items_would_fit(items)
-        else:
-            return super().items_would_fit(strip_sorting_data(items))
-
     @classmethod
     def aggregate_size(cls, items: Collection[SizedItem]) -> Size:
         return Size(sum(i.size for i in items))
-
-    @overload
-    def truncate_items_list_to_fit(self, items: SortableItems) -> SortableItems:
-        ...
-
-    @overload
-    def truncate_items_list_to_fit(self, items: List[Item]) -> List[Item]:
-        ...
-
-    # To support overloading
-    def truncate_items_list_to_fit(self, items: List[Item] | SortableItems) -> List[Item] | SortableItems:
-        return super().truncate_items_list_to_fit(items)
 
     def prune_decayed_items(self,
                             activation_lookup: ItemActivationLookup,
