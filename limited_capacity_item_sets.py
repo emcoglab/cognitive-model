@@ -364,8 +364,7 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
         # Update buffer
         self.items = new_buffer_items
 
-        buffer_events: List[BufferEvent] = [
-            ItemDisplacedEvent(time=time, item=i) for i in displaced_items]
+        buffer_events: List[BufferEvent] = [ItemDisplacedEvent(time=time, item=i) for i in displaced_items]
         if whole_buffer_replaced:
             buffer_events.append(BufferFloodEvent(time=time))
 
@@ -383,7 +382,7 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
             (
                 ItemEnteredBufferEvent(time=e.time, item=e.item,
                                        activation=e.activation, fired=e.fired)
-                if e.item in fresh_items
+                if e.item in fresh_items  # TODO: this is currently quite fragile, as the items in the buffer and the items in the events may or not be SizedItems or Items, and x in y doesn't work with different types unless both types override __hash__
                 else e
             )
             for e in activation_events

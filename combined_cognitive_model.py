@@ -666,6 +666,9 @@ class InteractiveCombinedCognitiveModel:
                 # New activation events for items which were activated
                 activation_events.extend(new_activation_events)
 
+            # Ensure that edited events also have sized items
+            self._apply_item_sizes_in_events(activation_events)
+
             # Add the buffer substitution events
             for sm_item, ling_item in substitutions_made.items():
                 buffer_events.append(SubstitutionEvent(new_item=ling_item, displaced_item=sm_item, time=time_at_start_of_tick))
