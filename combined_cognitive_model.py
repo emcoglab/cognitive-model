@@ -26,19 +26,16 @@ from numpy import lcm, inf
 from nltk.stem import WordNetLemmatizer
 from nltk.corpus.reader.wordnet import NOUN as POS_NOUN, VERB as POS_VERB
 
-from .basic_types import ActivationValue, Component, Size, Item, SizedItem, \
-    ItemLabel
+from .basic_types import ActivationValue, Component, Size, Item, SizedItem, ItemLabel
 from .components import ModelComponent
 from .components_linguistic import LinguisticComponent
 from .components_sensorimotor import SensorimotorComponent
-from .events import ItemActivatedEvent, ItemEvent, ModelEvent, \
-    ItemDisplacedEvent, SubstitutionEvent
+from .events import ItemActivatedEvent, ItemEvent, ModelEvent, ItemDisplacedEvent, SubstitutionEvent
 from .ldm.corpus.tokenising import modified_word_tokenize
-from .limited_capacity_item_sets import SortableItems, ItemSortingData, \
-    kick_item_from_sortable_list, WorkingMemoryBuffer, strip_sorting_data
+from .limited_capacity_item_sets import SortableItems, kick_item_from_sortable_list, WorkingMemoryBuffer, \
+    strip_sorting_data, replace_in_sortable_list
 from .prevalence.brysbaert_prevalence import BrysbaertPrevalence
-from .sensorimotor_norms.breng_translation.dictionary.dialect_dictionary \
-    import ameng_to_breng, breng_to_ameng
+from .sensorimotor_norms.breng_translation.dictionary.dialect_dictionary import ameng_to_breng, breng_to_ameng
 from .utils.decorators import cached
 from .utils.maths import prevalence_from_fraction_known
 from .utils.dictionary import forget_keys_for_values_satisfying
@@ -526,9 +523,8 @@ class InteractiveCombinedCognitiveModel:
 
             # We'll pass these into the mutator as a closure, so we get back the substitutions which were made therein
 
-            # Dictionary of mapping substituted sensorimotor items to their
-            # linguistic placeholders
-            substitutions_made: Dict[Item, Item] = dict()
+            # Dictionary of mapping substituted sensorimotor items to their linguistic placeholders
+            substitutions: Dict[Item, Item] = dict()
             # Items which need to be activated as the result of substitutions
             # Stores the item together with the activation to give it
             placeholders_for_activation: Set[Tuple[Item, ActivationValue]] = set()
@@ -542,6 +538,8 @@ class InteractiveCombinedCognitiveModel:
                 Apply the linguistic-placeholder substitution to the list of items
                 eligible for buffer entry.
 
+                Preserves the order of items in the list (i.e. items are substituted in-place).
+
                 ## The linguistic-placeholder substitution:
 
                 When items are competing for entry to the buffer (i.e. now), if the
@@ -550,31 +548,22 @@ class InteractiveCombinedCognitiveModel:
                 linguistic counterpart, to try and make more room for new items to enter.
                 """
 
-                # Items which should be substituted but for which no substitution
-                # is available
+                # Items which should be substituted but for which no substitution is available
                 no_substitutions_available: Set[Item] = set()
 
-                # Recursively apply substitutions ot the least-activated item
-                # remaining in the buffer until as much space is freed as
-                # required
+                # Recursively apply substitutions ot the least-activated item remaining in the buffer until as much
+                # space is freed as required
 
                 while not self.buffer.items_would_fit(strip_sorting_data(eligible_sortable_items)):
 
-                    # We store some items locally to do the actual mutation step, and will also feed them into the
-                    # captured variables for use elsewhere
-
-                    add_this_iteration: Set[Tuple[Item, ActivationValue]] = set()
-                    kick_this_iteration: Set[Item] = set()
-
-                    # Apply the substitution to the least-activated sensorimotor
-                    # item that would end up the buffer
+                    # Apply the substitution to the least-activated sensorimotor item that would end up the buffer
                     least_sm: Item = self.__get_least_sm_item(
                         provisional_buffer_items=self.buffer.truncate_items_list_to_fit(strip_sorting_data(eligible_sortable_items)),
                         ignoring=(
                             # We ignore all items where we know there are no substitutions to be made...
                             no_substitutions_available
-                            # ...and, since we actually make the substitutions at a later time
-                            | substitutions_made.keys()))
+                            # ...and substitutions we have already made
+                            | substitutions.keys()))
                     if least_sm is None:
                         # No sensorimotor items left to substitute
                         break
@@ -587,60 +576,38 @@ class InteractiveCombinedCognitiveModel:
 
                     # At this point a substitution will be made
 
-                    # Record it
-                    substitutions_made[least_sm] = ling_preferred_placeholder_for_buffer
-
                     activation_of_sensorimotor_item = activation_lookup(least_sm)
-
-                    # Only the single preferred placeholder gets presented to the buffer
-                    add_this_iteration.add((ling_preferred_placeholder_for_buffer, activation_of_sensorimotor_item))
                     # All placeholders get activated by the appropriate amount
                     placeholders_for_activation.add((
-                        # The blessed linguistic item will get the sensorimotor
-                        # item's full activation
+                        # The blessed linguistic item will get the sensorimotor item's full activation
                         ling_preferred_placeholder_for_buffer,
                         activation_of_sensorimotor_item))
                     placeholders_for_activation.update({
                         (
                             ling_item,
-                            # The other linguistic items get the sensorimotor
-                            # item's activation distributed between them
+                            # The other linguistic items get the sensorimotor item's activation distributed between them
                             activation_of_sensorimotor_item / len(other_ling_placeholders)
                         )
                         for ling_item in other_ling_placeholders
                     })
 
-                    # Then we can kick and deactivate the substituted item
-                    kick_this_iteration.add(least_sm)
+                    # Then we can deactivate the substituted item
                     substituted_items_to_deactivate.add(least_sm)
 
-                    # Items not presented to the buffer also get kicked if
-                    # they're already there
-                    kick_this_iteration.update(other_ling_placeholders)
+                    # region: Now do the actual mutation of the list.
 
-                    # Now do the actual mutation of the list.
-                    #
-                    # We do mutation iteratively because we want to stop as soon as the resultant list would fit in the
-                    # buffer.
+                    # Make substitution
+                    replace_in_sortable_list(eligible_sortable_items, item_out=least_sm, item_in=ling_preferred_placeholder_for_buffer)
+                    # Record it
+                    substitutions[least_sm] = ling_preferred_placeholder_for_buffer
 
-                    # Kick items from buffer
-                    for item in kick_this_iteration:
+                    # Substituted items not presented to the buffer also get kicked if they're already there
+                    for item in other_ling_placeholders:
                         if kick_item_from_sortable_list(eligible_sortable_items, item_to_kick=item):
-                            # Make items operated on available to the environment
+                            # Record the kicking
                             kicked_from_buffer.add(item)
 
-                    # Add new items to buffer
-                    for item, activation in add_this_iteration:
-                        eligible_sortable_items.append((
-                            item,
-                            ItemSortingData(activation=activation,
-                                            freshly_activated=True,
-                                            # This item being substituted in as the result of an item being removed
-                                            # which would otherwise have entered. Therefore we want to ensure that it
-                                            # actually ends up in the list even if the substituted item would have had
-                                            # a lower tie-breaker value.
-                                            tiebreaker=inf)
-                        ))
+                    # endregion
 
             buffer_events = self.buffer.present_items(
                 activation_events=activation_events,
@@ -682,7 +649,7 @@ class InteractiveCombinedCognitiveModel:
             self._apply_item_sizes_in_events(activation_events)
 
             # Add the buffer substitution events
-            for sm_item, ling_item in substitutions_made.items():
+            for sm_item, ling_item in substitutions.items():
                 buffer_events.append(SubstitutionEvent(new_item=ling_item, displaced_item=sm_item, time=time_at_start_of_tick))
 
             # endregion

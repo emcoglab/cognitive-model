@@ -44,11 +44,22 @@ class ItemSortingData:
 SortableItems = List[Tuple[Item, ItemSortingData]]
 ItemActivationLookup = Callable[[Item], ActivationValue]
 ItemValueLookup = Callable[[Item], float]
-ItemListMutator = Callable[[SortableItems], None]
+ItemListMutator = Callable[[SortableItems], None]  # Should preserve order
 
 
 def strip_sorting_data(sortable_items: SortableItems) -> List[Item]:
     return [i for i, _ in sortable_items]
+
+
+def replace_in_sortable_list(sortable_list: SortableItems, item_out: Item, item_in: Item):
+    """
+    Replaces the first instance of item_out with item_in the sortable_list.
+
+    Error if item_out is missing.
+    """
+    index: int = strip_sorting_data(sortable_list).index(item_out)
+    sorting_data: ItemSortingData = sortable_list[index][1]
+    sortable_list[index] = (item_in, sorting_data)
 
 
 def kick_item_from_sortable_list(sortable_list: SortableItems, item_to_kick: Item) -> bool:
@@ -285,8 +296,6 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
         eligible_items_sortable = self._sort_eligible_items(eligible_items_sortable)
         if eligible_items_list_mutator is not None:
             eligible_items_list_mutator(eligible_items_sortable)
-            # Resort after mutation
-            eligible_items_sortable = self._sort_eligible_items(eligible_items_sortable)
         eligible_items = self.truncate_items_list_to_fit(strip_sorting_data(eligible_items_sortable))
         buffer_events = self._commit_buffer_items(
             items=eligible_items,
