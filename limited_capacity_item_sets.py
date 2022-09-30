@@ -282,10 +282,11 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
         eligible_items_sortable = self._collect_eligible_items(
             from_new_activations=activation_events,
             activation_lookup=activation_lookup)
-        eligible_items_sortable = self._sort_eligible_items(
-            sortable_items=eligible_items_sortable)
+        eligible_items_sortable = self._sort_eligible_items(eligible_items_sortable)
         if eligible_items_list_mutator is not None:
             eligible_items_list_mutator(eligible_items_sortable)
+            # Resort after mutation
+            eligible_items_sortable = self._sort_eligible_items(eligible_items_sortable)
         eligible_items = self.truncate_items_list_to_fit(strip_sorting_data(eligible_items_sortable))
         buffer_events = self._commit_buffer_items(
             items=eligible_items,
