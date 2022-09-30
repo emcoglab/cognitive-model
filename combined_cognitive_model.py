@@ -593,8 +593,7 @@ class InteractiveCombinedCognitiveModel:
                     activation_of_sensorimotor_item = activation_lookup(least_sm)
 
                     # Only the single preferred placeholder gets presented to the buffer
-                    add_this_iteration.add(
-                        (ling_preferred_placeholder_for_buffer, activation_of_sensorimotor_item))
+                    add_this_iteration.add((ling_preferred_placeholder_for_buffer, activation_of_sensorimotor_item))
                     # All placeholders get activated by the appropriate amount
                     placeholders_for_activation.add((
                         # The blessed linguistic item will get the sensorimotor
@@ -636,7 +635,11 @@ class InteractiveCombinedCognitiveModel:
                             item,
                             ItemSortingData(activation=activation,
                                             freshly_activated=True,
-                                            tiebreaker=self.__prevalence_lookup(item))
+                                            # This item being substituted in as the result of an item being removed
+                                            # which would otherwise have entered. Therefore we want to ensure that it
+                                            # actually ends up in the list even if the substituted item would have had
+                                            # a lower tie-breaker value.
+                                            tiebreaker=inf)
                         ))
 
             buffer_events = self.buffer.present_items(
