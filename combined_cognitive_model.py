@@ -391,6 +391,17 @@ class InteractiveCombinedCognitiveModel:
         elif item.component == Component.linguistic:
             return self.linguistic_component.propagator.activation_of_item_with_idx_at_time(item.idx, time=time)
 
+    def label_lookup(self, item: Item) -> str:
+        """:raises: KeyError when the item is not found"""
+        mc: ModelComponent
+        if item.component == Component.sensorimotor:
+            mc = self.sensorimotor_component
+        elif item.component == Component.linguistic:
+            mc = self.linguistic_component
+        else:
+            raise NotImplementedError()
+        return mc.propagator.idx2label[item.idx]
+
     def _apply_item_sizes_in_events(self, events: List[ModelEvent]) -> None:
         """
         Converts Items in events to have SizedItems with the appropriate size.
@@ -615,10 +626,8 @@ class InteractiveCombinedCognitiveModel:
 
                     # Kick items from buffer
                     for item in kick_this_iteration:
-                        item_was_kicked = kick_item_from_sortable_list(eligible_sortable_items, item_to_kick=item)
-
-                        # Make items operated on available to the environment
-                        if item_was_kicked:
+                        if kick_item_from_sortable_list(eligible_sortable_items, item_to_kick=item):
+                            # Make items operated on available to the environment
                             kicked_from_buffer.add(item)
 
                     # Add new items to buffer
