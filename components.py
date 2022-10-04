@@ -21,7 +21,7 @@ from abc import ABC, abstractmethod
 from typing import Set, List, Optional
 
 from .basic_types import ActivationValue, ItemIdx, ItemLabel
-from .buffer import AccessibleSet
+from .limited_capacity_item_sets import AccessibleSet
 from .events import ModelEvent, ItemActivatedEvent
 from .propagator import GraphPropagator
 from .utils.iterable import partition

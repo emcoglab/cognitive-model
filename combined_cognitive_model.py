@@ -11,31 +11,31 @@ University of Lancaster
 c.wingfield@lancaster.ac.uk
 caiwingfield.net
 ---------------------------
-2020
+2020, 2022
 ---------------------------
 """
 
 from __future__ import annotations
 
 from collections import defaultdict
-from functools import partial
 from pathlib import Path
-from typing import List, Optional, Set, Dict, DefaultDict
+from typing import List, Optional, Set, Dict, DefaultDict, Tuple, Sequence, Container
 from logging import getLogger
 
 from numpy import lcm, inf
 from nltk.stem import WordNetLemmatizer
 from nltk.corpus.reader.wordnet import NOUN as POS_NOUN, VERB as POS_VERB
 
-from .components import ModelComponent
-from .ldm.corpus.tokenising import modified_word_tokenize
-from .prevalence.brysbaert_prevalence import BrysbaertPrevalence
-from .sensorimotor_norms.breng_translation.dictionary.dialect_dictionary import ameng_to_breng, breng_to_ameng
 from .basic_types import ActivationValue, Component, Size, Item, SizedItem, ItemLabel
-from .buffer import WorkingMemoryBuffer
-from .events import ItemActivatedEvent, ItemEvent, ModelEvent
+from .components import ModelComponent
 from .components_linguistic import LinguisticComponent
 from .components_sensorimotor import SensorimotorComponent
+from .events import ItemActivatedEvent, ItemEvent, ModelEvent, ItemDisplacedEvent, SubstitutionEvent
+from .ldm.corpus.tokenising import modified_word_tokenize
+from .limited_capacity_item_sets import SortableItems, kick_item_from_sortable_list, WorkingMemoryBuffer, \
+    strip_sorting_data, replace_in_sortable_list
+from .prevalence.brysbaert_prevalence import BrysbaertPrevalence
+from .sensorimotor_norms.breng_translation.dictionary.dialect_dictionary import ameng_to_breng, breng_to_ameng
 from .utils.decorators import cached
 from .utils.maths import prevalence_from_fraction_known
 from .utils.dictionary import forget_keys_for_values_satisfying
@@ -292,6 +292,7 @@ class InteractiveCombinedCognitiveModel:
                  lc_to_smc_threshold: ActivationValue,
                  smc_to_lc_threshold: ActivationValue,
                  buffer_threshold: ActivationValue,
+                 use_linguistic_placeholder: bool,
                  cross_component_attenuation: float,
                  buffer_capacity_linguistic_items: Optional[int],
                  buffer_capacity_sensorimotor_items: Optional[int],
@@ -328,29 +329,16 @@ class InteractiveCombinedCognitiveModel:
         self.linguistic_component: LinguisticComponent = linguistic_component
         self.sensorimotor_component: SensorimotorComponent = sensorimotor_component
 
-        bp = BrysbaertPrevalence()
-
-        @cached
-        def prevalence_lookup(item: Item) -> float:
-            try:
-                if item.component == Component.sensorimotor:
-                    label = self.sensorimotor_component.propagator.idx2label[item.idx]
-                    return prevalence_from_fraction_known(self.sensorimotor_component.sensorimotor_norms.fraction_known(label))
-                elif item.component == Component.linguistic:
-                    label = self.linguistic_component.propagator.idx2label[item.idx]
-                    return bp.prevalence_for(label)
-                else:
-                    raise NotImplementedError()
-            except LookupError:
-                # Item missing
-                return -inf
+        self._prevalence = BrysbaertPrevalence()
 
         self.buffer = WorkingMemoryBuffer(threshold=buffer_threshold,
                                           capacity=total_capacity,
-                                          tiebreaker_lookup=prevalence_lookup)
+                                          tiebreaker_lookup=self.__prevalence_lookup)
 
         assert self.buffer.threshold >= self.sensorimotor_component.accessible_set.threshold >= 0
         assert self.buffer.threshold >= self.linguistic_component.accessible_set.threshold >= 0
+
+        self._use_linguistic_placeholder: bool = use_linguistic_placeholder
 
         # The shared buffer does not affect the activity within either component or between them.
         self.linguistic_component.propagator.firing_guards.extend([])
@@ -400,19 +388,35 @@ class InteractiveCombinedCognitiveModel:
         elif item.component == Component.linguistic:
             return self.linguistic_component.propagator.activation_of_item_with_idx_at_time(item.idx, time=time)
 
-    def _apply_item_sizes(self, events: List[ModelEvent]) -> None:
+    def label_lookup(self, item: Item) -> str:
+        """:raises: KeyError when the item is not found"""
+        mc: ModelComponent
+        if item.component == Component.sensorimotor:
+            mc = self.sensorimotor_component
+        elif item.component == Component.linguistic:
+            mc = self.linguistic_component
+        else:
+            raise NotImplementedError()
+        return mc.propagator.idx2label[item.idx]
+
+    def _apply_item_sizes_in_events(self, events: List[ModelEvent]) -> None:
         """
-        Converts Items in events to have SizedItems withe the appropriate size.
-        :param events:
-            List of events.
-            Gets mutated.
+        Converts Items in events to have SizedItems with the appropriate size.
+
+        Mutates the input list.
         """
         for e in events:
             if isinstance(e, ItemEvent):
-                if e.item.component == Component.linguistic:
-                    e.item = SizedItem(idx=e.item.idx, component=e.item.component, size=self._lc_item_size)
-                elif e.item.component == Component.sensorimotor:
-                    e.item = SizedItem(idx=e.item.idx, component=e.item.component, size=self._smc_item_size)
+                e.item = self._apply_item_size(e.item)
+
+    def _apply_item_size(self, item: Item) -> SizedItem:
+        """Converts items to their appropriate sizes."""
+        if item.component == Component.linguistic:
+            return SizedItem(idx=item.idx, component=item.component, size=self._lc_item_size)
+        elif item.component == Component.sensorimotor:
+            return SizedItem(idx=item.idx, component=item.component, size=self._smc_item_size)
+        else:
+            raise NotImplementedError()
 
     def tick(self):
         time_at_start_of_tick = self.clock
@@ -460,21 +464,232 @@ class InteractiveCombinedCognitiveModel:
             + model_other_events + buffer_other_events
         )
 
+    def __get_linguistic_placeholders(self, sm_item: Item) -> Tuple[SizedItem | None, Set[SizedItem]]:
+        """
+        Given a sensorimotor item, returns the linguistic placeholder.
+
+        There can be multiple linguistic placeholders (think multi-word terms), so
+        returns first the preferred linguistic placeholder item and then a set of
+        other items which also matched.
+
+        Returns None in the first case where there is no substitution available.
+        """
+
+        sm_label: ItemLabel = self.sensorimotor_component.propagator.idx2label[sm_item.idx]
+
+        # Check first to see if the sensorimotor item has a simple available counterpart in the linguistic component
+        if sm_label in self.linguistic_component.available_labels:
+            ling_item = self._apply_item_size(Item(idx=self.linguistic_component.propagator.label2idx[sm_label],
+                                                   component=Component.linguistic))
+            return ling_item, set()
+
+        # If there's no direct counterpart, use the mapping
+        try:
+            ling_labels = self.mapping.sensorimotor_to_linguistic[sm_label]
+        except KeyError:
+            # No substitution available
+            return None, set()
+        ling_items: List[Item] = [
+            Item(
+                idx=self.linguistic_component.propagator.label2idx[ling_label],
+                component=Component.linguistic)
+            for ling_label in ling_labels
+        ]
+
+        # Return the most prevalent and then the rest
+        ling_items.sort(key=lambda item: self.__prevalence_lookup(item), reverse=True)
+        preferred_ling_item: SizedItem = self._apply_item_size(ling_items[0])
+        other_ling_items: Set[SizedItem] = set(self._apply_item_size(i) for i in ling_items[1:])
+
+        return preferred_ling_item, other_ling_items
+
     def _present_items_to_buffer(self,
                                  activation_events: List[ItemActivatedEvent],
                                  time_at_start_of_tick: int,
                                  ) -> List[ModelEvent]:
-        """Present activation events to buffer and upgrade as necessary."""
+        """
+        Present activation events to buffer and upgrade as necessary.
+        """
 
-        self._apply_item_sizes(activation_events)
+        self._apply_item_sizes_in_events(activation_events)
 
-        # Present all items together
-        buffer_events = self.buffer.present_items(
-            activation_events=activation_events,
-            activation_lookup=partial(self._activation_of_item_at_time, time=time_at_start_of_tick),
-            time=time_at_start_of_tick)
+        def activation_lookup(item: Item) -> ActivationValue:
+            return self._activation_of_item_at_time(
+                item=item, time=time_at_start_of_tick)
 
-        return buffer_events
+        previous_buffer = self.buffer.items
+
+        if self._use_linguistic_placeholder:
+
+            # We'll pass these into the mutator as a closure, so we get back the substitutions which were made therein
+
+            # Dictionary of mapping substituted sensorimotor items to their linguistic placeholders
+            substitutions: Dict[Item, Item] = dict()
+            # Items which need to be activated as the result of substitutions
+            # Stores the item together with the activation to give it
+            placeholders_for_activation: Set[Tuple[Item, ActivationValue]] = set()
+            # Items which need to be deactivated as the result of substitutions
+            substituted_items_to_deactivate: Set[Item] = set()
+            # Items which will be kicked from the buffer
+            kicked_from_buffer: Set[Item] = set()
+
+            def linguistic_placeholder_substitution_mutator(eligible_sortable_items: SortableItems) -> None:
+                """
+                Apply the linguistic-placeholder substitution to the list of items
+                eligible for buffer entry.
+
+                Preserves the order of items in the list (i.e. items are substituted in-place).
+
+                ## The linguistic-placeholder substitution:
+
+                When items are competing for entry to the buffer (i.e. now), if the
+                buffer would become over-full, at that point we take every sensorimotor
+                item *which would enter the buffer* and replace it (if possible) with its
+                linguistic counterpart, to try and make more room for new items to enter.
+                """
+
+                # Items which should be substituted but for which no substitution is available
+                no_substitutions_available: Set[Item] = set()
+
+                # Recursively apply substitutions ot the least-activated item remaining in the buffer until as much
+                # space is freed as required
+
+                while not self.buffer.items_would_fit(strip_sorting_data(eligible_sortable_items)):
+
+                    # Apply the substitution to the least-activated sensorimotor item that would end up the buffer
+                    least_sm: Item = self.__get_least_sm_item(
+                        provisional_buffer_items=self.buffer.truncate_items_list_to_fit(strip_sorting_data(eligible_sortable_items)),
+                        ignoring=(
+                            # We ignore all items where we know there are no substitutions to be made...
+                            no_substitutions_available
+                            # ...and substitutions we have already made
+                            | substitutions.keys()))
+                    if least_sm is None:
+                        # No sensorimotor items left to substitute
+                        break
+
+                    ling_preferred_placeholder_for_buffer, other_ling_placeholders = self.__get_linguistic_placeholders(least_sm)
+                    if ling_preferred_placeholder_for_buffer is None:
+                        # No substitution available
+                        no_substitutions_available.add(least_sm)
+                        continue
+
+                    # At this point a substitution will be made
+
+                    activation_of_sensorimotor_item = activation_lookup(least_sm)
+                    # All placeholders get activated by the appropriate amount
+                    placeholders_for_activation.add((
+                        # The blessed linguistic item will get the sensorimotor item's full activation
+                        ling_preferred_placeholder_for_buffer,
+                        activation_of_sensorimotor_item))
+                    placeholders_for_activation.update({
+                        (
+                            ling_item,
+                            # The other linguistic items get the sensorimotor item's activation distributed between them
+                            activation_of_sensorimotor_item / len(other_ling_placeholders)
+                        )
+                        for ling_item in other_ling_placeholders
+                    })
+
+                    # Then we can deactivate the substituted item
+                    substituted_items_to_deactivate.add(least_sm)
+
+                    # region: Now do the actual mutation of the list.
+
+                    # Make substitution
+                    replace_in_sortable_list(eligible_sortable_items, item_out=least_sm, item_in=ling_preferred_placeholder_for_buffer)
+                    # Record it
+                    substitutions[least_sm] = ling_preferred_placeholder_for_buffer
+
+                    # Substituted items not presented to the buffer also get kicked if they're already there
+                    for item in other_ling_placeholders:
+                        if kick_item_from_sortable_list(eligible_sortable_items, item_to_kick=item):
+                            # Record the kicking
+                            kicked_from_buffer.add(item)
+
+                    # endregion
+
+            buffer_events = self.buffer.present_items(
+                activation_events=activation_events,
+                activation_lookup=activation_lookup,
+                time=time_at_start_of_tick,
+                eligible_items_list_mutator=linguistic_placeholder_substitution_mutator,
+            )
+
+            # region: Substitution cleanup
+
+            # Validate the closure-captured collections
+            assert all(i.component == Component.sensorimotor for i in substituted_items_to_deactivate)
+            assert all(i.component == Component.linguistic for i, _a in placeholders_for_activation)
+
+            # New events for items which were kicked
+            for item in kicked_from_buffer:
+                buffer_events.append(ItemDisplacedEvent(
+                    item=item,
+                    time=time_at_start_of_tick))
+
+            # Omit activation events relating to items which have just been
+            # deactivated
+            edited_activation_events = []
+            for event in activation_events:
+                if event.item in substituted_items_to_deactivate:
+                    continue
+                edited_activation_events.append(event)
+            activation_events = edited_activation_events
+
+            # Now activate and deactivated the items which were substituted
+            for item in substituted_items_to_deactivate:
+                self.__set_activation_of_item(item, ActivationValue(0), time_at_start_of_tick=time_at_start_of_tick)
+            for item, activation in placeholders_for_activation:
+                new_activation_events = self.__set_activation_of_item(item, activation, time_at_start_of_tick=time_at_start_of_tick)
+                # New activation events for items which were activated
+                activation_events.extend(new_activation_events)
+
+            # Ensure that edited events also have sized items
+            self._apply_item_sizes_in_events(activation_events)
+
+            # Add the buffer substitution events
+            for sm_item, ling_item in substitutions.items():
+                buffer_events.append(SubstitutionEvent(new_item=ling_item, displaced_item=sm_item, time=time_at_start_of_tick))
+
+            # endregion
+
+        else:
+            # Just present all items together
+            buffer_events = self.buffer.present_items(
+                activation_events=activation_events,
+                activation_lookup=activation_lookup,
+                time=time_at_start_of_tick,
+            )
+
+        activation_events = self.buffer.upgrade_events(
+            old_items=set(previous_buffer), new_items=set(self.buffer.items),
+            activation_events=activation_events)
+
+        # noinspection PyTypeChecker
+        return activation_events + buffer_events
+
+    def __set_activation_of_item(self, item: Item, activation: ActivationValue, time_at_start_of_tick: int) -> List[ItemActivatedEvent]:
+        from framework.cognitive_model.propagator import ActivationRecord  # TODO: move this logic into the propagators?
+        component: ModelComponent
+        if item.component == Component.sensorimotor:
+            component = self.sensorimotor_component
+        else:
+            component = self.linguistic_component
+        if activation == 0:
+            # Just deactivate
+            component.propagator._activation_records[item.idx] = ActivationRecord(activation=0, time_activated=time_at_start_of_tick)
+            activation_events = []
+        else:
+            # Schedule and process activation
+            component.propagator._schedule_activation_of_item_with_idx(item.idx, activation=activation, arrival_time=time_at_start_of_tick)
+            # We will have advanced the individual propagator as part of this .tick(), so we do a hair-raising rollback
+            # of the clock and re-propagate the newly added activations
+            clock_should_be = component.propagator.clock
+            component.propagator.clock = time_at_start_of_tick
+            activation_events = component.propagator._evolve_propagator()
+            component.propagator.clock = clock_should_be
+        return activation_events
 
     def _handle_inter_component_activity(self,
                                          activation_events: List[ItemActivatedEvent],
@@ -580,3 +795,43 @@ class InteractiveCombinedCognitiveModel:
                     arrival_time=arrival_time)
                 # Remember to suppress the bounce-back, if any
                 suppressed_target_items_dict[arrival_time].append(target)
+
+    @classmethod
+    def __get_least_sm_item(cls, provisional_buffer_items: Sequence[Item], *, ignoring: Container[Item]) -> Item | None:
+        """
+        Gets the least-activated sensorimotor item which would enter the buffer.
+
+        Optional list of items to ignore (of we know we won't find a substitution
+        for them.
+
+        Assumes items are already sorted in descending order of precedence
+        """
+        item: Item
+        # items are already sorted in reverse
+        for item in reversed(provisional_buffer_items):
+            if item in ignoring:
+                continue
+            if item.component == Component.linguistic:
+                # Not interested in linguistic items
+                continue
+            return item
+        # No items left to look at
+        return None
+
+    @cached
+    def __prevalence_lookup(self, item: Item) -> float:
+        try:
+            if item.component == Component.sensorimotor:
+                label = self.sensorimotor_component.propagator.idx2label[
+                    item.idx]
+                return prevalence_from_fraction_known(
+                    self.sensorimotor_component.sensorimotor_norms.fraction_known(
+                        label))
+            elif item.component == Component.linguistic:
+                label = self.linguistic_component.propagator.idx2label[item.idx]
+                return self._prevalence.prevalence_for(label)
+            else:
+                raise NotImplementedError()
+        except LookupError:
+            # Item missing
+            return -inf
