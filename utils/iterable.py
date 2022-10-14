@@ -28,3 +28,18 @@ def partition(iterable: Iterable, predicate: callable) -> Tuple[List, List]:
     for item in iterable:
         trues.append(item) if predicate(item) else falses.append(item)
     return trues, falses
+
+
+def all_and_any(iterable: Iterable) -> bool:
+    """
+    Equivalent to `all(iterable)` for nonempty iterables, but returns False for empty iterables
+    (where `all` would return True, as it should).
+
+    Equivalent to `all(iterable) and any(iterable)` but only traverses the iterable once.
+    """
+    at_least_one = False
+    for element in iterable:
+        if not element:
+            return False
+        at_least_one = True
+    return at_least_one
