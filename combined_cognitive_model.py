@@ -18,6 +18,7 @@ caiwingfield.net
 from __future__ import annotations
 
 from collections import defaultdict
+from functools import cache
 from pathlib import Path
 from typing import List, Optional, Set, Dict, DefaultDict, Tuple, Sequence, Container
 from logging import getLogger
@@ -36,7 +37,6 @@ from .limited_capacity_item_sets import SortableItems, kick_item_from_sortable_l
     strip_sorting_data, replace_in_sortable_list
 from .prevalence.brysbaert_prevalence import BrysbaertPrevalence
 from .sensorimotor_norms.breng_translation.dictionary.dialect_dictionary import ameng_to_breng, breng_to_ameng
-from .utils.decorators import cached
 from .utils.maths import prevalence_from_fraction_known
 from .utils.dictionary import forget_keys_for_values_satisfying
 from .utils.iterable import partition
@@ -818,7 +818,7 @@ class InteractiveCombinedCognitiveModel:
         # No items left to look at
         return None
 
-    @cached
+    @cache
     def __prevalence_lookup(self, item: Item) -> float:
         try:
             if item.component == Component.sensorimotor:
