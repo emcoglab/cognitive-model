@@ -15,6 +15,7 @@ caiwingfield.net
 ---------------------------
 """
 
+from math import isclose
 from typing import Sequence, Tuple
 
 from numpy import percentile, pi, sqrt
@@ -136,3 +137,12 @@ def distance_from_similarity(similarity, max_similarity: float, min_similarity: 
 
 def cm_to_inches(cm: float) -> float:
     return cm * 0.3937008
+
+
+def eps_cmp(first, second, rel_tol=1e-9):
+    """Comparator (suitable for functools.cmp_to_key) which marks ties where items are sufficiently close."""
+    if isclose(first, second, rel_tol=rel_tol):
+        return 0
+    if first > second:
+        return 1
+    return -1

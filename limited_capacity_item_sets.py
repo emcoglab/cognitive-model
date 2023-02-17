@@ -19,8 +19,10 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from functools import cmp_to_key
 from typing import Optional, List, Callable, FrozenSet, Tuple, Collection, Dict, Set
 
+from .utils.maths import eps_cmp
 from .ldm.utils.maths import clamp01
 from .basic_types import ActivationValue, Size, SizedItem, Item
 from .events import ItemActivatedEvent, ItemDecayedOutEvent, BufferEvent, ItemDisplacedEvent, BufferFloodEvent, \
@@ -432,18 +434,22 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
 
         # So sort in reverse order of criteria:
 
+        # Sorting is often performed by comparing floating-point values, which can be problematic.
+        # So we use an epsilon-based comparator to sort this out
+        eps_key = cmp_to_key(eps_cmp)
+
         # Final tiebreaker first, descending
         sorted_buffer_items: SortableItems = sorted(sortable_items,
-                                                    key=lambda i_s: i_s[1].tiebreaker,
+                                                    key=lambda i_s: eps_key(i_s[1].tiebreaker),
                                                     reverse=True)
         # Then recency (i.e. whether they were presented for the first time just
         # now), descending
         sorted_buffer_items = sorted(sorted_buffer_items,
-                                     key=lambda i_s: i_s[1].freshly_activated,
+                                     key=lambda i_s: eps_key(i_s[1].freshly_activated),
                                      reverse=True)
         # Then we sort by activation, descending (larger activation first)
         sorted_buffer_items = sorted(sorted_buffer_items,
-                                     key=lambda i_s: i_s[1].activation,
+                                     key=lambda i_s: eps_key(i_s[1].activation),
                                      reverse=True)
 
         return sorted_buffer_items
