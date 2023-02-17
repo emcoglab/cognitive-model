@@ -438,10 +438,16 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
         # So we use an epsilon-based comparator to sort this out
         eps_key = cmp_to_key(eps_cmp)
 
-        # Final tiebreaker first, descending
+        # To keep things STABLE, begin by sorting by item id. This should not make any real difference, and is not a
+        # meaningful sort order.
         sorted_buffer_items: SortableItems = sorted(sortable_items,
-                                                    key=lambda i_s: eps_key(i_s[1].tiebreaker),
-                                                    reverse=True)
+                                                    key=lambda i_s: eps_key((i_s[0].idx, i_s[0].component)))
+
+        # Now do the real sorting.
+        # Final tiebreaker first, descending
+        sorted_buffer_items = sorted(sorted_buffer_items,
+                                     key=lambda i_s: eps_key(i_s[1].tiebreaker),
+                                     reverse=True)
         # Then recency (i.e. whether they were presented for the first time just
         # now), descending
         sorted_buffer_items = sorted(sorted_buffer_items,

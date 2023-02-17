@@ -29,6 +29,11 @@ Length = int
 Size = int
 
 
+class Component(Enum):
+    linguistic = 1
+    sensorimotor = 2
+
+
 @dataclass(eq=True, frozen=True)
 class Item:
     idx: ItemIdx
@@ -38,8 +43,3 @@ class Item:
 @dataclass(eq=True, frozen=True)
 class SizedItem(Item):
     size: Size
-
-
-class Component(Enum):
-    linguistic = auto()
-    sensorimotor = auto()
