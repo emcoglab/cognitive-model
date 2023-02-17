@@ -441,7 +441,7 @@ class WorkingMemoryBuffer(LimitedCapacityItemSet):
         # To keep things STABLE, begin by sorting by item id. This should not make any real difference, and is not a
         # meaningful sort order.
         sorted_buffer_items: SortableItems = sorted(sortable_items,
-                                                    key=lambda i_s: eps_key((i_s[0].idx, i_s[0].component)))
+                                                    key=lambda i_s: (i_s[0].idx, i_s[0].component))
 
         # Now do the real sorting.
         # Final tiebreaker first, descending
