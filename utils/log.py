@@ -15,10 +15,13 @@ caiwingfield.net
 ---------------------------
 """
 
+from sys import stdout
 from logging import getLogger, basicConfig, INFO
 
 logger = getLogger()
 basicConfig(
+    stream=stdout,
     format='%(asctime)s | %(levelname)s | %(funcName)s @ %(module)s:%(lineno)d |➤ %(message)s',
     datefmt="%Y-%m-%d %H:%M:%S",
-    level=INFO)
+    level=INFO,
+)

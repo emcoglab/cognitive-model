@@ -7,7 +7,7 @@ from .ldm.corpus.corpus import CorpusMetadata
 from .ldm.model.base import LinguisticDistributionalModel
 from .ldm.utils.maths import DistanceType
 from .basic_types import Length, ItemIdx, ItemLabel, Component
-from .utils.logging import logger
+from .utils.log import logger
 from .graph import Graph, EdgePruningType
 from .propagator import GraphPropagator, _load_labels, IMPULSE_PRUNING_THRESHOLD
 from .decay_functions import make_decay_function_exponential_with_decay_factor, make_decay_function_gaussian_with_sd

@@ -8,7 +8,7 @@ from .sensorimotor_norms.breng_translation.dictionary.version import VERSION as 
 from .basic_types import ItemIdx, ItemLabel, Component
 from .graph import Graph
 from .propagator import GraphPropagator, _load_labels, IMPULSE_PRUNING_THRESHOLD
-from .utils.logging import logger
+from .utils.log import logger
 from .decay_functions import make_decay_function_lognormal
 from .preferences.preferences import Preferences
 
