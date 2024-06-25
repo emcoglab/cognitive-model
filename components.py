@@ -21,9 +21,9 @@ from abc import ABC, abstractmethod
 from typing import Set, List, Optional
 
 from .basic_types import ActivationValue, ItemIdx, ItemLabel
-from .buffer import AccessibleSet
+from .limited_capacity_item_sets import AccessibleSet
 from .events import ModelEvent, ItemActivatedEvent
-from .graph_propagator import GraphPropagator
+from .propagator import GraphPropagator
 from .utils.iterable import partition
 
 FULL_ACTIVATION = ActivationValue(1.0)
@@ -106,10 +106,10 @@ class ModelComponentWithAccessibleSet(ModelComponent, ABC):
         # The set of items which are "accessible to conscious awareness"
         self.accessible_set: AccessibleSet = AccessibleSet(threshold=accessible_set_threshold, capacity=accessible_set_capacity)
 
-        self.propagator.presynaptic_modulations.extend([
+        self.propagator.activation_modulations.extend([
             self._apply_memory_pressure,
         ])
-        self.propagator.postsynaptic_guards.extend([
+        self.propagator.firing_guards.extend([
             # Only allow firing until the item is sufficiently activated to be in the accessible set.
             # Items are presented to the accessible set after tick(), so this will only apply if the item was already in
             # the accessible set at the start of this tick.
@@ -152,5 +152,3 @@ class ModelComponentWithAccessibleSet(ModelComponent, ABC):
             time=time_at_start_of_tick)
 
         return pre_tick_events + activation_events + other_events
-
-

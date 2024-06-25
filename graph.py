@@ -30,10 +30,10 @@ from scipy.sparse import coo_matrix, csr_matrix
 from scipy.stats import percentileofscore
 from sortedcontainers import SortedSet
 
-from .ldm.utils.logging import print_progress
+from .ldm.utils.log import print_progress
 from .basic_types import Node, Length
 from .utils.maths import mean, nearest_value_at_quantile, distance_from_similarity
-from .utils.logging import logger
+from .utils.log import logger
 
 
 class Edge(tuple):

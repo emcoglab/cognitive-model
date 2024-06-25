@@ -124,7 +124,7 @@ class GraphPropagator(ABC):
         # none, no modulation is applied.
         # If any guard in the sequence returns False, the sequence terminates with False; else we get True.
 
-        # presynaptic_guards:
+        # activation_guards (presynaptic):
         #     Guards a node's accumulation (and hence also its firing) based on its activation before incoming
         #     activation has accumulated.  (E.g. making sufficiently-activated nodes into sinks until they decay.)
         #     See "Guard" below for signature.
@@ -135,8 +135,8 @@ class GraphPropagator(ABC):
         #     The activation level of the item before accumulation.
         # :return:
         #     True if the node should be allowed accumulate, else False.
-        self.presynaptic_guards: Deque[Guard] = deque()
-        # presynaptic_modulations:
+        self.activation_guards: Deque[Guard] = deque()
+        # activation_modulations (presynaptic):
         #     Modulates the incoming activations to items. E.g. by scaling incoming activation by some property of the
         #     item. Applies to the sum total of all converging activation, not to each individual incoming activation
         #     (this isn't the same unless the modulation is linear).
@@ -146,8 +146,8 @@ class GraphPropagator(ABC):
         #     The unmodified presynaptic activation.
         # :return:
         #     The modified presynaptic activation.
-        self.presynaptic_modulations: Deque[Modulation] = deque()
-        # postsynaptic_modulations:
+        self.activation_modulations: Deque[Modulation] = deque()
+        # firing_modulations (postsynaptic):
         #     Modulates the activations of items after accumulation, but before firing.
         #     (E.g. applying an activation cap).
         # Modulates the activations of items after accumulation, but before firing.
@@ -158,8 +158,8 @@ class GraphPropagator(ABC):
         #     The unmodified postsynaptic activation.
         # :return:
         #     The modified postsynaptic activation.
-        self.postsynaptic_modulations: Deque[Modulation] = deque()
-        # postsynaptic_guards:
+        self.firing_modulations: Deque[Modulation] = deque()
+        # firing_guards (postsynaptic):
         #     Guards a node's firing based on its activation after incoming activation has accumulated.
         #     (E.g. applying a firing threshold.)
         #     argument `activation` is the activation level of the item AFTER accumulation
@@ -171,7 +171,7 @@ class GraphPropagator(ABC):
         #     The activation level of the item after accumulation.
         # :return:
         #     True if the node should be allowed to fire, else False.
-        self.postsynaptic_guards: Deque[Guard] = deque()
+        self.firing_guards: Deque[Guard] = deque()
 
         # endregion
 
@@ -313,13 +313,13 @@ class GraphPropagator(ABC):
         current_activation = self.activation_of_item_with_idx(idx)
 
         # Check if something will prevent the activation from occurring
-        if not self.__apply_presynaptic_guards(idx, current_activation):
+        if not self.__apply_activation_guards(idx, current_activation):
             # If activation was blocked, node didn't activate (or fire)
             return None
 
         # Otherwise, we proceed with the activation:
 
-        activation = self.__apply_presynaptic_modulation(idx, activation)
+        activation = self.__apply_activation_modulation(idx, activation)
 
         # We don't check for resultant activation beneath self.impulse_pruning_threshold here, as it would prevent
         # manual external activation beneath the threshold. Instead we must rely on the threshold being applied when
@@ -331,7 +331,7 @@ class GraphPropagator(ABC):
         new_activation = current_activation + activation
 
         # Apply postsynaptic modulations to accumulated value
-        new_activation = self.__apply_postsynaptic_modulation(idx, new_activation)
+        new_activation = self.__apply_firing_modulation(idx, new_activation)
 
         # The item activated, so an activation event occurs
         event = ItemActivatedEvent(time=self.clock, item=Item(idx=idx, component=self.component),
@@ -342,7 +342,7 @@ class GraphPropagator(ABC):
         self._activation_records[idx] = ActivationRecord(new_activation, self.clock)
 
         # Check if the postsynaptic firing guard is passed
-        if not self.__apply_postsynaptic_guards(idx, new_activation):
+        if not self.__apply_firing_guards(idx, new_activation):
             # If not, stop here
             return event
 
@@ -354,25 +354,25 @@ class GraphPropagator(ABC):
 
     # Separated out from __apply_activation_to_item_with_idx for profiling purposes
 
-    def __apply_presynaptic_guards(self, idx, activation):
-        for guard in self.presynaptic_guards:
+    def __apply_activation_guards(self, idx, activation):
+        for guard in self.activation_guards:
             if not guard(idx, activation):
                 return False
         return True
 
-    def __apply_postsynaptic_guards(self, idx, activation):
-        for guard in self.postsynaptic_guards:
+    def __apply_firing_guards(self, idx, activation):
+        for guard in self.firing_guards:
             if not guard(idx, activation):
                 return False
         return True
 
-    def __apply_presynaptic_modulation(self, idx, activation):
-        for modulation in self.presynaptic_modulations:
+    def __apply_activation_modulation(self, idx, activation):
+        for modulation in self.activation_modulations:
             activation = modulation(idx, activation)
         return activation
 
-    def __apply_postsynaptic_modulation(self, idx, activation):
-        for modulation in self.postsynaptic_modulations:
+    def __apply_firing_modulation(self, idx, activation):
+        for modulation in self.firing_modulations:
             activation = modulation(idx, activation)
         return activation
 
@@ -531,3 +531,20 @@ def _load_labels(node_label_path: str) -> Dict[ItemIdx, ItemLabel]:
     for k, v in node_relabelling_dictionary_json.items():
         node_labelling_dictionary[ItemIdx(k)] = v
     return node_labelling_dictionary
+
+
+# OneHopPropagators can be easily produced from main propagators by adding
+# postsynaptic guards:
+#
+#     _first_tick: Guard = lambda idx, activation: model.clock == 0
+#     model.propagator.postsynaptic_guards.appendleft(_first_tick)
+#
+# (Don't forget that if you're using a combined model, model.clock gets evaluated
+# lazily, so might be in an inconsistent state, so be careful with that.)
+#
+# Alternatively wait until after the initial activation on the first tick and then
+# just deny future activations
+#
+#   model.tick()
+#   from framework.cognitive_model.guards import just_no_guard
+#   model.propagator.postsynaptic_guards.append_left(just_no_guard)

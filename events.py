@@ -17,6 +17,7 @@ caiwingfield.net
 
 from abc import ABC
 from dataclasses import dataclass
+from typing import Set
 
 from .basic_types import ActivationValue, Item
 
@@ -44,6 +45,15 @@ class BufferEvent(ModelEvent, ABC):
 
 
 @dataclass
+class SubstitutionEvent(BufferEvent):
+    """Represents a substitution of an item in the buffer."""
+    # New item entering the buffer as part of the substitution
+    new_item: Item
+    # Item being displaced as part of the substitution
+    displaced_item: Item
+
+
+@dataclass
 class ItemActivatedEvent(ItemEvent):
     """An item is activated."""
     activation: ActivationValue
@@ -58,7 +68,19 @@ class ItemEnteredBufferEvent(BufferEvent, ItemActivatedEvent):
 
 @dataclass
 class ItemLeftBufferEvent(BufferEvent, ItemEvent):
-    """An item left the buffer by decaying or being displaced."""
+    """An item left the buffer."""
+    pass
+
+
+@dataclass
+class ItemDecayedOutEvent(ItemLeftBufferEvent):
+    """An item left the buffer by decaying."""
+    pass
+
+
+@dataclass
+class ItemDisplacedEvent(ItemLeftBufferEvent):
+    """An item left the buffer by being displaced."""
     pass
 
 

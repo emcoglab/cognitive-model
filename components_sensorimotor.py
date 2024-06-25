@@ -3,12 +3,12 @@ from __future__ import annotations
 from typing import Optional, List, Dict
 
 from .basic_types import ActivationValue, ItemIdx
-from .buffer import WorkingMemoryBuffer
+from .limited_capacity_item_sets import UnsizedWorkingMemoryBuffer
 from .components import ModelComponentWithAccessibleSet
 from .modulations import make_apply_activation_cap_modulation_for, make_attenuate_by_statistic_modulation_for
 from .events import ModelEvent, ItemActivatedEvent
 from .attenuation_statistic import AttenuationStatistic
-from .sensorimotor_propagator import SensorimotorPropagator
+from .propagator_sensorimotor import SensorimotorPropagator
 from .utils.iterable import partition
 from .utils.maths import prevalence_from_fraction_known, scale_prevalence_01
 from .sensorimotor_norms.sensorimotor_norms import SensorimotorNorms
@@ -56,16 +56,16 @@ class SensorimotorComponent(ModelComponentWithAccessibleSet):
         # region modulations and guards
 
         # No pre-synaptic guards
-        self.propagator.presynaptic_modulations.appendleft(
+        self.propagator.activation_modulations.appendleft(
             make_attenuate_by_statistic_modulation_for(self._attenuation_statistic)
         )
         if activation_cap is not None:
             # Apply cap before attenuations
-            self.propagator.presynaptic_modulations.appendleft(
+            self.propagator.activation_modulations.appendleft(
                 make_apply_activation_cap_modulation_for(activation_cap)
             )
         if activation_cap is not None:
-            self.propagator.postsynaptic_modulations.extend([
+            self.propagator.firing_modulations.extend([
                 # Cap on a node's total activation after receiving incoming activations
                 make_apply_activation_cap_modulation_for(activation_cap)
             ])
@@ -122,7 +122,7 @@ class BufferedSensorimotorComponent(SensorimotorComponent):
         # decay sufficiently (self.buffer_pruning_threshold) or are displaced.
         #
         # This is updated each .tick() based on items which became activated (a prerequisite for entering the buffer)
-        self.working_memory_buffer: WorkingMemoryBuffer = WorkingMemoryBuffer(buffer_threshold, buffer_capacity)
+        self.working_memory_buffer: UnsizedWorkingMemoryBuffer = UnsizedWorkingMemoryBuffer(buffer_threshold, buffer_capacity)
 
         # endregion
 
@@ -142,14 +142,17 @@ class BufferedSensorimotorComponent(SensorimotorComponent):
         activation_events, other_events = partition(propagator_events, lambda e: isinstance(e, ItemActivatedEvent))
 
         # Update buffer
-        # Some events will get updated commensurately.
-        # `activation_events` may now contain some non-activation events.
-        activation_events = self.working_memory_buffer.present_items(
+        previous_buffer = self.working_memory_buffer.items
+        buffer_events = self.working_memory_buffer.present_items(
             activation_events=activation_events,
             activation_lookup=lambda item: self.propagator.activation_of_item_with_idx_at_time(item.idx, time=time_at_start_of_tick),
             time=time_at_start_of_tick)
+        activation_events = self.working_memory_buffer.upgrade_events(
+            old_items=set(previous_buffer),
+            new_items=set(self.working_memory_buffer.items),
+            activation_events=activation_events)
 
-        return pre_tick_events + activation_events + other_events
+        return pre_tick_events + activation_events + buffer_events + other_events
 
     def reset(self):
         super().reset()
