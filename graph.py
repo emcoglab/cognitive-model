@@ -23,6 +23,7 @@ from enum import Enum, auto
 from numbers import Real
 from typing import Dict, Set, Tuple, Iterator, DefaultDict, List
 
+from numpy import nan
 from numpy.core.multiarray import ndarray
 from numpy.core.umath import ceil
 from scipy.sparse import coo_matrix, csr_matrix
@@ -622,8 +623,12 @@ def save_edgelist_from_similarity_matrix(file_path: str,
 
     # Drop zeros to make sure the min is non-zero
     similarity_matrix.eliminate_zeros()
-    max_value = similarity_matrix.data.max()
-    min_value = similarity_matrix.data.min()
+    if similarity_matrix.shape == (0, 0):
+        logger.warning("Empty matrix encountered")
+        max_value = min_value = nan
+    else:
+        max_value = similarity_matrix.data.max()
+        min_value = similarity_matrix.data.min()
 
     # Filter similarity matrix rows and columns by supplied ids
     similarity_matrix = similarity_matrix.tocsr()[filtered_node_ids, :].tocsc()[:, filtered_node_ids]
